@@ -73,6 +73,10 @@ Fluxo de instalação; plugin e doctor já são executáveis, enquanto setup/cut
 
 Instalação do plugin não autoriza migrar nenhum projeto.
 
+O passo a passo executável, incluindo o trecho exato do `AGENTS.md` e o gatilho `Processe a fila do Trello.`, está em [Início rápido](QUICKSTART.md).
+
+Antes de qualquer consulta ao tracker, execute `pipeline.ps1 status --project-root <projeto> --format json`. O comando comprova versão e origem do runtime que a tarefa realmente carregou, compara o piso do adapter e detecta um cache mais novo que a tarefa ativa. `FAIL` impede acesso ao Trello; reinstale quando necessário, reinicie o Codex e abra uma nova tarefa.
+
 ## 5. Atualização de um projeto
 
 Cada atualização segue uma unidade por projeto:

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0, Mandatory = $true)]
-  [ValidateSet('doctor', 'setup', 'plan', 'role-gate', 'transition-gate', 'trello', 'command')]
+  [ValidateSet('status', 'doctor', 'setup', 'plan', 'role-gate', 'transition-gate', 'trello', 'command')]
   [string]$Command,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs
@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $runtimeRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $entries = @{
+  'status' = 'version-status.mjs'
   'doctor' = 'doctor.mjs'
   'setup' = 'setup.mjs'
   'plan' = 'run-planner.mjs'

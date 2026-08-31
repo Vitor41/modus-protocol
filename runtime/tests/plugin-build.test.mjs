@@ -64,6 +64,14 @@ test("runtime standalone executa doctor sem node_modules no plugin", () => {
   assert.equal(JSON.parse(result.stdout).status, "PASS");
 });
 
+test("runtime standalone expõe status de versão antes do tracker", () => {
+  const result = spawnSync(NODE, [join(built.targetRoot, "runtime", "src", "version-status.mjs"), "--project-root", REPOSITORY_DIR, "--adapter", join(REPOSITORY_DIR, "examples", "project.adapter.example.yaml"), "--format", "json"], { cwd: REPOSITORY_DIR, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(result.stdout);
+  assert.equal(status.status, "PASS");
+  assert.equal(status.active.runtime_version, "0.1.11");
+});
+
 test("planner empacotado não executa o CLI interno do doctor", () => {
   const result = spawnSync(NODE, [join(built.targetRoot, "runtime", "src", "run-planner.mjs"), "--help"], { cwd: REPOSITORY_DIR, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
@@ -104,6 +112,7 @@ test("artefato inclui launcher determinístico", async () => {
   const launcher = await readFile(join(built.targetRoot, "runtime", "pipeline.ps1"), "utf8");
   assert.match(launcher, /codex-primary-runtime/);
   assert.match(launcher, /não crie scripts substitutos/);
+  assert.match(launcher, /'status' = 'version-status\.mjs'/);
 });
 
 test("artefato inclui executor oficial de comandos do adapter", async () => {

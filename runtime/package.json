@@ -1,6 +1,6 @@
 {
   "name": "@unified-development-pipeline/runtime",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "type": "module",
@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "status": "node src/version-status.mjs",
     "doctor": "node src/doctor.mjs",
     "setup": "node src/setup.mjs",
     "plan": "node src/run-planner.mjs",

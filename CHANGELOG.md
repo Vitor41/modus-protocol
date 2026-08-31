@@ -6,6 +6,16 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+### Adicionado
+
+- Kernel `0.1.11` adiciona status de versão fail-fast antes do Trello, expondo runtime ativo, origem física, piso do adapter, versões do cache e tarefa obsoleta.
+- Guia público de início rápido cobre instalação, adapter, credenciais, trecho canônico do `AGENTS.md`, gatilho, cutover e primeiro teste.
+
+### Alterado
+
+- `pipeline-run` e `pipeline-doctor` exigem comprovação da versão antes de acessar o tracker.
+- Documentação de empacotamento e operação deixa de apresentar versões históricas como configuração atual.
+
 ### Corrigido
 
 - Kernel `0.1.10` confirma upload pela coleção de anexos do card, sem depender do campo opcional `idCard`, e adiciona remoção segura com releitura de ausência.

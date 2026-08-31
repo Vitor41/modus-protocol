@@ -4,7 +4,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Repositório oficial: [github.com/Vitor41/modus-protocol](https://github.com/Vitor41/modus-protocol).
 
-> Estado: v0.1 publicada. O Kernel e o plugin estão na versão `0.1.10`.
+> Estado: v0.1 publicada. O Kernel e o plugin estão na versão `0.1.11`.
 
 ## O que ele resolve
 
@@ -53,8 +53,8 @@ Trello + contexto + comandos + políticas locais
 
 ## Começando
 
-1. Leia [Modus Protocol v0.1](docs/MODUS_PROTOCOL.md).
-2. Consulte [instalação e atualizações](docs/INSTALLATION_AND_UPDATES.md).
+1. Siga o [início rápido](docs/QUICKSTART.md) para instalar, configurar o adapter, declarar o gatilho e executar o primeiro teste.
+2. Leia [Modus Protocol v0.1](docs/MODUS_PROTOCOL.md) para entender os contratos.
 3. Copie e adapte somente o [adapter neutro](examples/project.adapter.example.yaml).
 4. Execute o doctor em modo estrutural e depois em shadow.
 5. Faça cutover somente após revisão explícita do adapter e do `AGENTS.md`.
@@ -75,6 +75,7 @@ Antes de contribuir, leia [CONTRIBUTING.md](CONTRIBUTING.md). Vulnerabilidades e
 ## Documentação
 
 - [Documento canônico](docs/MODUS_PROTOCOL.md)
+- [Início rápido: instalação, gatilho e primeiro uso](docs/QUICKSTART.md)
 - [Adapter de projeto](docs/PROJECT_ADAPTER.md)
 - [Formato físico do adapter](docs/ADAPTER_FORMAT.md)
 - [Catálogo de skills](docs/SKILL_CATALOG.md)

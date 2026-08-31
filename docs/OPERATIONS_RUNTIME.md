@@ -7,6 +7,7 @@ Esta versão implementa as operações centrais e os gates executáveis da estei
 | `pipeline-setup` | `runtime/src/setup.mjs` | Inventário e proposta em stdout; nenhuma escrita. |
 | `pipeline-doctor` | `runtime/src/doctor.mjs` | Diagnóstico somente leitura. |
 | `pipeline-run` | `runtime/src/run-planner.mjs` | Plano, `RUN_ID`, lock proposto, cápsula inicial e roteamento; nenhuma aplicação direta. |
+| Status de versão | `runtime/src/version-status.mjs` | Expõe runtime/origem/piso e bloqueia tarefa obsoleta antes do tracker. |
 | Gate de papel | `runtime/src/role-gate.mjs` | Validação de handoff; nenhuma transição direta. |
 | Gate de transição | `runtime/src/transition-gate.mjs` | Valida o recibo de comentário persistido e relido; autoriza ou nega, sem movimentar o tracker. |
 | Comentários Trello | `runtime/src/trello-comments.mjs` | Lista, publica e relê comentários pelo provider `environment`, sem imprimir credenciais. |
@@ -79,4 +80,4 @@ O integrador é responsável por derivar sinais como aprovação humana, impleme
 - O runtime possui cliente Trello determinístico, mas lê credenciais somente do provider externo declarado no adapter e nunca as incorpora ao núcleo.
 - Movimentações reais foram comprovadas no Piloto A; métricas de PO e UX/UI continuam sendo consolidadas nas execuções iniciadas em `REFINAMENTO`.
 - O protocolo físico de comentários e o gate executável exigem escrita + releitura antes da transição e foram comprovados nos dois projetos.
-- Piloto A e Projeto Piloto B possuem adapters repo-scoped pinados no Kernel `0.1.7`, com roteamento exclusivo para `pipeline-run`.
+- Piloto A e Projeto Piloto B possuem adapters repo-scoped, com roteamento exclusivo para `pipeline-run`; a adoção de cada novo piso é explícita por projeto.

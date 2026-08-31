@@ -51,7 +51,7 @@ Identidades locais:
 
 - marketplace: `unified-development-pipeline-local`;
 - plugin: `unified-development-pipeline`;
-- versão atual: `0.1.4`.
+- versão atual: `0.1.11`.
 
 Instalação inicial:
 
@@ -71,7 +71,8 @@ Após alterar a fonte:
 3. ler/confirmar o nome do marketplace com o helper oficial;
 4. aplicar um único cachebuster ao manifest gerado usando o helper oficial;
 5. reinstalar `unified-development-pipeline@unified-development-pipeline-local`;
-6. iniciar uma nova tarefa do Codex para carregar a versão atualizada.
+6. reiniciar completamente o Codex e iniciar uma nova tarefa para carregar a versão atualizada;
+7. executar `pipeline.ps1 status` e confirmar versão, origem e piso do adapter antes do tracker.
 
 O cachebuster não altera a versão funcional do Kernel. Releases promovidas incrementam SemVer; cachebuster serve apenas à iteração local.
 
@@ -80,4 +81,4 @@ O cachebuster não altera a versão funcional do Kernel. Releases promovidas inc
 - O nome público é Modus Protocol, sob licença MIT, com repositório oficial em `github.com/Vitor41/modus-protocol`.
 - Não há MCP ou app embutido; Trello será acessado pela integração autorizada disponível no ambiente.
 - O plugin não inclui credenciais nem dados dos projetos.
-- Dois adapters privados concluíram cutover técnico no Kernel `0.1.7`; somente evidências sanitizadas são publicadas.
+- Dois adapters privados concluíram cutover técnico; somente evidências sanitizadas são publicadas.
