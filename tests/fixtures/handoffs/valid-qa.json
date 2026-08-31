@@ -1,0 +1,34 @@
+{
+  "contract_version": "0.1",
+  "run_id": "RUN-20260828-QA000001",
+  "card": { "ref": "card-qa", "key": "FX-105" },
+  "role": "pipeline-qa",
+  "profile": "EQUILIBRADO",
+  "execution": {
+    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "EQUILIBRADO", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "agent_mode": "independent", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:qa-fixture", "fallback_used": false },
+    "usage": { "status": "not_observable" }
+  },
+  "status": "completed",
+  "iteration_kind": "initial",
+  "state": { "from": "ready_for_validation", "to": "ready_for_release" },
+  "summary": "Critérios e regressão aprovados no commit candidato.",
+  "context": { "capsule_reused": true, "read_paths": ["spec/card.md", "tests/feature"] },
+  "evidence": [
+    { "kind": "test", "ref": "qa-run-1", "result": "Critério AC-1 aprovado." },
+    { "kind": "ui", "ref": "qa-ui-1", "result": "Responsividade e foco aprovados." }
+  ],
+  "risks": [],
+  "next_step": "Aguardar APROVADO PARA PRD.",
+  "deliverable": {
+    "fixed_commit_ref": "abc1234",
+    "environment": "qa-local",
+    "verdict": "approved",
+    "criteria_matrix": [
+      { "criterion_id": "AC-1", "scenario": "Participante elegível", "evidence_ref": "qa-run-1", "result": "passed" },
+      { "criterion_id": "AC-1", "scenario": "Viewport móvel", "evidence_ref": "qa-ui-1", "result": "passed" }
+    ],
+    "regression_summary": "Suíte completa e smoke da área passaram.",
+    "test_data_refs": ["QA_FX-105_20260828"]
+  }
+}

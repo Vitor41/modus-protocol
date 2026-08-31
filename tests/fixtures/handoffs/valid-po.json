@@ -1,0 +1,30 @@
+{
+  "contract_version": "0.1",
+  "run_id": "RUN-20260828-PO000001",
+  "card": { "ref": "card-po", "key": "FX-101" },
+  "role": "pipeline-po",
+  "profile": "PROFUNDO",
+  "execution": {
+    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "PROFUNDO", "model": "gpt-5.6-sol", "reasoning_effort": "high", "agent_mode": "delegated", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-5.6-sol", "reasoning_effort": "high", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:po-fixture", "fallback_used": false },
+    "usage": { "status": "not_observable" }
+  },
+  "status": "completed",
+  "iteration_kind": "initial",
+  "state": { "from": "refinement", "to": "ux_ui" },
+  "summary": "Demanda refinada com critérios verificáveis.",
+  "context": { "capsule_reused": true, "read_paths": ["docs/context/product.md"] },
+  "evidence": [{ "kind": "decision", "ref": "card-comment-1", "result": "Regras confirmadas." }],
+  "risks": ["Regra de permissão exige validação técnica."],
+  "next_step": "Classificar impacto e especificar UX/UI.",
+  "deliverable": {
+    "scope": ["Criar e editar o registro pelo fluxo definido."],
+    "confirmed_rules": ["Somente participantes elegíveis aparecem no seletor."],
+    "acceptance_criteria": [
+      { "id": "AC-1", "behavior": "O seletor lista apenas participantes elegíveis.", "evidence": "Teste funcional do seletor." }
+    ],
+    "open_questions": [],
+    "impacts": { "frontend": true, "backend": true, "database": false, "bi_data": false, "security": true },
+    "ux_required": true
+  }
+}

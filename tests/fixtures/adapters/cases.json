@@ -1,0 +1,76 @@
+[
+  {
+    "name": "missing-ux-ui-state",
+    "operations": [{ "op": "delete", "path": "tracker.states.ux_ui" }],
+    "expected_codes": ["ADAPTER_SCHEMA_INVALID"]
+  },
+  {
+    "name": "missing-comment-policy",
+    "operations": [{ "op": "delete", "path": "tracker.comments" }],
+    "expected_codes": ["ADAPTER_SCHEMA_INVALID"]
+  },
+  {
+    "name": "wrong-trigger",
+    "operations": [{ "op": "set", "path": "trigger.process_queue", "value": "Processar fila" }],
+    "expected_codes": ["ADAPTER_SCHEMA_INVALID"]
+  },
+  {
+    "name": "production-enabled",
+    "operations": [{ "op": "set", "path": "safety.production_access", "value": "allowed" }],
+    "expected_codes": ["ADAPTER_SCHEMA_INVALID"]
+  },
+  {
+    "name": "absolute-context-path",
+    "operations": [{ "op": "set", "path": "context.agents", "value": "C:\\unsafe\\AGENTS.md" }],
+    "expected_codes": ["ADAPTER_SCHEMA_INVALID"]
+  },
+  {
+    "name": "duplicate-state-reference",
+    "operations": [{ "op": "set", "path": "tracker.states.done", "value": "list-ideas" }],
+    "expected_codes": ["TRACKER_STATE_REF_DUPLICATE"]
+  },
+  {
+    "name": "invalid-card-regex",
+    "operations": [{ "op": "set", "path": "tracker.card_keys.0.pattern", "value": "[" }],
+    "expected_codes": ["CARD_KEY_REGEX_INVALID"]
+  },
+  {
+    "name": "missing-required-context",
+    "operations": [{ "op": "set", "path": "context.index", "value": "docs/context/missing.md" }],
+    "expected_codes": ["REQUIRED_CONTEXT_MISSING"]
+  },
+  {
+    "name": "profile-default-not-allowed",
+    "operations": [
+      {
+        "op": "set",
+        "path": "profiles",
+        "value": { "default": "PROFUNDO", "allowed": ["RAPIDO", "EQUILIBRADO"] }
+      }
+    ],
+    "expected_codes": ["PROFILE_DEFAULT_NOT_ALLOWED"]
+  },
+  {
+    "name": "environment-command-unknown",
+    "operations": [
+      {
+        "op": "set",
+        "path": "environments",
+        "value": [
+          {
+            "name": "qa-local",
+            "start_command": "start_missing",
+            "healthcheck": "http://127.0.0.1:8000/health",
+            "shutdown": "tracked-process-only"
+          }
+        ]
+      }
+    ],
+    "expected_codes": ["ENVIRONMENT_COMMAND_UNKNOWN"]
+  },
+  {
+    "name": "kernel-version-mismatch",
+    "operations": [{ "op": "set", "path": "kernel.version", "value": "9.9.9" }],
+    "expected_codes": ["KERNEL_VERSION_MISMATCH"]
+  }
+]

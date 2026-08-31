@@ -1,0 +1,91 @@
+{
+  "schema_version": "0.1",
+  "kernel": {
+    "name": "unified-development-pipeline",
+    "version": "0.1.7",
+    "distribution": "source"
+  },
+  "project": {
+    "id": "fixture-project",
+    "name": "Fixture Project",
+    "root": "."
+  },
+  "tracker": {
+    "provider": "trello",
+    "board_ref": "board-fixture",
+    "credential_provider": "codex-connector",
+    "comments": {
+      "read_provider": "codex-connector",
+      "write_provider": "codex-connector",
+      "required_events": ["lock", "capsule", "role_handoff", "blocker", "transition"],
+      "verify_after_write": true,
+      "transition_requires_verified_comment": true,
+      "encoding": "utf-8"
+    },
+    "states": {
+      "ideas": "list-ideas",
+      "refinement": "list-refinement",
+      "ux_ui": "list-ux-ui",
+      "ready_for_development": "list-ready-development",
+      "in_development": "list-in-development",
+      "ready_for_validation": "list-ready-validation",
+      "ready_for_release": "list-ready-release",
+      "ready_for_production": "list-ready-production",
+      "done": "list-done"
+    },
+    "card_keys": [
+      {
+        "kind": "feature",
+        "pattern": "^FX-[0-9]{3}$"
+      }
+    ]
+  },
+  "trigger": {
+    "process_queue": "Processe a fila do Trello.",
+    "skill": "pipeline-run"
+  },
+  "context": {
+    "agents": "AGENTS.md",
+    "index": "docs/context/index.md",
+    "references": []
+  },
+  "commands": {
+    "baseline": {
+      "working_directory": ".",
+      "argv": ["example", "baseline"],
+      "timeout_seconds": 120,
+      "expected_exit_codes": [0]
+    },
+    "test_targeted": {
+      "working_directory": ".",
+      "argv": ["example", "test-targeted"],
+      "timeout_seconds": 300,
+      "expected_exit_codes": [0]
+    },
+    "test_full": {
+      "working_directory": ".",
+      "argv": ["example", "test-full"],
+      "timeout_seconds": 600,
+      "expected_exit_codes": [0]
+    }
+  },
+  "git": {
+    "default_branch": "main",
+    "branch_patterns": {
+      "feature": "feature/{card_key}",
+      "bug": "fix/{card_key}"
+    },
+    "release_gate": "APROVADO PARA PRD"
+  },
+  "qa": {
+    "data_prefix": "QA_{card_key}_{timestamp}",
+    "evidence_channels": ["test"],
+    "cleanup": "own-data-only"
+  },
+  "safety": {
+    "production_access": "forbidden",
+    "secrets": "external-provider-only",
+    "destructive_actions": "explicit-human-approval",
+    "external_writes": "workflow-scoped"
+  }
+}

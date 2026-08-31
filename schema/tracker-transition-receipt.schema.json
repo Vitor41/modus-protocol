@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unified-development-pipeline:schema:tracker-transition-receipt:0.1",
+  "title": "Modus Protocol Tracker Transition Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "run_id",
+    "card_ref",
+    "role",
+    "handoff_ref",
+    "role_gate_status",
+    "comment",
+    "transition"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1" },
+    "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+    "card_ref": { "$ref": "#/$defs/nonEmptyString" },
+    "role": {
+      "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"]
+    },
+    "handoff_ref": { "$ref": "#/$defs/nonEmptyString" },
+    "role_gate_status": { "enum": ["PASS", "FAIL"] },
+    "comment": { "$ref": "#/$defs/comment" },
+    "transition": { "$ref": "#/$defs/transition" },
+    "git_integration": { "$ref": "#/$defs/gitIntegration" }
+  },
+  "allOf": [{
+    "if": { "properties": { "transition": { "properties": { "from": { "const": "ready_for_release" }, "to": { "const": "ready_for_production" } }, "required": ["from", "to"] } }, "required": ["transition"] },
+    "then": { "required": ["git_integration"] }
+  }],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "provider": { "enum": ["codex-connector", "environment", "mcp"] },
+    "state": {
+      "enum": [
+        "ideas",
+        "refinement",
+        "ux_ui",
+        "ready_for_development",
+        "in_development",
+        "ready_for_validation",
+        "ready_for_release",
+        "ready_for_production",
+        "done"
+      ]
+    },
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "run_id",
+        "card_ref",
+        "events",
+        "read_provider",
+        "write_provider",
+        "written_at",
+        "read_at",
+        "readback_status",
+        "encoding",
+        "content_sha256"
+      ],
+      "properties": {
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+        "card_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "events": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["role_handoff", "transition"] },
+          "allOf": [
+            { "contains": { "const": "role_handoff" } },
+            { "contains": { "const": "transition" } }
+          ]
+        },
+        "read_provider": { "$ref": "#/$defs/provider" },
+        "write_provider": { "$ref": "#/$defs/provider" },
+        "written_at": { "$ref": "#/$defs/nonEmptyString" },
+        "read_at": { "$ref": "#/$defs/nonEmptyString" },
+        "readback_status": { "enum": ["confirmed", "failed", "unavailable"] },
+        "encoding": { "const": "utf-8" },
+        "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/state" },
+        "to": { "$ref": "#/$defs/state" }
+      }
+    },
+    "gitIntegration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["remote", "base_branch", "head_branch", "pushed_commit", "pr_url", "checks_status", "conflicts_status", "merge_status", "merged_commit"],
+      "properties": {
+        "remote": { "$ref": "#/$defs/nonEmptyString" }, "base_branch": { "$ref": "#/$defs/nonEmptyString" }, "head_branch": { "$ref": "#/$defs/nonEmptyString" },
+        "pushed_commit": { "type": "string", "pattern": "^[a-f0-9]{7,40}$" }, "pr_url": { "type": "string", "pattern": "^https://" },
+        "checks_status": { "const": "passed" }, "conflicts_status": { "enum": ["absent", "resolved"] }, "merge_status": { "const": "merged" },
+        "merged_commit": { "type": "string", "pattern": "^[a-f0-9]{7,40}$" }
+      }
+    }
+  }
+}

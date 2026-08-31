@@ -1,0 +1,24 @@
+{
+  "name": "unified-development-pipeline",
+  "version": "0.1.7",
+  "description": "Protocolo versionado e validável para desenvolvimento de software com agentes de IA.",
+  "author": {
+    "name": "Modus Protocol contributors",
+    "url": "https://github.com/Vitor41"
+  },
+  "homepage": "https://github.com/Vitor41/modus-protocol",
+  "repository": "https://github.com/Vitor41/modus-protocol",
+  "license": "MIT",
+  "keywords": ["development", "workflow", "skills", "quality", "trello"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Modus Protocol",
+    "shortDescription": "Desenvolvimento com agentes e gates validáveis.",
+    "longDescription": "Orquestra refinamento, UX/UI, implementação, Code Review e QA com adapters por projeto, contexto progressivo e gates determinísticos.",
+    "developerName": "Modus Protocol contributors",
+    "category": "Productivity",
+    "capabilities": ["Workflow", "Validation"],
+    "websiteURL": "https://github.com/Vitor41/modus-protocol",
+    "defaultPrompt": "Processe a fila do Trello."
+  }
+}

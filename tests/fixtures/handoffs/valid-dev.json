@@ -1,0 +1,51 @@
+{
+  "contract_version": "0.1",
+  "run_id": "RUN-20260828-DEV00001",
+  "card": { "ref": "card-dev", "key": "FX-103" },
+  "role": "pipeline-dev",
+  "profile": "EQUILIBRADO",
+  "execution": {
+    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "EQUILIBRADO", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "agent_mode": "delegated", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:dev-fixture", "fallback_used": false },
+    "usage": { "status": "not_observable" }
+  },
+  "status": "completed",
+  "iteration_kind": "initial",
+  "state": { "from": "in_development", "to": "in_development" },
+  "summary": "Fatia vertical implementada e pronta para revisão independente.",
+  "context": { "capsule_reused": true, "read_paths": ["src/feature", "tests/feature"] },
+  "evidence": [
+    { "kind": "test", "ref": "test-targeted-output", "result": "12 testes passaram." },
+    { "kind": "diff", "ref": "git-diff", "result": "Diff revisado pelo implementador." }
+  ],
+  "risks": ["Fluxo visual deve ser verificado no navegador pelo QA."],
+  "next_step": "Executar Code Review independente nos eixos SPEC e STANDARDS.",
+  "deliverable": {
+    "mode": "implementation",
+    "checkpoint": {
+      "status": "APTO PARA IMPLEMENTAR",
+      "baseline_command": "test_full",
+      "baseline_result": "passed",
+      "rollback": "Reverter somente o commit da fatia.",
+      "risks": ["Alteração atravessa frontend e backend."]
+    },
+    "implementation_summary": "Modal, validação backend e testes foram implementados na mesma fatia.",
+    "changes": [
+      { "path": "src/feature/view.tsx", "purpose": "Implementar interação aprovada." },
+      { "path": "src/feature/service.ts", "purpose": "Aplicar regra no limite do backend." },
+      { "path": "tests/feature.test.ts", "purpose": "Cobrir critérios públicos." }
+    ],
+    "tests": [
+      { "command": "test_targeted", "scope": "Feature alterada", "result": "passed", "evidence_ref": "test-targeted-output" },
+      { "command": "test_full", "scope": "Regressão", "result": "passed", "evidence_ref": "test-full-output" }
+    ],
+    "validations": [
+      { "kind": "ui", "result": "passed", "evidence_ref": "ui-smoke-artifact" },
+      { "kind": "api", "result": "passed", "evidence_ref": "api-test-output" }
+    ],
+    "specializations": ["frontend", "backend"],
+    "diff_reviewed": true,
+    "implementation_complete": true,
+    "commit_ref": "abc1234"
+  }
+}

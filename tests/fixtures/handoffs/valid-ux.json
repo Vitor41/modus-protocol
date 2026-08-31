@@ -1,0 +1,32 @@
+{
+  "contract_version": "0.1",
+  "run_id": "RUN-20260828-UX000001",
+  "card": { "ref": "card-ux", "key": "FX-102" },
+  "role": "pipeline-ux-ui",
+  "profile": "PROFUNDO",
+  "execution": {
+    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "PROFUNDO", "model": "gpt-5.6-sol", "reasoning_effort": "high", "agent_mode": "delegated", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-5.6-sol", "reasoning_effort": "high", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:ux-fixture", "fallback_used": false },
+    "usage": { "status": "not_observable" }
+  },
+  "status": "completed",
+  "iteration_kind": "initial",
+  "state": { "from": "ux_ui", "to": "ready_for_development" },
+  "summary": "Fluxo visual especificado e aprovado.",
+  "context": { "capsule_reused": true, "read_paths": ["docs/context/ux-ui.md"] },
+  "evidence": [
+    { "kind": "design", "ref": "design-spec-1", "result": "Estados e interação documentados." },
+    { "kind": "approval", "ref": "trello-comment-screen-approved", "result": "Tela aprovada após a especificação vigente." }
+  ],
+  "risks": [],
+  "next_step": "Implementar a fatia vertical aprovada.",
+  "deliverable": {
+    "classification": "frontend",
+    "flows": ["Abrir modal, preencher dados, salvar e receber feedback."],
+    "states": ["inicial", "carregando", "erro", "sucesso", "vazio"],
+    "accessibility": ["Foco entra no modal e retorna ao acionador.", "Fechamento por Escape."],
+    "responsiveness": ["Modal ocupa largura segura em viewport móvel."],
+    "human_approval": { "required": true, "evidence_ref": "trello-comment-screen-approved" },
+    "design_refs": ["design-spec-1"]
+  }
+}

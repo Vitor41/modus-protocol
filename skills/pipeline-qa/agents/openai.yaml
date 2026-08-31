@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline QA"
+  short_description: "Valida critérios e regressão com evidências"
+  default_prompt: "Use $pipeline-qa para validar o commit candidato do card ativo."
+policy:
+  allow_implicit_invocation: true

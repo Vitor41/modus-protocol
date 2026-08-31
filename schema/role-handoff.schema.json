@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unified-development-pipeline:schema:role-handoff:0.1",
+  "title": "Modus Protocol Role Handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "run_id",
+    "card",
+    "role",
+    "profile",
+    "execution",
+    "status",
+    "iteration_kind",
+    "state",
+    "summary",
+    "context",
+    "evidence",
+    "risks",
+    "next_step"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1" },
+    "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+    "card": { "$ref": "#/$defs/card" },
+    "role": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] },
+    "profile": { "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"] },
+    "execution": { "$ref": "#/$defs/execution" },
+    "status": { "enum": ["completed", "blocked", "return"] },
+    "iteration_kind": { "enum": ["initial", "return", "retest", "release"] },
+    "state": { "$ref": "#/$defs/state" },
+    "summary": { "$ref": "#/$defs/nonEmptyString" },
+    "context": { "$ref": "#/$defs/context" },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "risks": { "$ref": "#/$defs/stringArray" },
+    "next_step": { "$ref": "#/$defs/nonEmptyString" },
+    "blocker": { "$ref": "#/$defs/blocker" },
+    "deliverable": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["blocked", "return"] } }, "required": ["status"] },
+      "then": { "required": ["blocker"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+      "then": { "required": ["deliverable"], "properties": { "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "pipeline-po" } }, "required": ["role"] },
+      "then": { "properties": { "deliverable": { "$ref": "#/$defs/poDeliverable" } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "pipeline-ux-ui" } }, "required": ["role"] },
+      "then": { "properties": { "deliverable": { "$ref": "#/$defs/uxDeliverable" } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "pipeline-dev" } }, "required": ["role"] },
+      "then": { "properties": { "deliverable": { "$ref": "#/$defs/devDeliverable" } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "pipeline-code-review" } }, "required": ["role"] },
+      "then": { "properties": { "deliverable": { "$ref": "#/$defs/reviewDeliverable" } } }
+    },
+    {
+      "if": { "properties": { "role": { "const": "pipeline-qa" } }, "required": ["role"] },
+      "then": { "properties": { "deliverable": { "$ref": "#/$defs/qaDeliverable" } } }
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "stringArray": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+    "executionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mapping_version", "profile", "model", "reasoning_effort", "agent_mode", "configuration_source", "fallback_policy"],
+      "properties": {
+        "mapping_version": { "const": "gpt-5.6-2026-08-28" },
+        "profile": { "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"] },
+        "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"] },
+        "reasoning_effort": { "enum": ["low", "medium", "high", "max"] },
+        "agent_mode": { "enum": ["delegated", "independent", "parallel"] },
+        "configuration_source": { "const": "kernel-profile-map" },
+        "fallback_policy": { "const": "block" }
+      }
+    },
+    "executionObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "model", "reasoning_effort", "configuration_source", "evidence_ref", "fallback_used"],
+      "properties": {
+        "status": { "enum": ["confirmed", "not_observable"] },
+        "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "not_observable"] },
+        "reasoning_effort": { "enum": ["low", "medium", "high", "max", "not_observable"] },
+        "configuration_source": { "enum": ["explicit-agent-launch", "inherited", "not_observable"] },
+        "evidence_ref": { "type": "string", "pattern": "^agent:[A-Za-z0-9][A-Za-z0-9._:/-]*$" },
+        "fallback_used": { "type": "boolean" },
+        "fallback_reason": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "fallback_used": { "const": true } }, "required": ["fallback_used"] },
+          "then": { "required": ["fallback_reason"] }
+        }
+      ]
+    },
+    "executionUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["observed", "not_observable"] },
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "reasoning_tokens": { "type": "integer", "minimum": 0 },
+        "started_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$" },
+        "finished_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "observation"],
+      "properties": {
+        "request": { "$ref": "#/$defs/executionRequest" },
+        "observation": { "$ref": "#/$defs/executionObservation" },
+        "usage": { "$ref": "#/$defs/executionUsage" }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "key"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "key": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "stateName": {
+      "enum": [
+        "refinement",
+        "ux_ui",
+        "ready_for_development",
+        "in_development",
+        "ready_for_validation",
+        "ready_for_release",
+        "ready_for_production"
+      ]
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/stateName" },
+        "to": { "$ref": "#/$defs/stateName" }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capsule_reused", "read_paths"],
+      "properties": {
+        "capsule_reused": { "type": "boolean" },
+        "read_paths": { "$ref": "#/$defs/stringArray" },
+        "reason_for_full_reload": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "result"],
+      "properties": {
+        "kind": { "enum": ["card", "decision", "design", "test", "ui", "api", "database", "log", "diff", "commit", "approval", "artifact"] },
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "result": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "requires_human"],
+      "properties": {
+        "reason": { "$ref": "#/$defs/nonEmptyString" },
+        "requires_human": { "type": "boolean" },
+        "return_to": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "behavior", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "behavior": { "$ref": "#/$defs/nonEmptyString" },
+        "evidence": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "impactMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontend", "backend", "database", "bi_data", "security"],
+      "properties": {
+        "frontend": { "type": "boolean" },
+        "backend": { "type": "boolean" },
+        "database": { "type": "boolean" },
+        "bi_data": { "type": "boolean" },
+        "security": { "type": "boolean" }
+      }
+    },
+    "poDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "confirmed_rules", "acceptance_criteria", "open_questions", "impacts", "ux_required"],
+      "properties": {
+        "scope": { "$ref": "#/$defs/stringArray", "minItems": 1 },
+        "confirmed_rules": { "$ref": "#/$defs/stringArray" },
+        "acceptance_criteria": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/criterion" } },
+        "open_questions": { "$ref": "#/$defs/stringArray" },
+        "impacts": { "$ref": "#/$defs/impactMap" },
+        "ux_required": { "type": "boolean" }
+      }
+    },
+    "humanApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "uxDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "flows", "states", "accessibility", "responsiveness", "human_approval"],
+      "properties": {
+        "classification": { "enum": ["no_frontend", "frontend"] },
+        "flows": { "$ref": "#/$defs/stringArray" },
+        "states": { "$ref": "#/$defs/stringArray" },
+        "accessibility": { "$ref": "#/$defs/stringArray" },
+        "responsiveness": { "$ref": "#/$defs/stringArray" },
+        "human_approval": { "$ref": "#/$defs/humanApproval" },
+        "design_refs": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "baseline_command", "baseline_result", "rollback", "risks"],
+      "properties": {
+        "status": { "const": "APTO PARA IMPLEMENTAR" },
+        "baseline_command": { "$ref": "#/$defs/nonEmptyString" },
+        "baseline_result": { "enum": ["passed", "known_failure_documented"] },
+        "rollback": { "$ref": "#/$defs/nonEmptyString" },
+        "risks": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "purpose"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "purpose": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "testResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "scope", "result"],
+      "properties": {
+        "command": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "$ref": "#/$defs/nonEmptyString" },
+        "result": { "enum": ["passed", "failed", "not_applicable"] },
+        "evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "result", "evidence_ref"],
+      "properties": {
+        "kind": { "enum": ["test", "ui", "api", "database", "security", "build", "lint", "typecheck"] },
+        "result": { "enum": ["passed", "failed", "not_applicable"] },
+        "evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "devDeliverable": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "checkpoint", "implementation_summary", "changes", "tests", "validations", "specializations", "diff_reviewed", "implementation_complete"],
+          "properties": {
+            "mode": { "const": "implementation" },
+            "checkpoint": { "$ref": "#/$defs/checkpoint" },
+            "implementation_summary": { "$ref": "#/$defs/nonEmptyString" },
+            "changes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/change" } },
+            "tests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/testResult" } },
+            "validations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/validation" } },
+            "specializations": { "type": "array", "items": { "enum": ["frontend", "backend", "database", "bi-data", "security"] }, "uniqueItems": true },
+            "diff_reviewed": { "const": true },
+            "implementation_complete": { "const": true },
+            "commit_ref": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "production_approval_ref", "fixed_commit_ref", "release_actions", "validations"],
+          "properties": {
+            "mode": { "const": "release" },
+            "production_approval_ref": { "$ref": "#/$defs/nonEmptyString" },
+            "fixed_commit_ref": { "$ref": "#/$defs/nonEmptyString" },
+            "release_actions": {
+              "type": "array", "minItems": 5, "uniqueItems": true,
+              "items": { "enum": ["push_confirmed", "pr_confirmed", "checks_passed", "conflicts_resolved_or_absent", "merge_confirmed"] },
+              "allOf": [
+                { "contains": { "const": "push_confirmed" } }, { "contains": { "const": "pr_confirmed" } },
+                { "contains": { "const": "checks_passed" } }, { "contains": { "const": "conflicts_resolved_or_absent" } },
+                { "contains": { "const": "merge_confirmed" } }
+              ]
+            },
+            "validations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/validation" } }
+          }
+        }
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "path", "message"],
+      "properties": {
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "message": { "$ref": "#/$defs/nonEmptyString" },
+        "criterion_id": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "reviewDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_ref", "diff_ref", "verdict", "spec_findings", "standards_findings", "tests_observed"],
+      "properties": {
+        "baseline_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "diff_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "verdict": { "enum": ["approved", "changes_required"] },
+        "spec_findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "standards_findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "tests_observed": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "matrixRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "scenario", "evidence_ref", "result"],
+      "properties": {
+        "criterion_id": { "$ref": "#/$defs/nonEmptyString" },
+        "scenario": { "$ref": "#/$defs/nonEmptyString" },
+        "evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "result": { "enum": ["passed", "failed", "blocked"] }
+      }
+    },
+    "qaDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed_commit_ref", "environment", "verdict", "criteria_matrix", "regression_summary"],
+      "properties": {
+        "fixed_commit_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "environment": { "$ref": "#/$defs/nonEmptyString" },
+        "verdict": { "enum": ["approved", "rejected", "blocked"] },
+        "criteria_matrix": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/matrixRow" } },
+        "regression_summary": { "$ref": "#/$defs/nonEmptyString" },
+        "test_data_refs": { "$ref": "#/$defs/stringArray" }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "unified-development-pipeline-local",
+  "interface": {
+    "displayName": "Modus Protocol Local"
+  },
+  "plugins": [
+    {
+      "name": "unified-development-pipeline",
+      "source": {
+        "source": "local",
+        "path": "./plugins/unified-development-pipeline"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

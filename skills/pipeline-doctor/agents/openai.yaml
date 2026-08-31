@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline Doctor"
+  short_description: "Valida adapters e compatibilidade da esteira"
+  default_prompt: "Use $pipeline-doctor para diagnosticar a esteira deste projeto sem alterar arquivos ou serviços."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline Code Review"
+  short_description: "Revisa SPEC e STANDARDS sem editar"
+  default_prompt: "Use $pipeline-code-review para revisar o diff fixado do card ativo."
+policy:
+  allow_implicit_invocation: true

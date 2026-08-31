@@ -1,0 +1,359 @@
+#!/usr/bin/env node
+
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import YAML from "yaml";
+
+const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
+const RUNTIME_DIR = resolve(SOURCE_DIR, "..");
+const PACKAGE = JSON.parse(readFileSync(resolve(RUNTIME_DIR, "package.json"), "utf8"));
+const API_ROOT = "https://api.trello.com/1";
+
+function parseData(path, label) {
+  if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
+  const document = YAML.parseDocument(readFileSync(path, "utf8"), { uniqueKeys: true });
+  if (document.errors.length > 0) throw new Error(`${label} possui YAML/JSON inválido.`);
+  return document.toJS({ mapAsMap: false });
+}
+
+function containedPath(root, candidate, label) {
+  const delta = relative(root, candidate);
+  if (delta === "" || delta === ".." || delta.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+    throw new Error(`${label} precisa estar contido na raiz do projeto.`);
+  }
+  return candidate;
+}
+
+function parseEnvironmentFile(path) {
+  const values = {};
+  for (const rawLine of readFileSync(path, "utf8").split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator < 1) continue;
+    const name = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    values[name] = value;
+  }
+  const key = values.TRELLO_API_KEY;
+  const token = values.TRELLO_TOKEN;
+  if (!key || !token) throw new Error("Credenciais Trello obrigatórias não foram encontradas.");
+  return { key, token };
+}
+
+function endpoint(path, credentials, query = {}) {
+  const url = new URL(`${API_ROOT}${path}`);
+  url.searchParams.set("key", credentials.key);
+  url.searchParams.set("token", credentials.token);
+  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, String(value));
+  return url;
+}
+
+function unsafeEncoding(text) {
+  return text.includes("\uFFFD") || /Ã[\u0080-\u00BF]/u.test(text);
+}
+
+async function responseJson(response, operation) {
+  if (!response.ok) throw new Error(`Trello recusou ${operation} com HTTP ${response.status}.`);
+  return response.json();
+}
+
+async function safeFetch(fetchImpl, url, options, operation) {
+  try {
+    return await fetchImpl(url, options);
+  } catch {
+    throw new Error(`Falha de rede durante ${operation}.`);
+  }
+}
+
+function publicComment(action) {
+  return {
+    ref: action.id,
+    card_ref: action.data?.card?.id,
+    text: action.data?.text,
+    date: action.date,
+    member_ref: action.idMemberCreator,
+    member: action.memberCreator
+      ? { username: action.memberCreator.username, full_name: action.memberCreator.fullName }
+      : undefined
+  };
+}
+
+function cardKey(title, patterns = []) {
+  for (const item of patterns) {
+    const match = title.match(new RegExp(item.pattern.replace(/\$$/u, ""), "u"));
+    if (match?.[0]) return match[0];
+  }
+  return undefined;
+}
+
+function latestSignal(comments, exact, prefix) {
+  const chronological = [...comments].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  let value = false;
+  for (const comment of chronological) {
+    const text = String(comment.text ?? "").trim();
+    if (text === exact) value = true;
+    if (prefix && text.startsWith(prefix)) value = false;
+  }
+  return value;
+}
+
+function deliveryGroup(comments) {
+  for (const comment of [...comments].sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
+    const text = String(comment.text ?? "");
+    const id = text.match(/^DELIVERY GROUP:\s*([a-z0-9-]+)\s*$/imu)?.[1];
+    const cards = text.match(/^CARDS:\s*(.+)$/imu)?.[1]?.split(",").map((value) => value.trim()).filter(Boolean);
+    if (id && cards?.length >= 2 && /^DEFINED BY:\s*pipeline-po\s*$/imu.test(text)) {
+      const branch = text.match(/^BRANCH:\s*(.+)$/imu)?.[1]?.trim();
+      return { id, cards, ...(branch ? { branch } : {}), defined_by: "pipeline-po" };
+    }
+  }
+  return undefined;
+}
+
+async function getJson(fetchImpl, credentials, path, query, operation) {
+  return responseJson(await safeFetch(fetchImpl, endpoint(path, credentials, query), undefined, operation), operation);
+}
+
+function publicAttachment(value) {
+  return { ref: value.id, card_ref: value.idCard, name: value.name, url: value.url, bytes: value.bytes, mime_type: value.mimeType, date: value.date, previews: value.previews?.length ?? 0 };
+}
+
+export async function executeTrelloComment(input = {}) {
+  const projectRoot = resolve(input.projectRoot ?? process.cwd());
+  const adapterPath = resolve(input.adapterPath ?? resolve(projectRoot, ".pipeline", "project.adapter.yaml"));
+  const adapter = parseData(adapterPath, "Adapter");
+  if (adapter.tracker?.provider !== "trello") throw new Error("O cliente suporta somente tracker Trello.");
+  const providers = [adapter.tracker?.comments?.read_provider, adapter.tracker?.comments?.write_provider];
+  if (!providers.includes("environment")) throw new Error("O adapter não declara comentários pelo provider environment.");
+  const credentialRelative = adapter.tracker?.environment?.credential_file;
+  if (!credentialRelative) throw new Error("tracker.environment.credential_file é obrigatório.");
+  const credentialPath = containedPath(projectRoot, resolve(projectRoot, credentialRelative), "credential_file");
+  const credentials = parseEnvironmentFile(credentialPath);
+  const fetchImpl = input.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== "function") throw new Error("fetch não está disponível.");
+  const action = input.action;
+
+  if (action === "snapshot") {
+    if (!input.outputPath) throw new Error("outputPath é obrigatório para snapshot.");
+    const outputPath = containedPath(projectRoot, resolve(projectRoot, input.outputPath), "outputPath");
+    const lists = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/lists`, { filter: "open", fields: "name,pos" }, "a leitura das listas");
+    const cards = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/cards`, { filter: "open", fields: "name,idList,pos,labels" }, "a leitura dos cards");
+    const activeRefs = new Set(["refinement", "ux_ui", "ready_for_development", "in_development", "ready_for_validation", "ready_for_release"].map((state) => adapter.tracker.states[state]));
+    const activeCards = cards.filter((card) => activeRefs.has(card.idList));
+    const commentEntries = await Promise.all(activeCards.map(async (card) => {
+      const actions = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(card.id)}/actions`, { filter: "commentCard", limit: input.limit ?? 100, memberCreator_fields: "fullName,username" }, "a leitura pontual de comentários");
+      return [card.id, actions.map(publicComment)];
+    }));
+    const commentsByCard = new Map(commentEntries);
+    const gate = adapter.tracker.human_gates ?? {};
+    const verification = adapter.tracker.comments?.verification;
+    let verified = false;
+    if (verification?.comment_ref && verification?.card_ref) {
+      const evidence = await getJson(fetchImpl, credentials, `/actions/${encodeURIComponent(verification.comment_ref)}`, {}, "a verificação da integração");
+      verified = evidence.data?.card?.id === verification.card_ref;
+    }
+    const snapshot = {
+      board_ref: adapter.tracker.board_ref,
+      open_lists: lists.map((list) => ({ ref: list.id, name: list.name, position: list.pos })),
+      cards: activeCards.map((card) => {
+        const comments = commentsByCard.get(card.id) ?? [];
+        const item = { ref: card.id, title: card.name, list_ref: card.idList, position: card.pos };
+        const key = cardKey(card.name, adapter.tracker.card_keys);
+        if (key) item.key = key;
+        const group = deliveryGroup(comments);
+        if (group) item.delivery_group = group;
+        item.signals = {
+          awaiting_human: latestSignal(comments, "Aguardando resposta humana", gate.unblock_prefix),
+          screen_approval_valid: latestSignal(comments, gate.screen_approval ?? "Tela aprovada"),
+          production_approval_valid: latestSignal(comments, gate.production_approval ?? "APROVADO PARA PRD")
+        };
+        return item;
+      }),
+      integration: { comments: {
+        read: verified ? "verified" : "not_tested", write: verified ? "verified" : "not_tested",
+        read_provider: "environment", write_provider: "environment",
+        ...(verified ? { evidence_ref: verification.comment_ref, verified_at: verification.verified_at } : {})
+      }}
+    };
+    writeFileSync(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, board_ref: adapter.tracker.board_ref, output: relative(projectRoot, outputPath), counts: { lists: lists.length, cards: cards.length, hydrated_cards: activeCards.length, comments: commentEntries.reduce((sum, [, values]) => sum + values.length, 0) }, guarantees: { tracker_writes_performed: false, secrets_exposed: false, full_board_comment_scan: false } };
+  }
+
+  if (!input.cardRef) throw new Error("cardRef é obrigatório.");
+
+  if (action === "attach-file" || action === "attach-url") {
+    const form = new FormData();
+    form.set("key", credentials.key); form.set("token", credentials.token);
+    if (input.name) form.set("name", input.name);
+    if (input.setCover) form.set("setCover", "true");
+    let contentSha256;
+    if (action === "attach-file") {
+      if (!input.filePath) throw new Error("filePath é obrigatório.");
+      const filePath = containedPath(projectRoot, resolve(projectRoot, input.filePath), "filePath");
+      const allowed = new Set((adapter.tracker.attachments?.allowed_extensions ?? ["png", "jpg", "jpeg", "webp", "pdf", "html"]).map((value) => `.${value.toLowerCase()}`));
+      if (!allowed.has(extname(filePath).toLowerCase())) throw new Error("Tipo de anexo não permitido.");
+      const maxBytes = adapter.tracker.attachments?.max_bytes ?? 10485760;
+      if (statSync(filePath).size > maxBytes) throw new Error("Anexo excede o limite configurado.");
+      const buffer = readFileSync(filePath);
+      contentSha256 = createHash("sha256").update(buffer).digest("hex");
+      form.set("file", new Blob([buffer]), input.name ?? basename(filePath));
+    } else {
+      if (!input.url || !/^https?:\/\//u.test(input.url)) throw new Error("URL HTTP(S) é obrigatória.");
+      form.set("url", input.url);
+    }
+    const written = await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}/attachments`, { method: "POST", body: form }, "o envio do anexo"), "o envio do anexo");
+    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments/${encodeURIComponent(written.id)}`, {}, "a releitura do anexo");
+    if (persisted.id !== written.id || persisted.idCard !== input.cardRef) throw new Error("A releitura do anexo divergiu do envio.");
+    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, provider: "environment", attachment: publicAttachment(persisted), ...(contentSha256 ? { content_sha256: contentSha256 } : {}), readback_status: "confirmed", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+  }
+
+  if (action === "move-readback") {
+    if (!input.listRef || !Object.values(adapter.tracker.states ?? {}).includes(input.listRef)) throw new Error("listRef não pertence aos estados canônicos do adapter.");
+    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, idList: input.listRef });
+    await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}`, { method: "PUT", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body }, "a movimentação do card"), "a movimentação do card");
+    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "idList,name" }, "a releitura do card");
+    if (persisted.idList !== input.listRef) throw new Error("A releitura do card divergiu da coluna solicitada.");
+    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, provider: "environment", card_ref: input.cardRef, list_ref: persisted.idList, readback_status: "confirmed", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+  }
+
+  if (action === "list") {
+    const response = await safeFetch(fetchImpl,
+      endpoint(`/cards/${encodeURIComponent(input.cardRef)}/actions`, credentials, {
+        filter: "commentCard",
+        limit: input.limit ?? 100,
+        memberCreator_fields: "fullName,username"
+      }),
+      undefined,
+      "a leitura de comentários"
+    );
+    const actions = await responseJson(response, "a leitura de comentários");
+    return {
+      contract_version: "0.1",
+      tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
+      status: "PASS",
+      action,
+      provider: "environment",
+      card_ref: input.cardRef,
+      comments: actions.map(publicComment),
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false }
+    };
+  }
+
+  if (action === "read") {
+    if (!input.commentRef) throw new Error("commentRef é obrigatório para leitura individual.");
+    const response = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(input.commentRef)}`, credentials), undefined, "a releitura do comentário");
+    const persisted = await responseJson(response, "a releitura do comentário");
+    if (persisted.data?.card?.id !== input.cardRef) throw new Error("O comentário relido pertence a outro card.");
+    return {
+      contract_version: "0.1",
+      tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
+      status: "PASS",
+      action,
+      provider: "environment",
+      card_ref: input.cardRef,
+      comment: publicComment(persisted),
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false }
+    };
+  }
+
+  if (action === "write-readback") {
+    if (!input.textPath) throw new Error("textPath é obrigatório para escrita.");
+    const textPath = containedPath(projectRoot, resolve(projectRoot, input.textPath), "textPath");
+    const text = readFileSync(textPath, "utf8");
+    if (!text.trim()) throw new Error("O comentário não pode ser vazio.");
+    if (unsafeEncoding(text)) throw new Error("O comentário contém sinais de codificação corrompida.");
+    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, text });
+    const writeResponse = await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}/actions/comments`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body
+    }, "a escrita do comentário");
+    const written = await responseJson(writeResponse, "a escrita do comentário");
+    const readResponse = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(written.id)}`, credentials), undefined, "a releitura do comentário");
+    const persisted = await responseJson(readResponse, "a releitura do comentário");
+    const persistedText = persisted.data?.text;
+    if (persisted.data?.card?.id !== input.cardRef || persistedText !== text || unsafeEncoding(persistedText ?? "")) {
+      return {
+        contract_version: "0.1",
+        tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
+        status: "FAIL",
+        action,
+        provider: "environment",
+        card_ref: input.cardRef,
+        comment_ref: written.id,
+        diagnostic: { code: "TRACKER_COMMENT_READBACK_FAILED" },
+        guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+      };
+    }
+    return {
+      contract_version: "0.1",
+      tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
+      status: "PASS",
+      action,
+      provider: "environment",
+      card_ref: input.cardRef,
+      comment_ref: persisted.id,
+      written_at: written.date,
+      read_at: new Date(input.now ?? Date.now()).toISOString(),
+      content_sha256: createHash("sha256").update(text, "utf8").digest("hex"),
+      readback_status: "confirmed",
+      encoding: "utf-8",
+      guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+    };
+  }
+
+  throw new Error(`Ação inválida: ${action ?? "ausente"}.`);
+}
+
+function parseArguments(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") options.help = true;
+    else {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error(`Valor ausente para ${argument}`);
+      index += 1;
+      if (argument === "--action") options.action = value;
+      else if (argument === "--project-root") options.projectRoot = value;
+      else if (argument === "--adapter") options.adapterPath = value;
+      else if (argument === "--card-ref") options.cardRef = value;
+      else if (argument === "--comment-ref") options.commentRef = value;
+      else if (argument === "--list-ref") options.listRef = value;
+      else if (argument === "--text-file") options.textPath = value;
+      else if (argument === "--output") options.outputPath = value;
+      else if (argument === "--file") options.filePath = value;
+      else if (argument === "--url") options.url = value;
+      else if (argument === "--name") options.name = value;
+      else if (argument === "--set-cover") options.setCover = value === "true";
+      else if (argument === "--limit") options.limit = Number(value);
+      else if (argument === "--format") options.format = value;
+      else throw new Error(`Argumento desconhecido: ${argument}`);
+    }
+  }
+  return options;
+}
+
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  try {
+    const options = parseArguments(process.argv.slice(2));
+    if (options.help) {
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list|read|write-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
+    } else {
+      const result = await executeTrelloComment(options);
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      process.exitCode = result.status === "PASS" ? 0 : 1;
+    }
+  } catch (error) {
+    process.stderr.write(`pipeline-trello-comments: ${error.message}\n`);
+    process.exitCode = 2;
+  }
+}

@@ -1,0 +1,141 @@
+schema_version: "0.1"
+
+kernel:
+  name: unified-development-pipeline
+  version: "0.1.4"
+  distribution: local-plugin
+  plugin_name: unified-development-pipeline
+
+project:
+  id: example-project
+  name: Example Project
+  root: .
+  owners:
+    - product-owner
+
+tracker:
+  provider: trello
+  board_ref: replace-with-project-board-reference
+  credential_provider: codex-connector
+  comments:
+    read_provider: codex-connector
+    write_provider: codex-connector
+    required_events: [lock, capsule, role_handoff, blocker, transition]
+    verify_after_write: true
+    transition_requires_verified_comment: true
+    encoding: utf-8
+  states:
+    ideas: replace-with-ideas-list-reference
+    refinement: replace-with-refinement-list-reference
+    ux_ui: replace-with-ux-ui-list-reference
+    ready_for_development: replace-with-ready-development-list-reference
+    in_development: replace-with-in-development-list-reference
+    ready_for_validation: replace-with-ready-validation-list-reference
+    ready_for_release: replace-with-ready-release-list-reference
+    ready_for_production: replace-with-ready-production-list-reference
+    done: replace-with-done-list-reference
+  card_keys:
+    - kind: feature
+      pattern: "^EX-[0-9]{3}$"
+    - kind: bug
+      pattern: "^BUG-[0-9]{3}$"
+  type_labels:
+    feature: MELHORIA
+    bug: BUG
+  domain_labels:
+    business: NEGOCIO
+    technical: TECNICO
+  human_gates:
+    screen_approval: Tela aprovada
+    production_approval: APROVADO PARA PRD
+    unblock_prefix: "BLOQUEIO RESOLVIDO:"
+
+trigger:
+  process_queue: Processe a fila do Trello.
+  skill: pipeline-run
+
+context:
+  agents: AGENTS.md
+  index: docs/context/index.md
+  references:
+    - path: docs/context/architecture.md
+      read_when: A mudança afetar arquitetura ou mais de uma camada.
+    - path: docs/context/ux-ui.md
+      read_when: A mudança possuir impacto visual ou de interação.
+      optional: true
+
+stack:
+  languages:
+    - Python
+  frameworks:
+    - Example Framework
+  databases:
+    - PostgreSQL
+  architecture: Aplicação em camadas com fatias verticais.
+  invariants:
+    - Preservar histórico confirmado.
+
+commands:
+  baseline:
+    working_directory: .
+    argv: [python, -m, unittest, discover, -s, tests]
+    timeout_seconds: 600
+    expected_exit_codes: [0]
+    output: full-on-failure
+  test_targeted:
+    working_directory: .
+    argv: [python, -m, unittest]
+    timeout_seconds: 300
+    expected_exit_codes: [0]
+    output: full-on-failure
+  test_full:
+    working_directory: .
+    argv: [python, -m, unittest, discover, -s, tests]
+    timeout_seconds: 600
+    expected_exit_codes: [0]
+    output: artifact
+  start_local:
+    working_directory: .
+    argv: [python, -m, example_server]
+    timeout_seconds: 30
+    expected_exit_codes: [0]
+    output: artifact
+
+environments:
+  - name: qa-local
+    start_command: start_local
+    healthcheck: http://127.0.0.1:{port}/health
+    shutdown: tracked-process-only
+    port_strategy: first-free
+    ports: [8001, 8002, 8003]
+
+git:
+  default_branch: main
+  branch_patterns:
+    feature: feature/{card_key}
+    bug: fix/{card_key}
+  release_gate: APROVADO PARA PRD
+  versioning: semver
+  release_notes: docs/RELEASES.md
+
+qa:
+  data_prefix: QA_{card_key}_{timestamp}
+  evidence_channels: [test, ui, api, database, log]
+  cleanup: own-data-only
+  browsers: [chromium]
+  viewports: [desktop, mobile]
+
+safety:
+  production_access: forbidden
+  secrets: external-provider-only
+  destructive_actions: explicit-human-approval
+  external_writes: workflow-scoped
+  sensitive_paths: [.env, secrets/]
+  temporary_paths: [.pipeline/tmp]
+
+components: []
+specializations: [frontend, backend, database, bi-data, security]
+
+profiles:
+  default: EQUILIBRADO
+  allowed: [RAPIDO, EQUILIBRADO, PROFUNDO, MAXIMO]

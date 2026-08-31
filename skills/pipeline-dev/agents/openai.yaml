@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline DEV"
+  short_description: "Implementa fatias verticais com evidências"
+  default_prompt: "Use $pipeline-dev para implementar o card ativo com checkpoint, testes e evidências."
+policy:
+  allow_implicit_invocation: true

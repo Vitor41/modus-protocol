@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline UX/UI"
+  short_description: "Especifica UX/UI e protege o gate visual"
+  default_prompt: "Use $pipeline-ux-ui para classificar e especificar a interface do card ativo."
+policy:
+  allow_implicit_invocation: true

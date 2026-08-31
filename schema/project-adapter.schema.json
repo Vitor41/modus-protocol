@@ -1,0 +1,595 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unified-development-pipeline:schema:project-adapter:0.1",
+  "title": "Modus Protocol Project Adapter",
+  "description": "Contrato validável do adaptador repo-scoped da Modus Protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kernel",
+    "project",
+    "tracker",
+    "trigger",
+    "context",
+    "commands",
+    "git",
+    "qa",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "kernel": {
+      "$ref": "#/$defs/kernel"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "tracker": {
+      "$ref": "#/$defs/tracker"
+    },
+    "trigger": {
+      "$ref": "#/$defs/trigger"
+    },
+    "context": {
+      "$ref": "#/$defs/context"
+    },
+    "stack": {
+      "$ref": "#/$defs/stack"
+    },
+    "commands": {
+      "$ref": "#/$defs/commands"
+    },
+    "batching": {
+      "$ref": "#/$defs/batching"
+    },
+    "environments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/environment"
+      },
+      "uniqueItems": true
+    },
+    "git": {
+      "$ref": "#/$defs/git"
+    },
+    "qa": {
+      "$ref": "#/$defs/qa"
+    },
+    "safety": {
+      "$ref": "#/$defs/safety"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "specializations": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "frontend",
+          "backend",
+          "database",
+          "bi-data",
+          "security"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "profiles": {
+      "$ref": "#/$defs/profiles"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\])(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$)).+$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "distribution"],
+      "properties": {
+        "name": {
+          "const": "unified-development-pipeline"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "distribution": {
+          "enum": ["source", "local-plugin", "public-plugin"]
+        },
+        "plugin_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "distribution": {
+                "enum": ["local-plugin", "public-plugin"]
+              }
+            },
+            "required": ["distribution"]
+          },
+          "then": {
+            "required": ["plugin_name"]
+          }
+        }
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "root"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "root": {
+          "const": "."
+        },
+        "owners": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "tracker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "board_ref", "credential_provider", "comments", "states", "card_keys"],
+      "properties": {
+        "provider": {
+          "const": "trello"
+        },
+        "board_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "credential_provider": {
+          "enum": ["codex-connector", "environment", "mcp"]
+        },
+        "environment": {
+          "$ref": "#/$defs/trackerEnvironment"
+        },
+        "comments": {
+          "$ref": "#/$defs/commentPolicy"
+        },
+        "attachments": {
+          "$ref": "#/$defs/attachmentPolicy"
+        },
+        "states": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ideas",
+            "refinement",
+            "ux_ui",
+            "ready_for_development",
+            "in_development",
+            "ready_for_validation",
+            "ready_for_release",
+            "ready_for_production",
+            "done"
+          ],
+          "properties": {
+            "ideas": {"$ref": "#/$defs/nonEmptyString"},
+            "refinement": {"$ref": "#/$defs/nonEmptyString"},
+            "ux_ui": {"$ref": "#/$defs/nonEmptyString"},
+            "ready_for_development": {"$ref": "#/$defs/nonEmptyString"},
+            "in_development": {"$ref": "#/$defs/nonEmptyString"},
+            "ready_for_validation": {"$ref": "#/$defs/nonEmptyString"},
+            "ready_for_release": {"$ref": "#/$defs/nonEmptyString"},
+            "ready_for_production": {"$ref": "#/$defs/nonEmptyString"},
+            "done": {"$ref": "#/$defs/nonEmptyString"}
+          }
+        },
+        "card_keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "pattern"],
+            "properties": {
+              "kind": {
+                "enum": ["feature", "bug"]
+              },
+              "pattern": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        },
+        "type_labels": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "domain_labels": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "human_gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "screen_approval": {
+              "const": "Tela aprovada"
+            },
+            "production_approval": {
+              "const": "APROVADO PARA PRD"
+            },
+            "unblock_prefix": {
+              "const": "BLOQUEIO RESOLVIDO:"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "properties": { "credential_provider": { "const": "environment" } }, "required": ["credential_provider"] },
+              { "properties": { "comments": { "properties": { "read_provider": { "const": "environment" } }, "required": ["read_provider"] } }, "required": ["comments"] },
+              { "properties": { "comments": { "properties": { "write_provider": { "const": "environment" } }, "required": ["write_provider"] } }, "required": ["comments"] }
+            ]
+          },
+          "then": { "required": ["environment"] }
+        }
+      ]
+    },
+    "trackerEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credential_file"],
+      "properties": {
+        "credential_file": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "commentPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_provider",
+        "write_provider",
+        "required_events",
+        "verify_after_write",
+        "transition_requires_verified_comment",
+        "encoding"
+      ],
+      "properties": {
+        "read_provider": {
+          "enum": ["codex-connector", "environment", "mcp"]
+        },
+        "write_provider": {
+          "enum": ["codex-connector", "environment", "mcp"]
+        },
+        "required_events": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["lock", "capsule", "role_handoff", "blocker", "transition"]
+          },
+          "allOf": [
+            { "contains": { "const": "lock" } },
+            { "contains": { "const": "capsule" } },
+            { "contains": { "const": "role_handoff" } },
+            { "contains": { "const": "blocker" } },
+            { "contains": { "const": "transition" } }
+          ]
+        },
+        "verify_after_write": { "const": true },
+        "transition_requires_verified_comment": { "const": true },
+        "encoding": { "const": "utf-8" }
+        ,"verification": {
+          "type": "object", "additionalProperties": false,
+          "required": ["card_ref", "comment_ref", "verified_at"],
+          "properties": {
+            "card_ref": { "$ref": "#/$defs/nonEmptyString" },
+            "comment_ref": { "$ref": "#/$defs/nonEmptyString" },
+            "verified_at": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+    "attachmentPolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "max_bytes", "allowed_extensions", "verify_after_write"],
+      "properties": {
+        "provider": { "const": "environment" },
+        "max_bytes": { "type": "integer", "minimum": 1 },
+        "allowed_extensions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["png", "jpg", "jpeg", "webp", "pdf", "html"] } },
+        "verify_after_write": { "const": true }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["process_queue", "skill"],
+      "properties": {
+        "process_queue": {
+          "const": "Processe a fila do Trello."
+        },
+        "skill": {
+          "const": "pipeline-run"
+        }
+      }
+    },
+    "contextReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "read_when"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "read_when": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agents", "index", "references"],
+      "properties": {
+        "agents": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "index": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contextReference"
+          }
+        }
+      }
+    },
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "languages": {"$ref": "#/$defs/stringArray"},
+        "frameworks": {"$ref": "#/$defs/stringArray"},
+        "databases": {"$ref": "#/$defs/stringArray"},
+        "architecture": {"$ref": "#/$defs/nonEmptyString"},
+        "invariants": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["working_directory", "argv", "timeout_seconds", "expected_exit_codes"],
+      "properties": {
+        "working_directory": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "expected_exit_codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "uniqueItems": true
+        },
+        "output": {
+          "enum": ["summary", "full-on-failure", "artifact"]
+        }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/command"
+      },
+      "required": ["baseline", "test_targeted", "test_full"]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "start_command", "healthcheck", "shutdown"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "start_command": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "healthcheck": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "shutdown": {
+          "const": "tracked-process-only"
+        },
+        "port_strategy": {
+          "enum": ["fixed", "first-free"]
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 65535
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_branch", "branch_patterns", "release_gate"],
+      "properties": {
+        "default_branch": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "branch_patterns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["feature", "bug"],
+          "properties": {
+            "feature": {"$ref": "#/$defs/nonEmptyString"},
+            "bug": {"$ref": "#/$defs/nonEmptyString"}
+          }
+        },
+        "release_gate": {
+          "const": "APROVADO PARA PRD"
+        },
+        "versioning": {
+          "enum": ["semver", "calver", "none"]
+        },
+        "release_notes": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "batching": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "max_cards"],
+      "properties": {
+        "mode": { "const": "cohesive-delivery" },
+        "max_cards": { "type": "integer", "minimum": 2, "maximum": 12 }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data_prefix", "evidence_channels", "cleanup"],
+      "properties": {
+        "data_prefix": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "evidence_channels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["test", "ui", "api", "database", "log", "artifact"]
+          },
+          "uniqueItems": true
+        },
+        "cleanup": {
+          "const": "own-data-only"
+        },
+        "browsers": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "viewports": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production_access", "secrets", "destructive_actions", "external_writes"],
+      "properties": {
+        "production_access": {
+          "const": "forbidden"
+        },
+        "secrets": {
+          "const": "external-provider-only"
+        },
+        "destructive_actions": {
+          "const": "explicit-human-approval"
+        },
+        "external_writes": {
+          "const": "workflow-scoped"
+        },
+        "sensitive_paths": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "temporary_paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source", "version", "load_when"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "load_when": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"]
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"]
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

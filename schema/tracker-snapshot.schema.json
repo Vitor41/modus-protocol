@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unified-development-pipeline:schema:tracker-snapshot:0.1",
+  "title": "Modus Protocol Tracker Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["board_ref", "open_lists", "cards", "integration"],
+  "properties": {
+    "board_ref": { "$ref": "#/$defs/nonEmptyString" },
+    "open_lists": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/list" }
+    },
+    "cards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/card" }
+    },
+    "integration": { "$ref": "#/$defs/integration" },
+    "active_execution": { "$ref": "#/$defs/activeExecution" }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comments"],
+      "properties": {
+        "comments": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["read", "write", "read_provider", "write_provider"],
+          "properties": {
+            "read": { "enum": ["verified", "unavailable", "not_tested"] },
+            "write": { "enum": ["verified", "unavailable", "not_tested"] },
+            "read_provider": { "enum": ["codex-connector", "environment", "mcp"] },
+            "write_provider": { "enum": ["codex-connector", "environment", "mcp"] },
+            "evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
+            "verified_at": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "position"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "position": { "type": "number", "minimum": 0 }
+      }
+    },
+    "signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "awaiting_human": { "type": "boolean" },
+        "screen_approval_valid": { "type": "boolean" },
+        "production_approval_valid": { "type": "boolean" },
+        "business_question": { "type": "boolean" },
+        "implementation_complete": { "type": "boolean" },
+        "review_approved": { "type": "boolean" },
+        "qa_approved": { "type": "boolean" }
+      }
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "status"],
+      "properties": {
+        "run_id": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "enum": ["active", "released", "blocked"] },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "state": { "$ref": "#/$defs/nonEmptyString" },
+        "updated_at": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "list_ref", "position"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "key": { "$ref": "#/$defs/nonEmptyString" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "list_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "position": { "type": "number", "minimum": 0 },
+        "signals": { "$ref": "#/$defs/signals" },
+        "loop_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "lock": { "$ref": "#/$defs/lock" }
+        ,"delivery_group": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "cards"],
+          "properties": {
+            "id": { "$ref": "#/$defs/nonEmptyString" },
+            "cards": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
+            "branch": { "$ref": "#/$defs/nonEmptyString" },
+            "defined_by": { "const": "pipeline-po" }
+          }
+        }
+      }
+    },
+    "activeExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architecture", "status", "run_id"],
+      "properties": {
+        "architecture": { "enum": ["legacy", "unified"] },
+        "status": { "enum": ["active", "complete", "blocked"] },
+        "run_id": { "$ref": "#/$defs/nonEmptyString" },
+        "card_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "state": { "$ref": "#/$defs/nonEmptyString" },
+        "capsule_present": { "type": "boolean" }
+      }
+    }
+  }
+}

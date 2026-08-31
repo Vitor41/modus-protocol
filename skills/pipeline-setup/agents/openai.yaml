@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline Setup"
+  short_description: "Propõe adapters sem alterar o projeto"
+  default_prompt: "Use $pipeline-setup para inspecionar este projeto e preparar uma proposta de adapter sem gravar arquivos."
+policy:
+  allow_implicit_invocation: false

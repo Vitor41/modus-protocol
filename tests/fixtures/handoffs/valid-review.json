@@ -1,0 +1,28 @@
+{
+  "contract_version": "0.1",
+  "run_id": "RUN-20260828-REV00001",
+  "card": { "ref": "card-review", "key": "FX-104" },
+  "role": "pipeline-code-review",
+  "profile": "PROFUNDO",
+  "execution": {
+    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "PROFUNDO", "model": "gpt-5.6-sol", "reasoning_effort": "high", "agent_mode": "independent", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-5.6-sol", "reasoning_effort": "high", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:review-fixture", "fallback_used": false },
+    "usage": { "status": "not_observable" }
+  },
+  "status": "completed",
+  "iteration_kind": "initial",
+  "state": { "from": "in_development", "to": "ready_for_validation" },
+  "summary": "Diff aprovado contra especificação e padrões.",
+  "context": { "capsule_reused": true, "read_paths": ["spec/card.md", "src/feature"] },
+  "evidence": [{ "kind": "diff", "ref": "base..abc1234", "result": "Diff fixado e revisado." }],
+  "risks": ["QA deve validar responsividade móvel."],
+  "next_step": "Validar critérios sobre o commit fixado.",
+  "deliverable": {
+    "baseline_ref": "base1234",
+    "diff_ref": "base1234..abc1234",
+    "verdict": "approved",
+    "spec_findings": [],
+    "standards_findings": [],
+    "tests_observed": ["test_targeted: passed", "test_full: passed"]
+  }
+}

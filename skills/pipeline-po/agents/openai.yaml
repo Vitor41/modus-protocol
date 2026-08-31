@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline PO"
+  short_description: "Refina demandas em critérios verificáveis"
+  default_prompt: "Use $pipeline-po para refinar o card ativo sem prescrever a implementação."
+policy:
+  allow_implicit_invocation: true
