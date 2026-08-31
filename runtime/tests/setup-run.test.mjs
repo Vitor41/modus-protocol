@@ -127,6 +127,9 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-002");
     assert.equal(result.selected.skill, "pipeline-qa");
+    assert.equal(result.selected.continuation_policy.mode, "until-human-gate-or-blocker");
+    assert.equal(result.selected.continuation_policy.continue_after_role_handoff, true);
+    assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
     assert.deepEqual(result.selected.execution_request, {
       mapping_version: "gpt-5.6-2026-08-28",

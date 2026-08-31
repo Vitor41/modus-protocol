@@ -18,8 +18,11 @@ Transforme intenção em comportamento verificável sem inventar regra de negóc
 7. Produza critérios observáveis com identificador, comportamento esperado e evidência capaz de comprová-lo.
 8. Classifique impactos em frontend, backend, banco, BI/dados e segurança; não prescreva arquivos, classes ou arquitetura.
 9. Se faltar regra ou decisão material para concluir, bloqueie o card, preserve `refinement` e faça perguntas objetivas ao humano. Não invente nem escolha silenciosamente uma regra plausível.
+10. Antes de concluir o refinamento, normalize fisicamente o card: use `trello --action list-card-names` para considerar também cards arquivados, resolva a próxima chave pela regra de nomenclatura do projeto, preserve uma chave válida já existente, atualize o título no padrão local e substitua a descrição original pela história de usuário refinada. Use `trello --action update-card-readback` e só aceite a atualização com releitura confirmada.
 
 Um título curto ou uma descrição incompleta não autoriza rejeição automática. Bloqueie somente quando, mesmo após investigação proporcional, a intenção continuar incompreensível ou uma decisão humana for necessária para fechar escopo, regra ou critério.
+
+A descrição final é a fonte legível do refinamento e deve conter, mesmo quando a entrada veio em texto livre: contexto, problema, história de usuário, solução esperada, escopo, fora do escopo, regras e exceções, critérios de aceite identificados, impactos, riscos/dependências e decisões pendentes. Não deixe a especificação completa apenas em comentário ou handoff. Se o projeto não fornecer regra suficiente para calcular uma chave sem colisão, bloqueie e peça a decisão humana; não invente numeração.
 
 Leia `references/refinement-gate.md` quando a demanda for ampla, ambígua, financeira, regulatória ou estiver retornando de outro papel.
 
@@ -30,6 +33,7 @@ Leia `references/refinement-gate.md` quando a demanda for ampla, ambígua, finan
 - Dúvida pendente mantém o card em `refinement` e registra o bloqueio.
 - Bloqueio do PO deve declarar o que foi investigado, a lacuna material e as perguntas necessárias para o usuário responder.
 - Não mova o card antes de validar o handoff.
+- Não devolva `PASS` enquanto título e descrição não tiverem sido persistidos e relidos no tracker.
 
 Produza o contrato de `schema/role-handoff.schema.json` com `role: pipeline-po` e valide usando:
 

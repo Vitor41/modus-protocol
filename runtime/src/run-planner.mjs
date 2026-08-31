@@ -310,6 +310,12 @@ export function planRun(input = {}) {
     run_id: id,
     selected: {
       ...selected,
+      continuation_policy: {
+        mode: "until-human-gate-or-blocker",
+        preserve_run_id: true,
+        continue_after_role_handoff: true,
+        stop_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure", "queue_complete"]
+      },
       ...(declaredGroup ? {
         delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, cards: batchMembers.map(({ snapshot_index, ...card }) => card) },
         card_refs: batchMembers.map((card) => card.card_ref)

@@ -1,3 +1,4 @@
 runtime/node_modules/
 runtime/.validator-deps/
+.pnpm-store/
 local-marketplace/plugins/unified-development-pipeline/

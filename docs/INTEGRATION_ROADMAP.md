@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.1.7` |
+| Versão | `0.1.8` |
 | Estado | Cutover técnico concluído nos dois projetos e rollback isolado aprovado |
 | Projetos obrigatórios | Projeto Piloto A e Projeto Piloto B |
 
@@ -89,7 +89,7 @@ Integrado em 2026-08-28 preservando as colunas e movimentações que originaram 
 Evidências do cutover:
 
 1. `.agents`, workflow, RTK, Ponytail e UI/UX Pro Max inventariados e preservados como referências sem autoridade concorrente;
-2. adapter repo-scoped pinado no Kernel `0.1.7`;
+2. adapter repo-scoped pinado no Kernel compatível;
 3. `AGENTS.md` direcionando o gatilho exclusivamente para `pipeline-run`;
 4. board com nove listas canônicas reconhecido pela API direta;
 5. comentário diagnóstico em card sanitizado gravado e relido pelo provider declarado;

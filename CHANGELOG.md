@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+### Corrigido
+
+- Kernel `0.1.8` mantém o mesmo `RUN_ID` e continua automaticamente entre PO, UX/UI, DEV, Code Review e QA até um gate humano, bloqueio real, falha ou conclusão.
+- PO passa a persistir e reler título canônico e descrição completa no card antes do handoff; o refinamento não pode existir apenas em comentários.
+- Cliente Trello ganha leitura e atualização verificável de card e exclusão segura de comentário por card, referência e hash, sempre com releitura.
+
 ### Adicionado
 
 - Identidade pública **Modus Protocol**, com o identificador técnico `unified-development-pipeline` preservado por compatibilidade na série v0.1.

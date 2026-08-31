@@ -1,11 +1,11 @@
 ---
 name: pipeline-run
-description: Inicia ou retoma a Modus Protocol a partir do gatilho aprovado, validando adapter, tracker, execução ativa, locks e elegibilidade antes de selecionar um card e rotear um único papel. Use para `Processe a fila do Trello.`, shadow run ou retomada; não use para substituir diretamente PO, UX/UI, DEV, Code Review ou QA.
+description: Inicia ou retoma a Modus Protocol a partir do gatilho aprovado, validando adapter, tracker, execução ativa, locks e elegibilidade e coordenando papéis consecutivos até um gate humano ou bloqueio real. Use para `Processe a fila do Trello.`, shadow run ou retomada; não use para substituir diretamente PO, UX/UI, DEV, Code Review ou QA.
 ---
 
 # Pipeline Run
 
-Coordene uma execução por vez e preserve as fronteiras entre os papéis.
+Coordene uma execução por vez e preserve as fronteiras entre os papéis. Um handoff técnico aprovado continua o mesmo loop; não encerre a execução apenas porque o próximo papel mudou.
 
 ## Planejar
 
@@ -30,7 +30,9 @@ Leia `references/execution-protocol.md` e `references/tracker-comment-protocol.m
 7. Aceite um handoff apenas com saída, recibo de execução e evidência exigidos pelo gate.
 8. Publique o comentário do handoff ou bloqueio e releia-o. Se a escrita ou a releitura falhar, mantenha o card na coluna atual e reporte `TRACKER_COMMENT_WRITE_FAILED` ou `TRACKER_COMMENT_READBACK_FAILED`.
 9. Releia o lock e o estado, produza o recibo de `schema/tracker-transition-receipt.schema.json` e execute `../../runtime/pipeline.ps1 transition-gate`. Mova o card somente com `PASS / GRANTED`; nunca mova primeiro para comentar depois.
-10. Atualize cápsula e lock com o mesmo ciclo de escrita e releitura antes de liberar o próximo papel ou encerrar.
+10. Atualize cápsula e lock com o mesmo ciclo de escrita e releitura.
+11. Após um handoff e uma transição confirmados, gere novo snapshot e plano, preserve o `RUN_ID` e acione imediatamente o próximo papel elegível. Repita o ciclo PO → UX/UI → DEV → Code Review → QA enquanto não houver condição canônica de parada.
+12. Encerre a automação somente em: decisão humana pendente; `Tela aprovada` pendente após especificação/mock vigente; `APROVADO PARA PRD` pendente; dúvida de negócio; limite de retornos; lock/conflito externo; falha de gate, ferramenta ou releitura; ou fila concluída. Um handoff `PASS`, isoladamente, nunca é condição de parada.
 
 ## Limites
 

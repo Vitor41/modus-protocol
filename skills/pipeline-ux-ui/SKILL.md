@@ -17,6 +17,7 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 6. Se faltar regra de negócio, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente.
 7. Não implemente código de produção durante este papel.
 8. Quando houver mock, protótipo ou evidência visual, anexe-o ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência, nome, hash (para arquivo), `RUN_ID` e versão da especificação.
+9. Se houver frontend, produza a especificação e os mocks necessários antes de solicitar aprovação; somente então registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar espera artificial.
 
 ## Gate visual
 
@@ -27,3 +28,5 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 - `Tela aprovada` deve ser posterior ao anexo/especificação vigente; um mock apenas enviado não constitui aprovação.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-ux-ui` e valide usando `../../runtime/src/role-gate.mjs`. Somente `PASS` pode retornar ao ORCHESTRATOR.
+
+Depois de `Tela aprovada` válida, devolva `PASS` para `ready_for_development`; o ORCHESTRATOR deve acionar DEV imediatamente no mesmo loop. Não encerre apenas para anunciar o handoff.

@@ -27,8 +27,16 @@ Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência 
 8. Nova releitura do lock e do estado.
 9. Transição permitida somente após comentário confirmado, ou bloqueio explícito.
 10. Atualização final da cápsula e do lock, ambas relidas.
+11. Novo snapshot e novo plano usando o mesmo `RUN_ID` após cada transição técnica confirmada.
+12. Lançamento imediato do próximo papel elegível até alcançar uma condição de parada canônica.
 
 Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma sucesso e não repita cegamente. Consulte o estado oficial e reconcilie antes de continuar.
+
+## Continuação automática
+
+O gatilho processa uma unidade de entrega até o próximo gate humano, e não apenas um papel. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente no mesmo loop quando seus gates passam. Retornos de Review ou QA ao DEV também continuam, respeitando o limite de ciclos.
+
+São paradas legítimas: decisão de negócio solicitada pelo PO; aprovação visual pendente; aprovação para PRD pendente; terceiro retorno; conflito de lock ou estado; falha de ferramenta, gate ou releitura; e conclusão da fila. A simples existência de um próximo papel nunca encerra o loop.
 
 ## Cápsula mínima
 

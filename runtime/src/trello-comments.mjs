@@ -140,6 +140,16 @@ export async function executeTrelloComment(input = {}) {
   if (typeof fetchImpl !== "function") throw new Error("fetch não está disponível.");
   const action = input.action;
 
+  if (action === "list-card-names") {
+    const cards = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/cards`, { filter: "all", fields: "name,closed" }, "a leitura das chaves históricas do board");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", board_ref: adapter.tracker.board_ref,
+      cards: cards.map((card) => ({ ref: card.id, title: card.name, key: cardKey(card.name, adapter.tracker.card_keys), closed: card.closed })),
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false, includes_closed_cards: true }
+    };
+  }
+
   if (action === "snapshot") {
     if (!input.outputPath) throw new Error("outputPath é obrigatório para snapshot.");
     const outputPath = containedPath(projectRoot, resolve(projectRoot, input.outputPath), "outputPath");
@@ -187,6 +197,38 @@ export async function executeTrelloComment(input = {}) {
   }
 
   if (!input.cardRef) throw new Error("cardRef é obrigatório.");
+
+  if (action === "read-card") {
+    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "name,desc,idList,idLabels,closed" }, "a leitura do card");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card: { ref: persisted.id, title: persisted.name, description: persisted.desc, list_ref: persisted.idList, label_refs: persisted.idLabels ?? [], closed: persisted.closed },
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false }
+    };
+  }
+
+  if (action === "update-card-readback") {
+    if (!input.namePath || !input.descriptionPath) throw new Error("namePath e descriptionPath são obrigatórios.");
+    const namePath = containedPath(projectRoot, resolve(projectRoot, input.namePath), "namePath");
+    const descriptionPath = containedPath(projectRoot, resolve(projectRoot, input.descriptionPath), "descriptionPath");
+    const name = readFileSync(namePath, "utf8").trim();
+    const description = readFileSync(descriptionPath, "utf8").trim();
+    if (!name || !description) throw new Error("Título e descrição refinada não podem ser vazios.");
+    if (unsafeEncoding(name) || unsafeEncoding(description)) throw new Error("Título ou descrição contém sinais de codificação corrompida.");
+    if (!cardKey(name, adapter.tracker.card_keys)) throw new Error("O título não contém uma chave canônica aceita pelo adapter.");
+    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, name, desc: description });
+    await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}`, {
+      method: "PUT", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body
+    }, "a atualização do card"), "a atualização do card");
+    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "name,desc,idList" }, "a releitura do card");
+    if (persisted.name !== name || persisted.desc !== description) throw new Error("A releitura do card divergiu do título ou descrição refinada.");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: persisted.id, title: persisted.name, list_ref: persisted.idList,
+      title_sha256: createHash("sha256").update(name, "utf8").digest("hex"), description_sha256: createHash("sha256").update(description, "utf8").digest("hex"),
+      readback_status: "confirmed", guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+    };
+  }
 
   if (action === "attach-file" || action === "attach-url") {
     const form = new FormData();
@@ -263,6 +305,22 @@ export async function executeTrelloComment(input = {}) {
     };
   }
 
+  if (action === "delete-comment-readback") {
+    if (!input.commentRef || !input.expectedSha256) throw new Error("commentRef e expectedSha256 são obrigatórios para exclusão segura.");
+    const existing = await getJson(fetchImpl, credentials, `/actions/${encodeURIComponent(input.commentRef)}`, {}, "a validação prévia do comentário");
+    const text = String(existing.data?.text ?? "");
+    if (existing.data?.card?.id !== input.cardRef) throw new Error("O comentário pertence a outro card.");
+    if (createHash("sha256").update(text, "utf8").digest("hex") !== input.expectedSha256) throw new Error("O conteúdo do comentário mudou; exclusão recusada.");
+    await responseJson(await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(input.commentRef)}`, credentials), { method: "DELETE" }, "a exclusão do comentário"), "a exclusão do comentário");
+    const readback = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(input.commentRef)}`, credentials), undefined, "a confirmação da exclusão");
+    if (readback.status !== 404) throw new Error("A releitura não confirmou a exclusão do comentário.");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello-comments", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: input.cardRef, comment_ref: input.commentRef, deleted_content_sha256: input.expectedSha256,
+      readback_status: "confirmed_absent", guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+    };
+  }
+
   if (action === "write-readback") {
     if (!input.textPath) throw new Error("textPath é obrigatório para escrita.");
     const textPath = containedPath(projectRoot, resolve(projectRoot, input.textPath), "textPath");
@@ -328,6 +386,9 @@ function parseArguments(argv) {
       else if (argument === "--comment-ref") options.commentRef = value;
       else if (argument === "--list-ref") options.listRef = value;
       else if (argument === "--text-file") options.textPath = value;
+      else if (argument === "--name-file") options.namePath = value;
+      else if (argument === "--description-file") options.descriptionPath = value;
+      else if (argument === "--expected-sha256") options.expectedSha256 = value;
       else if (argument === "--output") options.outputPath = value;
       else if (argument === "--file") options.filePath = value;
       else if (argument === "--url") options.url = value;
@@ -346,7 +407,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list|read|write-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|write-readback|delete-comment-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
