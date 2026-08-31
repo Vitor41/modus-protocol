@@ -2,7 +2,8 @@
   "schema_version": "0.1",
   "kernel": {
     "name": "unified-development-pipeline",
-    "version": "0.1.8",
+    "version": "0.1.9",
+    "update_policy": "latest-compatible",
     "distribution": "source"
   },
   "project": {
@@ -38,7 +39,14 @@
         "kind": "feature",
         "pattern": "^FX-[0-9]{3}$"
       }
-    ]
+    ],
+    "type_labels": {
+      "feature": "label-feature",
+      "bug": "label-bug"
+    },
+    "domain_labels": {
+      "business": "label-business"
+    }
   },
   "trigger": {
     "process_queue": "Processe a fila do Trello.",

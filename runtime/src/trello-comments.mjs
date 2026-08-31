@@ -230,6 +230,27 @@ export async function executeTrelloComment(input = {}) {
     };
   }
 
+  if (action === "update-labels-readback") {
+    const requested = [...new Set(input.labelRefs ?? [])];
+    const typeRefs = new Set(Object.values(adapter.tracker.type_labels ?? {}));
+    const domainRefs = new Set(Object.values(adapter.tracker.domain_labels ?? {}));
+    const allowed = new Set([...typeRefs, ...domainRefs]);
+    if (requested.filter((ref) => typeRefs.has(ref)).length !== 1) throw new Error("Exatamente uma label de tipo é obrigatória.");
+    if (requested.filter((ref) => domainRefs.has(ref)).length < 1) throw new Error("Ao menos uma label oficial de domínio é obrigatória.");
+    if (requested.some((ref) => !allowed.has(ref))) throw new Error("Uma label solicitada não pertence ao adapter.");
+    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, idLabels: requested.join(",") });
+    await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}`, {
+      method: "PUT", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body
+    }, "a atualização das labels"), "a atualização das labels");
+    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "idLabels" }, "a releitura das labels");
+    if (JSON.stringify([...(persisted.idLabels ?? [])].sort()) !== JSON.stringify([...requested].sort())) throw new Error("A releitura das labels divergiu da classificação solicitada.");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: persisted.id, label_refs: persisted.idLabels, readback_status: "confirmed",
+      guarantees: { tracker_writes_performed: true, secrets_exposed: false, labels_restricted_to_adapter: true }
+    };
+  }
+
   if (action === "attach-file" || action === "attach-url") {
     const form = new FormData();
     form.set("key", credentials.key); form.set("token", credentials.token);
@@ -389,6 +410,7 @@ function parseArguments(argv) {
       else if (argument === "--name-file") options.namePath = value;
       else if (argument === "--description-file") options.descriptionPath = value;
       else if (argument === "--expected-sha256") options.expectedSha256 = value;
+      else if (argument === "--label-refs") options.labelRefs = value.split(",").map((item) => item.trim()).filter(Boolean);
       else if (argument === "--output") options.outputPath = value;
       else if (argument === "--file") options.filePath = value;
       else if (argument === "--url") options.url = value;
@@ -407,7 +429,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|write-readback|delete-comment-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

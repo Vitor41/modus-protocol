@@ -60,6 +60,17 @@ test("UX não conclui frontend sem estados verificáveis", async () => {
   assert.ok(result.diagnostics.some((item) => item.code === "UX_SPEC_INCOMPLETE"));
 });
 
+test("UX frontend exige mock anexado e relido no RUN_ID atual", async () => {
+  const handoff = await fixture("valid-ux.json");
+  delete handoff.deliverable.attachments;
+  const missing = await validateObject(handoff);
+  assert.ok(missing.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
+
+  handoff.deliverable.attachments = [{ ref: "attachment-1", name: "mock.png", kind: "file", run_id: "RUN-20260828-OUTRO001", specification_version: "ux-v1", readback_status: "confirmed" }];
+  const wrongRun = await validateObject(handoff);
+  assert.ok(wrongRun.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
+});
+
 test("DEV não conclui com teste falhando", async () => {
   const handoff = await fixture("valid-dev.json");
   handoff.deliverable.tests[0].result = "failed";
@@ -193,4 +204,11 @@ test("handoff rejeita fallback mesmo quando produz saída", async () => {
   handoff.execution.observation.fallback_reason = "Modelo solicitado indisponível.";
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_FALLBACK_FORBIDDEN"));
+});
+
+test("handoff rejeita placeholder como evidência do agente", async () => {
+  const handoff = await fixture("valid-ux.json");
+  handoff.execution.observation.evidence_ref = "agent:placeholder-agent-id";
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_EVIDENCE_PLACEHOLDER"));
 });

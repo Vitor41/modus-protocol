@@ -27,6 +27,9 @@
     "accessibility": ["Foco entra no modal e retorna ao acionador.", "Fechamento por Escape."],
     "responsiveness": ["Modal ocupa largura segura em viewport móvel."],
     "human_approval": { "required": true, "evidence_ref": "trello-comment-screen-approved" },
-    "design_refs": ["design-spec-1"]
+    "design_refs": ["design-spec-1"],
+    "attachments": [
+      { "ref": "trello-attachment-1", "name": "mock-modal.png", "kind": "file", "run_id": "RUN-20260828-UX000001", "specification_version": "ux-v1", "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "readback_status": "confirmed" }
+    ]
   }
 }

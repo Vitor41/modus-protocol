@@ -30,7 +30,7 @@ Após os dois pilotos, documentação, licença, segurança e atualização esta
 |---|---|
 | Workflow e gates | Kernel central |
 | Skills comuns | Pacote central/plugin |
-| Versão adotada | `kernel.version` no adapter do projeto |
+| Piso compatível | `kernel.version` e `kernel.update_policy` no adapter do projeto |
 | Configuração local | `.pipeline/project.adapter.yaml` |
 | Domínio e arquitetura | Documentação do projeto consumidor |
 | Credenciais | Provedor externo autorizado |
@@ -50,10 +50,11 @@ O produto público se chama **Modus Protocol**. O identificador permanece estáv
 Adapter, Kernel e plugin registram versões separadas quando necessário:
 
 - `schema_version`: contrato do adapter;
-- `kernel.version`: comportamento desejado pelo projeto;
+- `kernel.version`: piso de comportamento desejado pelo projeto;
+- `kernel.update_policy`: `latest-compatible` por padrão ou `pinned` para igualdade exata;
 - `plugin.version`: artefato instalado que fornece o Kernel e as Skills.
 
-Doctor exige compatibilidade explícita entre os três.
+Doctor aceita patches mais novos na mesma linha quando a política é `latest-compatible`; bloqueia downgrade, mudança de linha e qualquer divergência quando a política é `pinned`.
 
 ## 4. Instalação inicial
 

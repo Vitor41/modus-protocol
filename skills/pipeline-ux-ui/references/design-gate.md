@@ -10,7 +10,7 @@
 - nome acessível, contraste e comunicação não dependente apenas de cor;
 - comportamento em viewports suportados;
 - componentes e tokens existentes reutilizados;
-- evidência visual ou referência que o DEV e o QA consigam consultar.
+- ao menos um mock/protótipo anexado ao card e relido por referência, que o humano, DEV e QA consigam consultar.
 
 ## Limites
 
@@ -19,3 +19,5 @@ Não transforme preferência estética em requisito universal. Diferencie padrã
 ## Aprovação
 
 Associe a aprovação à versão da especificação. Registre a referência da evidência; não use apenas um booleano sem origem. Mudança posterior em fluxo, regra ou estados exige nova avaliação de validade.
+
+Para `frontend`, a ordem é obrigatória: especificar → gerar mock → anexar e reler → solicitar `Tela aprovada`. Nunca solicite aprovação baseada somente em texto no comentário.

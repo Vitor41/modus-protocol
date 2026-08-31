@@ -16,12 +16,14 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 5. Reuse o design system e os padrões reais do produto antes de propor componente novo.
 6. Se faltar regra de negócio, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente.
 7. Não implemente código de produção durante este papel.
-8. Quando houver mock, protótipo ou evidência visual, anexe-o ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência, nome, hash (para arquivo), `RUN_ID` e versão da especificação.
-9. Se houver frontend, produza a especificação e os mocks necessários antes de solicitar aprovação; somente então registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar espera artificial.
+8. Em toda classificação `frontend`, gere ao menos um mock ou protótipo visual consultável que represente a solução proposta; descrição textual isolada não atende ao gate.
+9. Anexe cada mock ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID`, versão da especificação e `readback_status: confirmed`.
+10. Somente depois de gerar, anexar e reler a evidência visual registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar mock ou espera artificial.
 
 ## Gate visual
 
 - Alteração de frontend exige evidência de `Tela aprovada` posterior à especificação vigente.
+- Frontend sem ao menos um anexo visual com releitura confirmada falha o role gate e permanece em `ux_ui`.
 - Sem aprovação, permaneça em `ux_ui` com status bloqueado.
 - `no_frontend` concluído pode seguir para `ready_for_development` sem simular aprovação visual.
 - Uma especificação substituída invalida a aprovação anterior.

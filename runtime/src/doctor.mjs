@@ -274,14 +274,19 @@ function checkAdapterSemantics(adapter, projectRoot, diagnostics) {
     );
   }
 
-  if (adapter.kernel.version !== PACKAGE.version) {
+  const adapterParts = String(adapter.kernel.version).split(".").map(Number);
+  const runtimeParts = String(PACKAGE.version).split(".").map(Number);
+  const latestCompatible = adapter.kernel.update_policy !== "pinned";
+  const compatible = latestCompatible && adapterParts.length === 3 && runtimeParts.length === 3 &&
+    adapterParts[0] === runtimeParts[0] && adapterParts[1] === runtimeParts[1] && runtimeParts[2] >= adapterParts[2];
+  if (adapter.kernel.version !== PACKAGE.version && !compatible) {
     addDiagnostic(
       diagnostics,
       "KERNEL_VERSION_MISMATCH",
       "error",
       "kernel.version",
-      `O adapter fixa o Kernel ${adapter.kernel.version}, mas o doctor executado é ${PACKAGE.version}.`,
-      "Instale a versão correspondente ou migre o adapter de forma explícita."
+      `O adapter exige Kernel ${adapter.kernel.version} (${adapter.kernel.update_policy ?? "latest-compatible"}), mas o doctor executado é ${PACKAGE.version}.`,
+      "Instale uma versão compatível, eleve o piso do adapter ou use pinned quando a igualdade exata for necessária."
     );
   }
 }

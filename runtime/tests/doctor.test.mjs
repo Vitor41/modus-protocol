@@ -221,6 +221,27 @@ test("cutover válido exige snapshot e roteamento unificado", async () => {
   }
 });
 
+test("doctor aceita patch mais novo na mesma linha por padrão", async () => {
+  const fixture = JSON.parse(await readFile(FIXTURE_PATH, "utf8"));
+  fixture.kernel.version = "0.1.7";
+  const { root, adapterPath } = await createProject(fixture);
+  try {
+    const result = runDoctor({ projectRoot: root, adapterPath, schemaPath: SCHEMA_PATH, mode: "shadow" });
+    assert.ok(!result.diagnostics.some((item) => item.code === "KERNEL_VERSION_MISMATCH"), JSON.stringify(result.diagnostics));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("doctor mantém igualdade exata quando adapter usa pinned", async () => {
+  const fixture = JSON.parse(await readFile(FIXTURE_PATH, "utf8"));
+  fixture.kernel.version = "0.1.7";
+  fixture.kernel.update_policy = "pinned";
+  const { root, adapterPath } = await createProject(fixture);
+  try {
+    const result = runDoctor({ projectRoot: root, adapterPath, schemaPath: SCHEMA_PATH, mode: "shadow" });
+    assert.ok(result.diagnostics.some((item) => item.code === "KERNEL_VERSION_MISMATCH"), JSON.stringify(result.diagnostics));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("rollback isolado alterna bootstrap sem manter dois roteadores ativos", async () => {
   const fixture = JSON.parse(await readFile(FIXTURE_PATH, "utf8"));
   const { root, adapterPath } = await createProject(fixture);

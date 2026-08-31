@@ -27,7 +27,7 @@ Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência 
 8. Nova releitura do lock e do estado.
 9. Transição permitida somente após comentário confirmado, ou bloqueio explícito.
 10. Atualização final da cápsula e do lock, ambas relidas.
-11. Novo snapshot e novo plano usando o mesmo `RUN_ID` após cada transição técnica confirmada.
+11. Novo snapshot e novo plano com `plan --tracker-snapshot <arquivo> --continue-run-id <RUN_ID atual>` após cada transição técnica confirmada.
 12. Lançamento imediato do próximo papel elegível até alcançar uma condição de parada canônica.
 
 Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma sucesso e não repita cegamente. Consulte o estado oficial e reconcilie antes de continuar.
@@ -56,7 +56,7 @@ A cápsula reduz releitura, mas não substitui card, diff, teste, gate humano ou
 
 O planner resolve o perfil semântico antes de qualquer escrita. O ORCHESTRATOR deve repassar ao agente de papel, como parâmetros explícitos, `execution_request.model` e `execution_request.reasoning_effort`.
 
-O ORCHESTRATOR copia a solicitação em `execution.request` e carimba `execution.observation` a partir da chamada de lançamento; o papel não pode autodeclarar sua configuração. O recibo registra:
+O ORCHESTRATOR substitui qualquer valor proposto pelo papel: copia o `execution_request` do plano em `execution.request` e carimba `execution.observation` a partir da chamada real de lançamento; o papel não pode autodeclarar sua configuração. A evidência usa `agent:<id-real-retornado>`, nunca placeholder. O recibo registra:
 
 - modelo e esforço aceitos no lançamento;
 - fonte `explicit-agent-launch`;

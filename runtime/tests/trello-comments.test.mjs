@@ -19,7 +19,9 @@ async function projectFixture() {
       provider: "trello",
       comments: { read_provider: "environment", write_provider: "environment" },
       environment: { credential_file: "trello_key/trello.env" },
-      card_keys: [{ kind: "feature", pattern: "^FP-[0-9]{3}$" }]
+      card_keys: [{ kind: "feature", pattern: "^FP-[0-9]{3}$" }],
+      type_labels: { feature: "label-feature", bug: "label-bug" },
+      domain_labels: { business: "label-business", technical: "label-technical" }
     }
   };
   await writeFile(join(root, ".pipeline", "project.adapter.yaml"), YAML.stringify(adapter), "utf8");
@@ -246,5 +248,27 @@ test("exclui comentário somente após validar card e hash e confirma ausência"
     }});
     assert.equal(result.readback_status, "confirmed_absent");
     assert.equal(calls, 3);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("atualiza uma label de tipo e labels oficiais de domínio com releitura", async () => {
+  const root = await projectFixture();
+  let calls = 0;
+  try {
+    const result = await executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["label-feature", "label-business"], fetchImpl: async (_url, options = {}) => {
+      calls += 1;
+      if (calls === 1) { assert.equal(options.body.get("idLabels"), "label-feature,label-business"); return new Response(JSON.stringify({ id: "card-1" })); }
+      return new Response(JSON.stringify({ id: "card-1", idLabels: ["label-business", "label-feature"] }));
+    }});
+    assert.equal(result.readback_status, "confirmed");
+    assert.equal(result.guarantees.labels_restricted_to_adapter, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recusa labels sem tipo único ou fora do adapter", async () => {
+  const root = await projectFixture();
+  try {
+    await assert.rejects(() => executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["label-business"], fetchImpl: async () => new Response() }), /Exatamente uma/u);
+    await assert.rejects(() => executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["label-feature", "label-business", "label-unknown"], fetchImpl: async () => new Response() }), /não pertence/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

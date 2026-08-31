@@ -83,6 +83,9 @@ function validateTransition(handoff, diagnostics) {
     }
     const frontend = deliverable?.classification === "frontend";
     const approval = deliverable?.human_approval;
+    if (frontend && (!deliverable?.attachments?.length || deliverable.attachments.some((item) => item.readback_status !== "confirmed" || item.run_id !== handoff.run_id))) {
+      diagnostic(diagnostics, "UX_VISUAL_ATTACHMENT_MISSING", "deliverable.attachments", "Frontend exige mock ou protótipo anexado, relido e vinculado ao RUN_ID atual.");
+    }
     if (status === "completed" && frontend && (!approval?.required || !approval?.evidence_ref)) {
       diagnostic(diagnostics, "UX_APPROVAL_MISSING", "deliverable.human_approval", "Frontend não pode avançar sem aprovação humana vigente.");
     }
@@ -216,6 +219,14 @@ function validateExecutionReceipt(handoff, diagnostics) {
       "EXECUTION_CONFIGURATION_SOURCE_INVALID",
       "execution.observation.configuration_source",
       "O recibo deve vir do lançamento explícito do agente de papel."
+    );
+  }
+  if (/(placeholder|todo|pending|replace|agent-id|unknown|temp)/iu.test(observation.evidence_ref ?? "")) {
+    diagnostic(
+      diagnostics,
+      "EXECUTION_EVIDENCE_PLACEHOLDER",
+      "execution.observation.evidence_ref",
+      "A evidência deve conter o identificador real retornado pelo lançamento do agente."
     );
   }
   if (observation.model !== expected.model || observation.reasoning_effort !== expected.reasoning_effort) {

@@ -36,6 +36,10 @@ function runId(now, uuid) {
   return `RUN-${date}-${uuid.slice(0, 8).toUpperCase()}`;
 }
 
+function validRunId(value) {
+  return /^RUN-[0-9]{8}-[A-Z0-9]{8}$/u.test(String(value ?? ""));
+}
+
 function matchesCardKey(adapter, key) {
   return adapter.tracker.card_keys.some((item) => new RegExp(item.pattern).test(key));
 }
@@ -93,6 +97,7 @@ export function planRun(input = {}) {
   );
   const mode = input.mode ?? "shadow";
   if (!["shadow", "live"].includes(mode)) throw new Error(`Modo inválido: ${mode}`);
+  if (input.continueRunId && !validRunId(input.continueRunId)) throw new Error("continueRunId possui formato inválido.");
 
   const doctor = runDoctor({
     projectRoot,
@@ -297,7 +302,7 @@ export function planRun(input = {}) {
       return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: missing.length || inconsistent.length ? "DELIVERY_GROUP_INCOMPLETE" : "DELIVERY_GROUP_STATE_DIVERGED", delivery_group: declaredGroup.id, missing_cards: missing, inconsistent_cards: inconsistent.map((card) => card.key), doctor, blocked, guarantees };
     }
   }
-  const id = runId(input.now ?? new Date(), input.uuid ?? randomUUID());
+  const id = input.continueRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
   const batchPolicy = declaredGroup ? "cohesive-delivery-v0.1" : "single-card-v0.1";
   const memberRefs = new Set(batchMembers.map((card) => card.card_ref));
   return {
@@ -308,6 +313,7 @@ export function planRun(input = {}) {
     batch_policy: batchPolicy,
     doctor,
     run_id: id,
+    continuing: Boolean(input.continueRunId),
     selected: {
       ...selected,
       continuation_policy: {
@@ -361,6 +367,7 @@ function parseArguments(argv) {
       if (argument === "--project-root") options.projectRoot = value;
       else if (argument === "--adapter") options.adapterPath = value;
       else if (argument === "--tracker-snapshot") options.trackerSnapshotPath = value;
+      else if (argument === "--continue-run-id") options.continueRunId = value;
       else if (argument === "--schema") options.schemaPath = value;
       else if (argument === "--tracker-schema") options.trackerSchemaPath = value;
       else if (argument === "--mode") options.mode = value;
@@ -373,7 +380,7 @@ function parseArguments(argv) {
 
 function printHelp() {
   process.stdout.write(
-    "Uso: node runtime/src/run-planner.mjs --project-root <path> --tracker-snapshot <path> [--mode shadow|live] [--format text|json]\n"
+    "Uso: node runtime/src/run-planner.mjs --project-root <path> --tracker-snapshot <path> [--continue-run-id <RUN_ID>] [--mode shadow|live] [--format text|json]\n"
   );
 }
 

@@ -33,6 +33,8 @@ O modo `live` exige que o doctor passe em modo `cutover`. Mesmo assim, o execut�
 
 O plano `READY` inclui `execution_request` com perfil, modelo, esforço e modo do agente. O role gate exige o recibo confirmado descrito em [EXECUTION_AUDIT.md](EXECUTION_AUDIT.md) antes de qualquer transição ao vivo.
 
+Após handoff técnico, replaneje com `--continue-run-id <RUN_ID atual>`. A saída deve preservar `run_id` e declarar `continuing: true`; o planner não infere continuidade apenas pela coluna.
+
 O plano também inclui `comment_gate`. Em modo live, o snapshot precisa comprovar leitura e escrita de comentários com `evidence_ref` e `verified_at`. O ORCHESTRATOR publica e relê lock, cápsula, handoff/bloqueio e transição; falha nessa confirmação preserva a coluna atual.
 
 Imediatamente antes da movimentação, o integrador materializa um recibo conforme [tracker-transition-receipt.schema.json](../schema/tracker-transition-receipt.schema.json) e executa:

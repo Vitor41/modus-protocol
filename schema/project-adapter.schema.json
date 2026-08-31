@@ -113,6 +113,10 @@
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
         },
+        "update_policy": {
+          "enum": ["latest-compatible", "pinned"],
+          "default": "latest-compatible"
+        },
         "distribution": {
           "enum": ["source", "local-plugin", "public-plugin"]
         },
@@ -160,7 +164,7 @@
     "tracker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "board_ref", "credential_provider", "comments", "states", "card_keys"],
+      "required": ["provider", "board_ref", "credential_provider", "comments", "states", "card_keys", "type_labels", "domain_labels"],
       "properties": {
         "provider": {
           "const": "trello"
@@ -225,12 +229,14 @@
         },
         "type_labels": {
           "type": "object",
+          "minProperties": 1,
           "additionalProperties": {
             "$ref": "#/$defs/nonEmptyString"
           }
         },
         "domain_labels": {
           "type": "object",
+          "minProperties": 1,
           "additionalProperties": {
             "$ref": "#/$defs/nonEmptyString"
           }

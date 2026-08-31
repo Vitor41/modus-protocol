@@ -256,7 +256,9 @@ export function createSetupProposal(input = {}) {
         ready_for_production: "REVIEW_REQUIRED_READY_FOR_PRODUCTION_REF",
         done: "REVIEW_REQUIRED_DONE_REF"
       },
-      card_keys: [{ kind: "feature", pattern: "^REVIEW_REQUIRED-[0-9]+$" }]
+      card_keys: [{ kind: "feature", pattern: "^REVIEW_REQUIRED-[0-9]+$" }],
+      type_labels: { feature: "REVIEW_REQUIRED_FEATURE_LABEL_REF", bug: "REVIEW_REQUIRED_BUG_LABEL_REF" },
+      domain_labels: { business: "REVIEW_REQUIRED_DOMAIN_LABEL_REF" }
     },
     trigger: { process_queue: "Processe a fila do Trello.", skill: "pipeline-run" },
     context: { agents: "AGENTS.md", index: contextIndex, references: [] },

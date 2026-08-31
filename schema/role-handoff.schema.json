@@ -53,7 +53,7 @@
     },
     {
       "if": { "properties": { "role": { "const": "pipeline-ux-ui" } }, "required": ["role"] },
-      "then": { "properties": { "deliverable": { "$ref": "#/$defs/uxDeliverable" } } }
+      "then": { "required": ["deliverable"], "properties": { "deliverable": { "$ref": "#/$defs/uxDeliverable" } } }
     },
     {
       "if": { "properties": { "role": { "const": "pipeline-dev" } }, "required": ["role"] },
@@ -242,7 +242,25 @@
         "accessibility": { "$ref": "#/$defs/stringArray" },
         "responsiveness": { "$ref": "#/$defs/stringArray" },
         "human_approval": { "$ref": "#/$defs/humanApproval" },
-        "design_refs": { "$ref": "#/$defs/stringArray" }
+        "design_refs": { "$ref": "#/$defs/stringArray" },
+        "attachments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/visualAttachment" }
+        }
+      }
+    },
+    "visualAttachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "name", "kind", "run_id", "specification_version", "readback_status"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "enum": ["file", "url"] },
+        "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+        "specification_version": { "$ref": "#/$defs/nonEmptyString" },
+        "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "readback_status": { "const": "confirmed" }
       }
     },
     "checkpoint": {

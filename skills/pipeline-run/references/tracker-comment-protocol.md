@@ -16,7 +16,7 @@ Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 
 Falha na publicação gera `TRACKER_COMMENT_WRITE_FAILED`. Falha, ausência ou divergência na releitura gera `TRACKER_COMMENT_READBACK_FAILED`. Em ambos os casos, não mova o card e não presuma sucesso.
 
-Antes de movimentar, materialize `schema/tracker-transition-receipt.schema.json` com o handoff aprovado, hash do conteúdo persistido, providers e timestamps. Execute `runtime/pipeline.ps1 transition-gate`; somente `PASS / GRANTED` autoriza `runtime/pipeline.ps1 trello --action move-readback`. A movimentação só conclui após reler e confirmar a lista persistida.
+Antes de movimentar, materialize `schema/tracker-transition-receipt.schema.json` com o handoff aprovado, hash do conteúdo persistido, providers e timestamps. Execute `runtime/pipeline.ps1 transition-gate --receipt <recibo> --adapter <projeto>/.pipeline/project.adapter.yaml --format json`; esse comando não aceita `--project-root`. Somente `PASS / GRANTED` autoriza `runtime/pipeline.ps1 trello --action move-readback`. A movimentação só conclui após reler e confirmar a lista persistida.
 
 ## Eventos mínimos
 

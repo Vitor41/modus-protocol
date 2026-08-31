@@ -8,6 +8,10 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- Kernel `0.1.9` preserva mecanicamente o `RUN_ID` com `--continue-run-id`, documenta as interfaces reais de `plan` e `transition-gate` e rejeita placeholders no recibo do agente.
+- Adapters passam a aceitar automaticamente patches mais novos da mesma linha compatível, mantendo opção `pinned` para igualdade exata e bloqueando downgrade ou linha incompatível.
+- PO passa a persistir e reler exatamente uma label oficial de tipo e uma ou mais labels oficiais de domínio; lotes compartilham a classificação visual de domínio.
+- UX/UI com impacto frontend passa a exigir mock/protótipo anexado e relido no card antes de solicitar `Tela aprovada`; texto isolado não atravessa o gate.
 - Kernel `0.1.8` mantém o mesmo `RUN_ID` e continua automaticamente entre PO, UX/UI, DEV, Code Review e QA até um gate humano, bloqueio real, falha ou conclusão.
 - PO passa a persistir e reler título canônico e descrição completa no card antes do handoff; o refinamento não pode existir apenas em comentários.
 - Cliente Trello ganha leitura e atualização verificável de card e exclusão segura de comentário por card, referência e hash, sempre com releitura.

@@ -30,19 +30,20 @@ Cada projeto consumidor terá:
 
 O nome e a localização são fixos na v0.1 para impedir descoberta ambígua. Não haverá busca recursiva por múltiplos adapters.
 
-## 3. Pinagem
+## 3. Compatibilidade do Kernel
 
-O bloco `kernel` usa versão SemVer exata:
+O bloco `kernel` usa uma versão SemVer como piso da linha compatível:
 
 ```yaml
 kernel:
   name: unified-development-pipeline
-  version: "0.1.4"
+  version: "0.1.9"
+  update_policy: latest-compatible
   distribution: local-plugin
   plugin_name: unified-development-pipeline
 ```
 
-Intervalos como `^0.1`, `latest` ou branch móvel são proibidos no projeto consumidor. Atualização exige validação, alteração explícita do pin e commit próprio.
+`latest-compatible` aceita automaticamente patches instalados mais novos dentro do mesmo `major.minor`, mas bloqueia downgrade e mudança de linha. Use `pinned` quando o projeto exigir igualdade exata. Intervalos textuais como `^0.1`, `latest` ou branch móvel continuam proibidos; a compatibilidade é calculada pelo doctor.
 
 `schema_version` evolui separadamente da versão do Kernel. Uma versão nova do Kernel pode continuar aceitando schema `0.1`; uma mudança incompatível do adapter exige migração declarada.
 

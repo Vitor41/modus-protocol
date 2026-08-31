@@ -199,6 +199,28 @@ test("planner aceita card bruto sem chave em REFINAMENTO e o encaminha ao PO", a
   }
 });
 
+test("replanejamento técnico preserva RUN_ID explicitamente informado", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "card-ux", key: "FX-012", title: "Desenhar fluxo", list_ref: adapter.tracker.states.ux_ui, position: 1 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: "RUN-20260831-ABCDEF12" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, "RUN-20260831-ABCDEF12");
+    assert.equal(result.continuing, true);
+    assert.equal(result.selected.lock_proposal.run_id, "RUN-20260831-ABCDEF12");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("replanejamento recusa RUN_ID de continuação inválido", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, []));
+    assert.throws(() => planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, continueRunId: "RUN-placeholder" }), /formato inválido/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("planner continua exigindo chave válida depois de REFINAMENTO", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
