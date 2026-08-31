@@ -14,22 +14,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0609f0983b7a228f052f81ef4c3d6510cae254ad
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "22.13"
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: pnpm
+          cache-dependency-path: runtime/pnpm-lock.yaml
 
       - name: Install dependencies
         working-directory: runtime
-        run: corepack pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Test contracts and runtime
         working-directory: runtime
-        run: corepack pnpm test
+        run: pnpm test
 
       - name: Build plugin
         working-directory: runtime
-        run: corepack pnpm run build:plugin
+        run: pnpm run build:plugin

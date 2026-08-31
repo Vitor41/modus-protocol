@@ -16,9 +16,9 @@ Requer Node.js 22.13+ e pnpm 11. O artefato gerado continua mirando Node.js 20+.
 
 ```powershell
 cd runtime
-corepack pnpm install --frozen-lockfile
-corepack pnpm test
-corepack pnpm run build:plugin
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run build:plugin
 ```
 
 ## Critério para pull request

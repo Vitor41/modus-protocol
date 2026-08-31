@@ -65,9 +65,9 @@ Instalar o plugin nunca autoriza modificar um projeto, escrever no Trello ou ace
 
 ```powershell
 cd runtime
-corepack pnpm install --frozen-lockfile
-corepack pnpm test
-corepack pnpm run build:plugin
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run build:plugin
 ```
 
 Antes de contribuir, leia [CONTRIBUTING.md](CONTRIBUTING.md). Vulnerabilidades e riscos de exposição devem seguir [SECURITY.md](SECURITY.md).
