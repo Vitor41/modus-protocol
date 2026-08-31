@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- Kernel `0.1.10` confirma upload pela coleção de anexos do card, sem depender do campo opcional `idCard`, e adiciona remoção segura com releitura de ausência.
 - Kernel `0.1.9` preserva mecanicamente o `RUN_ID` com `--continue-run-id`, documenta as interfaces reais de `plan` e `transition-gate` e rejeita placeholders no recibo do agente.
 - Adapters passam a aceitar automaticamente patches mais novos da mesma linha compatível, mantendo opção `pinned` para igualdade exata e bloqueando downgrade ou linha incompatível.
 - PO passa a persistir e reler exatamente uma label oficial de tipo e uma ou mais labels oficiais de domínio; lotes compartilham a classificação visual de domínio.

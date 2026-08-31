@@ -172,12 +172,28 @@ test("anexa mock e confirma por releitura", async () => {
     const result = await executeTrelloComment({ action: "attach-file", projectRoot: root, cardRef: "card-1", filePath: ".pipeline/tmp/mock.png", fetchImpl: async (_url, options = {}) => {
       calls += 1;
       if (calls === 1) { assert.equal(options.method, "POST"); return new Response(JSON.stringify({ id: "att-1" })); }
-      return new Response(JSON.stringify({ id: "att-1", idCard: "card-1", name: "mock.png", url: "https://trello.example/mock" }));
+      return new Response(JSON.stringify([{ id: "att-1", name: "mock.png", url: "https://trello.example/mock" }]));
     }});
     assert.equal(result.status, "PASS");
     assert.equal(result.readback_status, "confirmed");
     assert.equal(result.content_sha256.length, 64);
     assert.equal(calls, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("remove anexo somente do card informado e confirma ausência", async () => {
+  const root = await projectFixture();
+  let calls = 0;
+  try {
+    const result = await executeTrelloComment({ action: "delete-attachment-readback", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", expectedName: "mock.png", fetchImpl: async (_url, options = {}) => {
+      calls += 1;
+      if (calls === 1) return new Response(JSON.stringify([{ id: "att-1", name: "mock.png" }]));
+      if (calls === 2) { assert.equal(options.method, "DELETE"); return new Response(JSON.stringify({ _value: null })); }
+      return new Response(JSON.stringify([]));
+    }});
+    assert.equal(result.readback_status, "confirmed_absent");
+    assert.equal(result.deleted_name, "mock.png");
+    assert.equal(calls, 3);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -121,8 +121,8 @@ async function getJson(fetchImpl, credentials, path, query, operation) {
   return responseJson(await safeFetch(fetchImpl, endpoint(path, credentials, query), undefined, operation), operation);
 }
 
-function publicAttachment(value) {
-  return { ref: value.id, card_ref: value.idCard, name: value.name, url: value.url, bytes: value.bytes, mime_type: value.mimeType, date: value.date, previews: value.previews?.length ?? 0 };
+function publicAttachment(value, cardRef) {
+  return { ref: value.id, card_ref: value.idCard ?? cardRef, name: value.name, url: value.url, bytes: value.bytes, mime_type: value.mimeType, date: value.date, previews: value.previews?.length ?? 0 };
 }
 
 export async function executeTrelloComment(input = {}) {
@@ -198,6 +198,15 @@ export async function executeTrelloComment(input = {}) {
 
   if (!input.cardRef) throw new Error("cardRef é obrigatório.");
 
+  if (action === "list-attachments") {
+    const attachments = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments`, {}, "a leitura dos anexos");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: input.cardRef, attachments: attachments.map((item) => publicAttachment(item, input.cardRef)),
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false }
+    };
+  }
+
   if (action === "read-card") {
     const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "name,desc,idList,idLabels,closed" }, "a leitura do card");
     return {
@@ -272,9 +281,26 @@ export async function executeTrelloComment(input = {}) {
       form.set("url", input.url);
     }
     const written = await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}/attachments`, { method: "POST", body: form }, "o envio do anexo"), "o envio do anexo");
-    const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments/${encodeURIComponent(written.id)}`, {}, "a releitura do anexo");
-    if (persisted.id !== written.id || persisted.idCard !== input.cardRef) throw new Error("A releitura do anexo divergiu do envio.");
-    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, provider: "environment", attachment: publicAttachment(persisted), ...(contentSha256 ? { content_sha256: contentSha256 } : {}), readback_status: "confirmed", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+    const attachments = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments`, {}, "a releitura dos anexos do card");
+    const persisted = attachments.find((item) => item.id === written.id);
+    if (!persisted) throw new Error("A releitura dos anexos do card não encontrou o item enviado.");
+    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, provider: "environment", attachment: publicAttachment(persisted, input.cardRef), ...(contentSha256 ? { content_sha256: contentSha256 } : {}), readback_status: "confirmed", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+  }
+
+  if (action === "delete-attachment-readback") {
+    if (!input.attachmentRef) throw new Error("attachmentRef é obrigatório.");
+    const before = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments`, {}, "a validação prévia do anexo");
+    const existing = before.find((item) => item.id === input.attachmentRef);
+    if (!existing) throw new Error("O anexo não pertence ao card ou já foi removido.");
+    if (input.expectedName && existing.name !== input.expectedName) throw new Error("O nome do anexo mudou; exclusão recusada.");
+    await responseJson(await safeFetch(fetchImpl, endpoint(`/cards/${encodeURIComponent(input.cardRef)}/attachments/${encodeURIComponent(input.attachmentRef)}`, credentials), { method: "DELETE" }, "a exclusão do anexo"), "a exclusão do anexo");
+    const after = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments`, {}, "a confirmação da exclusão do anexo");
+    if (after.some((item) => item.id === input.attachmentRef)) throw new Error("A releitura não confirmou a exclusão do anexo.");
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: input.cardRef, attachment_ref: input.attachmentRef, deleted_name: existing.name,
+      readback_status: "confirmed_absent", guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+    };
   }
 
   if (action === "move-readback") {
@@ -405,6 +431,8 @@ function parseArguments(argv) {
       else if (argument === "--adapter") options.adapterPath = value;
       else if (argument === "--card-ref") options.cardRef = value;
       else if (argument === "--comment-ref") options.commentRef = value;
+      else if (argument === "--attachment-ref") options.attachmentRef = value;
+      else if (argument === "--expected-name") options.expectedName = value;
       else if (argument === "--list-ref") options.listRef = value;
       else if (argument === "--text-file") options.textPath = value;
       else if (argument === "--name-file") options.namePath = value;
@@ -429,7 +457,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|attach-file|attach-url --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|list-attachments|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
