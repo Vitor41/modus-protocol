@@ -12,7 +12,7 @@ Obrigado por considerar uma contribuição.
 
 ## Ambiente local
 
-Requer Node.js 20+ e pnpm 11.
+Requer Node.js 22.13+ e pnpm 11. O artefato gerado continua mirando Node.js 20+.
 
 ```powershell
 cd runtime

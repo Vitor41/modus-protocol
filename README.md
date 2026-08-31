@@ -47,7 +47,7 @@ Trello + contexto + comandos + políticas locais
 
 - Codex com suporte a plugins locais;
 - PowerShell 7 no Windows para o launcher atual;
-- Node.js 20 ou superior para desenvolvimento do Kernel;
+- Node.js 22.13 ou superior para desenvolver e empacotar o Kernel; o runtime gerado continua compatível com Node.js 20+;
 - pnpm 11 para instalar as dependências de desenvolvimento;
 - Trello com credenciais fornecidas externamente pelo projeto consumidor.
 
