@@ -127,6 +127,37 @@ async function getJson(fetchImpl, credentials, path, query, operation) {
   return responseJson(await safeFetch(fetchImpl, endpoint(path, credentials, query), undefined, operation), operation);
 }
 
+function labelLookupKey(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR");
+}
+
+async function resolveLabelRefs(fetchImpl, credentials, adapter, configuredRefs) {
+  const labels = await getJson(
+    fetchImpl,
+    credentials,
+    `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/labels`,
+    { fields: "name,color" },
+    "a resolução das labels oficiais"
+  );
+  const byId = new Map(labels.map((label) => [String(label.id), String(label.id)]));
+  const byName = new Map();
+  for (const label of labels) {
+    const key = labelLookupKey(label.name);
+    if (!key) continue;
+    const matches = byName.get(key) ?? [];
+    matches.push(String(label.id));
+    byName.set(key, matches);
+  }
+  return configuredRefs.map((reference) => {
+    const direct = byId.get(String(reference));
+    if (direct) return direct;
+    const matches = byName.get(labelLookupKey(reference)) ?? [];
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) throw new Error(`A label oficial '${reference}' é ambígua no board; use o ID no adapter.`);
+    throw new Error(`A label oficial '${reference}' não foi encontrada no board declarado pelo adapter.`);
+  });
+}
+
 function publicAttachment(value, cardRef) {
   return { ref: value.id, card_ref: value.idCard ?? cardRef, name: value.name, url: value.url, bytes: value.bytes, mime_type: value.mimeType, date: value.date, previews: value.previews?.length ?? 0 };
 }
@@ -270,16 +301,17 @@ export async function executeTrelloComment(input = {}) {
     if (requested.filter((ref) => typeRefs.has(ref)).length !== 1) throw new Error("Exatamente uma label de tipo é obrigatória.");
     if (requested.filter((ref) => domainRefs.has(ref)).length < 1) throw new Error("Ao menos uma label oficial de domínio é obrigatória.");
     if (requested.some((ref) => !allowed.has(ref))) throw new Error("Uma label solicitada não pertence ao adapter.");
-    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, idLabels: requested.join(",") });
+    const resolved = await resolveLabelRefs(fetchImpl, credentials, adapter, requested);
+    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, idLabels: resolved.join(",") });
     await responseJson(await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}`, {
       method: "PUT", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body
     }, "a atualização das labels"), "a atualização das labels");
     const persisted = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "idLabels" }, "a releitura das labels");
-    if (JSON.stringify([...(persisted.idLabels ?? [])].sort()) !== JSON.stringify([...requested].sort())) throw new Error("A releitura das labels divergiu da classificação solicitada.");
+    if (JSON.stringify([...(persisted.idLabels ?? [])].sort()) !== JSON.stringify([...resolved].sort())) throw new Error("A releitura das labels divergiu da classificação solicitada.");
     return {
       contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
-      provider: "environment", card_ref: persisted.id, label_refs: persisted.idLabels, readback_status: "confirmed",
-      guarantees: { tracker_writes_performed: true, secrets_exposed: false, labels_restricted_to_adapter: true }
+      provider: "environment", card_ref: persisted.id, label_refs: persisted.idLabels, configured_label_refs: requested, readback_status: "confirmed",
+      guarantees: { tracker_writes_performed: true, secrets_exposed: false, labels_restricted_to_adapter: true, labels_resolved_from_adapter: true }
     };
   }
 

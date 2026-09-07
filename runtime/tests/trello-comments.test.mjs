@@ -296,13 +296,34 @@ test("atualiza uma label de tipo e labels oficiais de domínio com releitura", a
   const root = await projectFixture();
   let calls = 0;
   try {
-    const result = await executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["label-feature", "label-business"], fetchImpl: async (_url, options = {}) => {
+    const result = await executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["label-feature", "label-business"], fetchImpl: async (url, options = {}) => {
       calls += 1;
-      if (calls === 1) { assert.equal(options.body.get("idLabels"), "label-feature,label-business"); return new Response(JSON.stringify({ id: "card-1" })); }
+      if (calls === 1) { assert.match(String(url), /\/labels/u); return new Response(JSON.stringify([{ id: "label-feature", name: "Melhoria" }, { id: "label-business", name: "Negócio" }])); }
+      if (calls === 2) { assert.equal(options.body.get("idLabels"), "label-feature,label-business"); return new Response(JSON.stringify({ id: "card-1" })); }
       return new Response(JSON.stringify({ id: "card-1", idLabels: ["label-business", "label-feature"] }));
     }});
     assert.equal(result.readback_status, "confirmed");
     assert.equal(result.guarantees.labels_restricted_to_adapter, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("resolve label oficial por nome antes de gravar IDs no Trello", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.type_labels.feature = "Melhoria";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  let calls = 0;
+  try {
+    const result = await executeTrelloComment({ action: "update-labels-readback", projectRoot: root, cardRef: "card-1", labelRefs: ["Melhoria", "label-business"], fetchImpl: async (_url, options = {}) => {
+      calls += 1;
+      if (calls === 1) return new Response(JSON.stringify([{ id: "label-feature", name: "Melhoria" }, { id: "label-business", name: "Negócio" }]));
+      if (calls === 2) { assert.equal(options.body.get("idLabels"), "label-feature,label-business"); return new Response(JSON.stringify({ id: "card-1" })); }
+      return new Response(JSON.stringify({ id: "card-1", idLabels: ["label-feature", "label-business"] }));
+    }});
+    assert.equal(result.readback_status, "confirmed");
+    assert.equal(result.guarantees.labels_resolved_from_adapter, true);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

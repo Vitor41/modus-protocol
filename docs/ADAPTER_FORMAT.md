@@ -61,7 +61,7 @@ Se o plugin, a Skill ou a versão pinada não estiver disponível, a execução 
 
 ## 5. Referências e credenciais
 
-Board, listas e labels podem ser versionados no adapter do projeto porque são identificadores operacionais, não credenciais. O exemplo público usa placeholders.
+Board, listas e labels podem ser versionados no adapter do projeto porque são identificadores operacionais, não credenciais. Labels podem ser declaradas por ID ou por nome exato: antes de escrever, o runtime resolve nomes únicos no board declarado e grava somente IDs; nomes ambíguos ou inexistentes são rejeitados. O exemplo público usa placeholders.
 
 Tokens, chaves, senhas, cookies e strings de conexão são proibidos. `credential_provider` declara apenas a origem autorizada, como o conector Trello do Codex, MCP aprovado ou ambiente local já provisionado. Quando o provider for `environment`, `tracker.environment.credential_file` aponta para um arquivo relativo contido no projeto; o adapter nunca contém os valores.
 
