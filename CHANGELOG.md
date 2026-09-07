@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.1.15` reconhece bloqueio humano estruturado no lock e obriga replanejamento completo após qualquer gate localizado antes de encerrar a execução.
 - Kernel `0.1.14` resolve labels declaradas por nome para IDs oficiais do board antes da escrita e releitura, preservando suporte a adapters existentes que já usam IDs.
 - Kernel `0.1.13` torna o plugin instalado a única fonte de versão ativa; adapters deixam de fixar ou comparar versão de Kernel e o gatilho não executa preflight de versão.
 - Kernel `0.1.12` transforma o refinamento em fila: o PO recebe todos os cards elegíveis, normaliza título/descrição/labels e define Delivery Groups após analisar o conjunto.

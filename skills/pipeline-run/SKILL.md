@@ -33,7 +33,7 @@ Leia `references/execution-protocol.md` e `references/tracker-comment-protocol.m
 10. Atualize cápsula e lock com o mesmo ciclo de escrita e releitura.
 11. Após um handoff e uma transição confirmados, gere novo snapshot e replaneje com `--continue-run-id <RUN_ID atual>`; confira que a saída contém o mesmo `run_id` e `continuing: true` antes de acionar o próximo papel. Repita o ciclo PO → UX/UI → DEV → Code Review → QA enquanto houver trabalho independente elegível.
 12. Um bloqueio humano, `Tela aprovada` pendente, `APROVADO PARA PRD` pendente, limite de retorno, lock externo ou falha de gate afeta somente o escopo declarado: `card`, `delivery_group` ou `dependency_group`. Registre e adie esse escopo; continue cards e grupos independentes.
-13. Encerre a automação somente quando a fila elegível estiver esgotada ou uma falha global de contrato, ferramenta, releitura ou segurança impedir o processamento. Um handoff `PASS`, isoladamente, nunca é condição de parada.
+13. Após qualquer gate humano ou bloqueio localizado, gere obrigatoriamente um novo snapshot e plano antes de responder. Encerre a automação somente quando esse replanejamento retornar fila elegível esgotada ou uma falha global de contrato, ferramenta, releitura ou segurança impedir o processamento. Um handoff `PASS` ou o próximo gate de um único card nunca é condição de parada.
 
 ## Limites
 

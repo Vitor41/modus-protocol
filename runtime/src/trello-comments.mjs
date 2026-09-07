@@ -104,6 +104,17 @@ function latestSignal(comments, exact, prefix) {
   return value;
 }
 
+function awaitingHuman(comments, unblockPrefix) {
+  const chronological = [...comments].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  let value = false;
+  for (const comment of chronological) {
+    const text = String(comment.text ?? "").trim();
+    if (text === "Aguardando resposta humana" || (/^CODEX LOCK$/mu.test(text) && /^STATUS:\s*blocked\s*$/imu.test(text) && /^REQUIRES_HUMAN:\s*true\s*$/imu.test(text))) value = true;
+    if (unblockPrefix && text.startsWith(unblockPrefix)) value = false;
+  }
+  return value;
+}
+
 function parseDeliveryGroup(text) {
   const id = text.match(/^DELIVERY GROUP:\s*([a-z0-9-]+)\s*$/imu)?.[1];
   const cards = text.match(/^CARDS:\s*(.+)$/imu)?.[1]?.split(",").map((value) => value.trim()).filter(Boolean);
@@ -222,7 +233,7 @@ export async function executeTrelloComment(input = {}) {
         groupByCard.set(card.id, group);
       }
       item.signals = {
-        awaiting_human: latestSignal(comments, "Aguardando resposta humana", gate.unblock_prefix),
+        awaiting_human: awaitingHuman(comments, gate.unblock_prefix),
         screen_approval_valid: latestSignal(comments, gate.screen_approval ?? "Tela aprovada"),
         production_approval_valid: latestSignal(comments, gate.production_approval ?? "APROVADO PARA PRD")
       };
