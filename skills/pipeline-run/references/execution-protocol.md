@@ -9,7 +9,8 @@ O snapshot normalizado contém:
 - `board_ref`;
 - `open_lists[]` com `ref` e `position`;
 - `cards[]` com `ref`, `title`, `list_ref` e `position`; `key` pode faltar somente em `refinement`, onde será normalizada pelo PO;
-- por card, quando aplicável: `signals`, `loop_counts` e `lock`;
+- por card, quando aplicável: `signals`, `loop_counts`, `lock` e `delivery_group`;
+- `delivery_groups[]` quando houver grupos ou dependências, inclusive membros em estados terminais necessários para resolver precedência;
 - `active_execution` quando existir lote em andamento no projeto.
 - `integration.comments` com leitura, escrita e referência do teste observadas.
 
@@ -34,9 +35,9 @@ Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma
 
 ## Continuação automática
 
-O gatilho processa uma unidade de entrega até o próximo gate humano, e não apenas um papel. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente no mesmo loop quando seus gates passam. Retornos de Review ou QA ao DEV também continuam, respeitando o limite de ciclos.
+O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o PO os refina antes de devolver o controle. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente no mesmo loop quando seus gates passam. Retornos de Review ou QA ao DEV também continuam, respeitando o limite de ciclos.
 
-São paradas legítimas: decisão de negócio solicitada pelo PO; aprovação visual pendente; aprovação para PRD pendente; terceiro retorno; conflito de lock ou estado; falha de ferramenta, gate ou releitura; e conclusão da fila. A simples existência de um próximo papel nunca encerra o loop.
+Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 
 ## Cápsula mínima
 

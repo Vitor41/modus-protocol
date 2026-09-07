@@ -16,7 +16,12 @@
       "items": { "$ref": "#/$defs/card" }
     },
     "integration": { "$ref": "#/$defs/integration" },
-    "active_execution": { "$ref": "#/$defs/activeExecution" }
+    "active_execution": { "$ref": "#/$defs/activeExecution" },
+    "delivery_groups": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/deliveryGroup" }
+    }
   },
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
@@ -91,16 +96,19 @@
           "additionalProperties": { "type": "integer", "minimum": 0 }
         },
         "lock": { "$ref": "#/$defs/lock" }
-        ,"delivery_group": {
-          "type": "object", "additionalProperties": false,
-          "required": ["id", "cards"],
-          "properties": {
-            "id": { "$ref": "#/$defs/nonEmptyString" },
-            "cards": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
-            "branch": { "$ref": "#/$defs/nonEmptyString" },
-            "defined_by": { "const": "pipeline-po" }
-          }
-        }
+        ,"delivery_group": { "$ref": "#/$defs/deliveryGroup" }
+      }
+    },
+    "deliveryGroup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "cards", "mode", "defined_by"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "cards": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "branch": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "enum": ["optimization", "dependency"] },
+        "depends_on": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "defined_by": { "const": "pipeline-po" }
       }
     },
     "activeExecution": {

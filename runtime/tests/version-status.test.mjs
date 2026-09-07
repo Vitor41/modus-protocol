@@ -14,18 +14,18 @@ async function project(version, updatePolicy = "latest-compatible") {
 }
 
 test("status comprova runtime ativo e origem antes do tracker", async () => {
-  const root = await project("0.1.11");
+  const root = await project("0.1.12");
   try {
     const result = getVersionStatus({ projectRoot: root });
     assert.equal(result.status, "PASS");
-    assert.equal(result.active.runtime_version, "0.1.11");
+    assert.equal(result.active.runtime_version, "0.1.12");
     assert.match(result.active.runtime_root, /runtime$/u);
-    assert.equal(result.project.required_kernel, "0.1.11");
+    assert.equal(result.project.required_kernel, "0.1.12");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("status bloqueia tarefa carregada abaixo do piso do projeto", async () => {
-  const root = await project("0.1.12");
+  const root = await project("0.1.13");
   try {
     const result = getVersionStatus({ projectRoot: root });
     assert.equal(result.status, "FAIL");

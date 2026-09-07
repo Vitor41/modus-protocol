@@ -19,6 +19,7 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 8. Em toda classificação `frontend`, gere ao menos um mock ou protótipo visual consultável que represente a solução proposta; descrição textual isolada não atende ao gate.
 9. Anexe cada mock ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID`, versão da especificação e `readback_status: confirmed`.
 10. Somente depois de gerar, anexar e reler a evidência visual registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar mock ou espera artificial.
+11. Preserve no handoff o `delivery_group` definido pelo PO quando existir; UX/UI não cria, remove nem altera membros, modo ou dependências. Dúvida visual ou de negócio é bloqueio de `card`, salvo dependência determinante já declarada pelo PO.
 
 ## Gate visual
 

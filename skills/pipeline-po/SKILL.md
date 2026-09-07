@@ -9,7 +9,7 @@ Transforme intenção em comportamento verificável sem inventar regra de negóc
 
 ## Refinar
 
-1. Confirme `RUN_ID`, card, lock, estado `refinement`, capsule e motivo da iteração.
+1. Confirme `RUN_ID`, fila `refinement_queue`, locks, estado `refinement`, capsule e motivo da iteração. Quando o plano trouxer `refinement_queue`, ela é o escopo obrigatório do PO nesta execução: percorra todos os cards elegíveis antes de devolver o controle ao ORCHESTRATOR.
 2. Aceite a intenção em texto livre ou em qualquer estrutura equivalente. `Contexto`, `Problema` e `Solução esperada` são uma forma recomendada, não um formato obrigatório.
 3. Para iniciar, basta compreender o assunto, a situação atual ou oportunidade e o resultado pretendido. Chave canônica, labels, regras completas, exceções, impactos e critérios são saída do PO, não pré-requisito de entrada.
 4. Reuse a capsule e leia somente o contexto de produto/domínio necessário ao delta. Investigue produto, código, documentação e decisões anteriores antes de perguntar ao humano.
@@ -17,9 +17,9 @@ Transforme intenção em comportamento verificável sem inventar regra de negóc
 6. Divida demandas amplas em unidades independentes quando isso reduzir ambiguidade ou risco.
 7. Produza critérios observáveis com identificador, comportamento esperado e evidência capaz de comprová-lo.
 8. Classifique impactos em frontend, backend, banco, BI/dados e segurança; não prescreva arquivos, classes ou arquitetura.
-9. Se faltar regra ou decisão material para concluir, bloqueie o card, preserve `refinement` e faça perguntas objetivas ao humano. Não invente nem escolha silenciosamente uma regra plausível.
+9. Se faltar regra ou decisão material para concluir, bloqueie somente o card, preserve `refinement` e faça perguntas objetivas ao humano. Registre `blocker.scope: card`; a dúvida não interrompe os demais cards independentes da fila. Não invente nem escolha silenciosamente uma regra plausível.
 10. Antes de concluir o refinamento, normalize fisicamente o card: use `trello --action list-card-names` para considerar também cards arquivados, resolva a próxima chave pela regra de nomenclatura do projeto, preserve uma chave válida já existente, atualize o título no padrão local e substitua a descrição original pela história de usuário refinada. Use `trello --action update-card-readback` e só aceite a atualização com releitura confirmada.
-11. Classifique o card com `trello --action update-labels-readback`: mantenha exatamente uma label de tipo e uma ou mais labels oficiais de domínio declaradas no adapter. Não crie labels de módulo, prioridade ou bloqueio. Cards do mesmo `DELIVERY GROUP` devem compartilhar as labels de domínio que identificam o lote, preservando a label de tipo correta de cada card.
+11. Classifique cada card com `trello --action update-labels-readback`: mantenha exatamente uma label de tipo e uma ou mais labels oficiais de domínio declaradas no adapter. Não crie labels de módulo, prioridade ou bloqueio. Cards do mesmo `DELIVERY GROUP` devem compartilhar as labels de domínio que identificam o lote, preservando a label de tipo correta de cada card.
 
 Um título curto ou uma descrição incompleta não autoriza rejeição automática. Bloqueie somente quando, mesmo após investigação proporcional, a intenção continuar incompreensível ou uma decisão humana for necessária para fechar escopo, regra ou critério.
 
@@ -29,9 +29,9 @@ Leia `references/refinement-gate.md` quando a demanda for ampla, ambígua, finan
 
 ## Handoff
 
-- Na iteração inicial concluída, encaminhe sempre para `ux_ui`; UX/UI classificará `no_frontend` quando aplicável.
+- Na iteração inicial concluída, encaminhe cada card concluído para `ux_ui`; UX/UI classificará `no_frontend` quando aplicável.
 - Em retorno de negócio que elimine impacto visual já classificado, pode recomendar `ready_for_development`.
-- Dúvida pendente mantém o card em `refinement` e registra o bloqueio.
+- Dúvida pendente mantém apenas o card em `refinement` e registra o bloqueio. Continue a varredura dos demais cards elegíveis; só um bloqueio declarado como de grupo pode afetar outros membros.
 - Bloqueio do PO deve declarar o que foi investigado, a lacuna material e as perguntas necessárias para o usuário responder.
 - Não mova o card antes de validar o handoff.
 - Não devolva `PASS` enquanto título, descrição e labels não tiverem sido persistidos e relidos no tracker.
@@ -44,6 +44,24 @@ node <skill-dir>/../../runtime/src/role-gate.mjs --handoff <arquivo-temporário>
 
 Somente um resultado `PASS` pode ser devolvido ao `pipeline-run`. Inclua resumo, critérios, decisões, riscos, contexto realmente lido e próximo passo.
 
-## Unidade de entrega
+## Unidade de entrega e dependências
 
-O PO define se a demanda segue isolada ou integra um lote coeso. Agrupe somente quando os cards compartilham objetivo, branch, implementação e validação a ponto de ciclos separados gerarem retrabalho; uma label ampla de domínio, sozinha, não basta. Registre em cada card do lote o mesmo bloco `DELIVERY GROUP`, `CARDS`, `BRANCH` e `DEFINED BY: pipeline-po`. Preserve critérios verificáveis por card. Depois de registrado, o ORCHESTRATOR usa um único `RUN_ID`, branch, DEV, Code Review e QA para o lote e mantém comentários e transições individualizados.
+Depois de analisar toda a fila de refinamento, o PO decide se cada card segue isolado ou integra um Delivery Group. Não agrupe por proximidade de título, label ou domínio; a decisão deve ser baseada no ganho operacional real.
+
+- `optimization`: cards podem compartilhar branch, implementação, Review e QA para reduzir retrabalho, mas continuam independentes. Um bloqueio humano em um card afeta somente aquele card.
+- `dependency`: existe uma premissa técnica ou de negócio determinante entre membros. Um bloqueio em qualquer membro bloqueia o Delivery Group inteiro.
+
+Um grupo pode depender de outro grupo. Essa dependência deve ser explícita; o grupo dependente não inicia enquanto todos os cards do grupo anterior não estiverem concluídos em estado terminal.
+
+Registre em cada card do grupo, na descrição refinada e no comentário/handoff, o mesmo bloco:
+
+```text
+DELIVERY GROUP: <id>
+CARDS: <chaves separadas por vírgula>
+BRANCH: <branch quando aplicável>
+GROUP MODE: optimization | dependency
+DEPENDS ON: <ids de grupos, quando existirem>
+DEFINED BY: pipeline-po
+```
+
+Em bloqueio de grupo, use `blocker.scope: delivery_group`; em dependência externa pendente, use `blocker.scope: dependency_group` e identifique o grupo precedente. O ORCHESTRATOR mantém comentários e transições individualizados e continua qualquer card ou grupo independente na mesma execução.

@@ -104,17 +104,23 @@ function latestSignal(comments, exact, prefix) {
   return value;
 }
 
-function deliveryGroup(comments) {
+function parseDeliveryGroup(text) {
+  const id = text.match(/^DELIVERY GROUP:\s*([a-z0-9-]+)\s*$/imu)?.[1];
+  const cards = text.match(/^CARDS:\s*(.+)$/imu)?.[1]?.split(",").map((value) => value.trim()).filter(Boolean);
+  if (!id || !cards || cards.length < 2 || !/^DEFINED BY:\s*pipeline-po\s*$/imu.test(text)) return undefined;
+  const branch = text.match(/^BRANCH:\s*(.+)$/imu)?.[1]?.trim();
+  const mode = text.match(/^GROUP MODE:\s*(optimization|dependency)\s*$/imu)?.[1]?.toLowerCase() ?? "optimization";
+  const dependencies = text.match(/^DEPENDS ON:\s*(.+)$/imu)?.[1]
+    ?.split(",").map((value) => value.trim()).filter(Boolean);
+  return { id, cards, ...(branch ? { branch } : {}), mode, ...(dependencies?.length ? { depends_on: dependencies } : {}), defined_by: "pipeline-po" };
+}
+
+function deliveryGroup(comments, description) {
   for (const comment of [...comments].sort((a, b) => String(b.date).localeCompare(String(a.date)))) {
-    const text = String(comment.text ?? "");
-    const id = text.match(/^DELIVERY GROUP:\s*([a-z0-9-]+)\s*$/imu)?.[1];
-    const cards = text.match(/^CARDS:\s*(.+)$/imu)?.[1]?.split(",").map((value) => value.trim()).filter(Boolean);
-    if (id && cards?.length >= 2 && /^DEFINED BY:\s*pipeline-po\s*$/imu.test(text)) {
-      const branch = text.match(/^BRANCH:\s*(.+)$/imu)?.[1]?.trim();
-      return { id, cards, ...(branch ? { branch } : {}), defined_by: "pipeline-po" };
-    }
+    const parsed = parseDeliveryGroup(String(comment.text ?? ""));
+    if (parsed) return parsed;
   }
-  return undefined;
+  return parseDeliveryGroup(String(description ?? ""));
 }
 
 async function getJson(fetchImpl, credentials, path, query, operation) {
@@ -154,7 +160,7 @@ export async function executeTrelloComment(input = {}) {
     if (!input.outputPath) throw new Error("outputPath é obrigatório para snapshot.");
     const outputPath = containedPath(projectRoot, resolve(projectRoot, input.outputPath), "outputPath");
     const lists = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/lists`, { filter: "open", fields: "name,pos" }, "a leitura das listas");
-    const cards = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/cards`, { filter: "open", fields: "name,idList,pos,labels" }, "a leitura dos cards");
+    const cards = await getJson(fetchImpl, credentials, `/boards/${encodeURIComponent(adapter.tracker.board_ref)}/cards`, { filter: "open", fields: "name,desc,idList,pos,labels" }, "a leitura dos cards");
     const activeRefs = new Set(["refinement", "ux_ui", "ready_for_development", "in_development", "ready_for_validation", "ready_for_release"].map((state) => adapter.tracker.states[state]));
     const activeCards = cards.filter((card) => activeRefs.has(card.idList));
     const commentEntries = await Promise.all(activeCards.map(async (card) => {
@@ -169,23 +175,40 @@ export async function executeTrelloComment(input = {}) {
       const evidence = await getJson(fetchImpl, credentials, `/actions/${encodeURIComponent(verification.comment_ref)}`, {}, "a verificação da integração");
       verified = evidence.data?.card?.id === verification.card_ref;
     }
+    const groupByCard = new Map();
+    for (const card of cards) {
+      const group = deliveryGroup([], card.desc);
+      if (group) groupByCard.set(card.id, group);
+    }
+    const snapshotCards = activeCards.map((card) => {
+      const comments = commentsByCard.get(card.id) ?? [];
+      const item = { ref: card.id, title: card.name, list_ref: card.idList, position: card.pos };
+      const key = cardKey(card.name, adapter.tracker.card_keys);
+      if (key) item.key = key;
+      const group = deliveryGroup(comments, card.desc);
+      if (group) {
+        item.delivery_group = group;
+        groupByCard.set(card.id, group);
+      }
+      item.signals = {
+        awaiting_human: latestSignal(comments, "Aguardando resposta humana", gate.unblock_prefix),
+        screen_approval_valid: latestSignal(comments, gate.screen_approval ?? "Tela aprovada"),
+        production_approval_valid: latestSignal(comments, gate.production_approval ?? "APROVADO PARA PRD")
+      };
+      return item;
+    });
+    for (const card of cards.filter((card) => !activeRefs.has(card.idList) && groupByCard.has(card.id))) {
+      const item = { ref: card.id, title: card.name, list_ref: card.idList, position: card.pos, delivery_group: groupByCard.get(card.id) };
+      const key = cardKey(card.name, adapter.tracker.card_keys);
+      if (key) item.key = key;
+      snapshotCards.push(item);
+    }
+    const groups = [...new Map([...groupByCard.values()].map((group) => [group.id, group])).values()];
     const snapshot = {
       board_ref: adapter.tracker.board_ref,
       open_lists: lists.map((list) => ({ ref: list.id, name: list.name, position: list.pos })),
-      cards: activeCards.map((card) => {
-        const comments = commentsByCard.get(card.id) ?? [];
-        const item = { ref: card.id, title: card.name, list_ref: card.idList, position: card.pos };
-        const key = cardKey(card.name, adapter.tracker.card_keys);
-        if (key) item.key = key;
-        const group = deliveryGroup(comments);
-        if (group) item.delivery_group = group;
-        item.signals = {
-          awaiting_human: latestSignal(comments, "Aguardando resposta humana", gate.unblock_prefix),
-          screen_approval_valid: latestSignal(comments, gate.screen_approval ?? "Tela aprovada"),
-          production_approval_valid: latestSignal(comments, gate.production_approval ?? "APROVADO PARA PRD")
-        };
-        return item;
-      }),
+      cards: snapshotCards,
+      ...(groups.length ? { delivery_groups: groups } : {}),
       integration: { comments: {
         read: verified ? "verified" : "not_tested", write: verified ? "verified" : "not_tested",
         read_provider: "environment", write_provider: "environment",

@@ -24,3 +24,5 @@ Avalie a entrega fixada sem assumir autoria ou corrigir durante a revisão.
 - Code Review não movimenta para uma coluna própria e não substitui QA.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-code-review` e valide com `../../runtime/src/role-gate.mjs`. Somente `PASS` pode ser aplicado pelo ORCHESTRATOR.
+
+Preserve o `delivery_group` que veio do PO. Um achado em um membro de grupo `optimization` retorna somente aquele card; escopo de grupo só cabe quando a dependência determinante estiver declarada.

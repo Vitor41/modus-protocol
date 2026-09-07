@@ -127,7 +127,7 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-002");
     assert.equal(result.selected.skill, "pipeline-qa");
-    assert.equal(result.selected.continuation_policy.mode, "until-human-gate-or-blocker");
+    assert.equal(result.selected.continuation_policy.mode, "drain-independent-work-v0.2");
     assert.equal(result.selected.continuation_policy.continue_after_role_handoff, true);
     assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
@@ -152,14 +152,14 @@ test("planner preserva lote coeso definido pelo PO", async () => {
   try {
     adapter.batching = { mode: "cohesive-delivery", max_cards: 6 };
     await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
-    const group = { id: "fx-101-102", cards: ["FX-101", "FX-102"], branch: "codex/fx-101-102", defined_by: "pipeline-po" };
+    const group = { id: "fx-101-102", cards: ["FX-101", "FX-102"], branch: "codex/fx-101-102", mode: "optimization", defined_by: "pipeline-po" };
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
       { ref: "c1", key: "FX-101", title: "Parte um", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group },
       { ref: "c2", key: "FX-102", title: "Parte dois", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: group }
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH, mode: "shadow", now: new Date("2026-08-29T00:00:00Z"), uuid: "11111111-2222-3333-4444-555555555555" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "cohesive-delivery-v0.1");
+    assert.equal(result.batch_policy, "cohesive-delivery-v0.2");
     assert.deepEqual(result.selected.capsule_seed.cards, ["FX-101", "FX-102"]);
     assert.equal(result.selected.lock_proposals.length, 2);
     assert.equal(result.deferred.length, 0);
@@ -197,6 +197,77 @@ test("planner aceita card bruto sem chave em REFINAMENTO e o encaminha ao PO", a
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("PO recebe toda a fila elegível de refinamento na mesma execução", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "r1", title: "Demanda um", list_ref: adapter.tracker.states.refinement, position: 1 },
+      { ref: "r2", title: "Demanda dois", list_ref: adapter.tracker.states.refinement, position: 2 },
+      { ref: "r3", title: "Demanda três", list_ref: adapter.tracker.states.refinement, position: 3 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.batch_policy, "refinement-queue-v0.2");
+    assert.equal(result.selected.refinement_queue.scope, "all-eligible-refinement-cards");
+    assert.deepEqual(result.selected.refinement_queue.cards.map((card) => card.card_ref), ["r1", "r2", "r3"]);
+    assert.deepEqual(result.selected.continuation_policy.defer_on.slice(0, 3), ["human_decision", "screen_approval", "production_approval"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("bloqueio individual não paralisa card independente do grupo de otimização", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    adapter.batching = { mode: "cohesive-delivery", max_cards: 6 };
+    await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+    const group = { id: "fx-201-202", cards: ["FX-201", "FX-202"], mode: "optimization", defined_by: "pipeline-po" };
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "c1", key: "FX-201", title: "Bloqueado", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true } },
+      { ref: "c2", key: "FX-202", title: "Independente", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: group }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.key, "FX-202");
+    assert.ok(result.blocked.some((item) => item.key === "FX-201" && item.reason === "AWAITING_HUMAN" && item.block_scope === "card"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("bloqueio em grupo de dependência impede todos os membros", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    adapter.batching = { mode: "cohesive-delivery", max_cards: 6 };
+    await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+    const group = { id: "fx-301-302", cards: ["FX-301", "FX-302"], mode: "dependency", defined_by: "pipeline-po" };
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "c1", key: "FX-301", title: "Premissa bloqueada", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true } },
+      { ref: "c2", key: "FX-302", title: "Depende da premissa", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: group }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
+    assert.equal(result.status, "EMPTY");
+    assert.ok(result.blocked.some((item) => item.key === "FX-301" && item.reason === "DELIVERY_GROUP_MEMBER_BLOCKED" && item.block_scope === "delivery_group"));
+    assert.ok(result.blocked.some((item) => item.key === "FX-302" && item.reason === "DELIVERY_GROUP_MEMBER_BLOCKED" && item.block_scope === "delivery_group"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("dependência entre grupos mantém somente o grupo dependente aguardando", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    adapter.batching = { mode: "cohesive-delivery", max_cards: 6 };
+    await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+    const upstream = { id: "fx-401-402", cards: ["FX-401", "FX-402"], mode: "optimization", defined_by: "pipeline-po" };
+    const downstream = { id: "fx-403-404", cards: ["FX-403", "FX-404"], mode: "optimization", depends_on: ["fx-401-402"], defined_by: "pipeline-po" };
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "c1", key: "FX-401", title: "Origem um", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: upstream },
+      { ref: "c2", key: "FX-402", title: "Origem dois", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: upstream },
+      { ref: "c3", key: "FX-403", title: "Dependente um", list_ref: adapter.tracker.states.ready_for_development, position: 3, delivery_group: downstream },
+      { ref: "c4", key: "FX-404", title: "Dependente dois", list_ref: adapter.tracker.states.ready_for_development, position: 4, delivery_group: downstream }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.delivery_group.id, "fx-401-402");
+    assert.ok(result.blocked.some((item) => item.key === "FX-403" && item.reason === "DELIVERY_GROUP_DEPENDENCY_PENDING" && item.dependency_group_id === "fx-401-402"));
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("replanejamento técnico preserva RUN_ID explicitamente informado", async () => {

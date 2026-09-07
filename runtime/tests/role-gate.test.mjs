@@ -46,6 +46,15 @@ test("PO não conclui com pergunta material aberta", async () => {
   assert.ok(result.diagnostics.some((item) => item.code === "PO_COMPLETED_WITH_OPEN_QUESTIONS"));
 });
 
+test("bloqueio de grupo exige identificador do Delivery Group", async () => {
+  const handoff = await fixture("valid-po.json");
+  handoff.status = "blocked";
+  handoff.state.to = "refinement";
+  handoff.blocker = { reason: "Premissa compartilhada pendente.", requires_human: true, scope: "delivery_group", return_to: "pipeline-po" };
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+});
+
 test("UX com frontend exige aprovação humana vigente", async () => {
   const handoff = await fixture("valid-ux.json");
   delete handoff.deliverable.human_approval.evidence_ref;

@@ -4,7 +4,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Repositório oficial: [github.com/Vitor41/modus-protocol](https://github.com/Vitor41/modus-protocol).
 
-> Estado: v0.1 publicada. O Kernel e o plugin estão na versão `0.1.11`.
+> Estado: v0.1 publicada. O Kernel e o plugin estão na versão `0.1.12`.
 
 ## O que ele resolve
 

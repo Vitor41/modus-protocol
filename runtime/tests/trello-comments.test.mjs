@@ -164,6 +164,31 @@ test("snapshot hidrata comentários apenas dos estados ativos", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("snapshot preserva Delivery Group da descrição e membro terminal para precedência", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const group = "DELIVERY GROUP: fp-201-202\nCARDS: FP-201, FP-202\nGROUP MODE: optimization\nDEFINED BY: pipeline-po";
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", fetchImpl: async (url) => {
+      if (String(url).includes("/lists")) return new Response(JSON.stringify([{ id: "dev-ready", name: "PRONTO PARA DESENVOLVER", pos: 1 }, { id: "prd", name: "PRONTO PARA PRD", pos: 2 }]));
+      if (String(url).includes("/cards?")) return new Response(JSON.stringify([
+        { id: "active", name: "FP-201 - Ativo", desc: group, idList: "dev-ready", pos: 1 },
+        { id: "terminal", name: "FP-202 - Terminal", desc: group, idList: "prd", pos: 2 }
+      ]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    assert.deepEqual(snapshot.cards.map((card) => card.key), ["FP-201", "FP-202"]);
+    assert.equal(snapshot.cards[0].delivery_group.mode, "optimization");
+    assert.deepEqual(snapshot.delivery_groups.map((item) => item.id), ["fp-201-202"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("anexa mock e confirma por releitura", async () => {
   const root = await projectFixture();
   await writeFile(join(root, ".pipeline", "tmp", "mock.png"), "png-fixture", "utf8");

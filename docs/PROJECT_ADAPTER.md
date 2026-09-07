@@ -133,7 +133,11 @@ O adaptador declara:
 
 Nenhum adaptador pode converter automaticamente `APROVADO PARA PRD` em autorização genérica para ações destrutivas ou fora do repositório.
 
-### 3.8 QA e evidências
+### 3.8 Delivery Groups e fila
+
+O adapter habilita somente os limites operacionais de agrupamento; ele não decide grupos por conta própria. O PO registra cada grupo no tracker com `GROUP MODE: optimization` ou `GROUP MODE: dependency`, os cards membros, a origem `pipeline-po` e, quando houver, `DEPENDS ON` entre grupos. A semântica é canônica no Kernel: grupos de otimização não propagam bloqueio individual; grupos de dependência e precedências entre grupos propagam apenas o escopo declarado. O adapter deve manter o snapshot capaz de recuperar essa declaração e membros terminais necessários para precedência.
+
+### 3.9 QA e evidências
 
 O contrato de QA inclui:
 
@@ -146,7 +150,7 @@ O contrato de QA inclui:
 
 Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
 
-### 3.9 Segurança e permissões
+### 3.10 Segurança e permissões
 
 O adaptador registra limites locais, nunca permissões adicionais. Deve identificar:
 

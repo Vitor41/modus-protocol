@@ -37,7 +37,7 @@ O bloco `kernel` usa uma versão SemVer como piso da linha compatível:
 ```yaml
 kernel:
   name: unified-development-pipeline
-  version: "0.1.9"
+  version: "0.1.12"
   update_policy: latest-compatible
   distribution: local-plugin
   plugin_name: unified-development-pipeline

@@ -87,6 +87,48 @@ function blockedReason(card, state) {
   return undefined;
 }
 
+function isTerminalState(state) {
+  return state === "ready_for_production" || state === "done";
+}
+
+function deliveryGroups(snapshot, cardsByKey) {
+  const groups = new Map();
+  for (const group of snapshot.delivery_groups ?? []) groups.set(group.id, group);
+  for (const card of cardsByKey.values()) {
+    if (card.delivery_group) groups.set(card.delivery_group.id, card.delivery_group);
+  }
+  return groups;
+}
+
+function groupBlockers(groups, cardsByKey, baseBlocked) {
+  const blocked = new Map();
+  for (const group of groups.values()) {
+    const members = group.cards.map((key) => cardsByKey.get(key));
+    if (members.some((member) => !member)) {
+      blocked.set(group.id, { reason: "DELIVERY_GROUP_INCOMPLETE", scope: "delivery_group" });
+      continue;
+    }
+    for (const dependencyId of group.depends_on ?? []) {
+      const dependency = groups.get(dependencyId);
+      const dependencyMembers = dependency?.cards.map((key) => cardsByKey.get(key));
+      if (!dependency || dependencyMembers.some((member) => !member)) {
+        blocked.set(group.id, { reason: "DELIVERY_GROUP_DEPENDENCY_UNKNOWN", scope: "dependency_group", dependency_group_id: dependencyId });
+        break;
+      }
+      if (!dependencyMembers.every((member) => isTerminalState(member.state))) {
+        blocked.set(group.id, { reason: "DELIVERY_GROUP_DEPENDENCY_PENDING", scope: "dependency_group", dependency_group_id: dependencyId });
+        break;
+      }
+    }
+    if (blocked.has(group.id)) continue;
+    if (group.mode === "dependency") {
+      const source = members.find((member) => baseBlocked.has(member.card_ref));
+      if (source) blocked.set(group.id, { reason: "DELIVERY_GROUP_MEMBER_BLOCKED", scope: "delivery_group", blocked_card_ref: source.card_ref });
+    }
+  }
+  return blocked;
+}
+
 export function planRun(input = {}) {
   const projectRoot = resolve(input.projectRoot ?? process.cwd());
   const adapterPath = resolve(input.adapterPath ?? join(projectRoot, ".pipeline", "project.adapter.yaml"));
@@ -178,7 +220,8 @@ export function planRun(input = {}) {
       activeCard.lock.run_id === activeExecution.run_id &&
       activeState === activeExecution.state &&
       activeRoute?.skill === activeExecution.role;
-    if (!resumeConsistent) {
+    const activeCardDeferred = activeCard && (activeCard.signals?.awaiting_human === true || activeCard.lock?.status === "blocked");
+    if (!resumeConsistent && !activeCardDeferred) {
       return {
         contract_version: "0.1",
         tool: { name: "pipeline-run-planner", version: PACKAGE.version },
@@ -190,12 +233,12 @@ export function planRun(input = {}) {
         guarantees
       };
     }
-    return {
+    if (!activeCardDeferred) return {
       contract_version: "0.1",
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
       status: "READY",
-      batch_policy: "single-card-v0.1",
+      batch_policy: activeCard.delivery_group ? "cohesive-delivery-v0.2" : "single-card-v0.2",
       doctor,
       run_id: activeExecution.run_id,
       resuming: true,
@@ -219,8 +262,10 @@ export function planRun(input = {}) {
     };
   }
 
-  const eligible = [];
+  const candidates = [];
   const blocked = [];
+  const baseBlocked = new Map();
+  const cardsByKey = new Map();
   for (const [index, card] of (snapshot.cards ?? []).entries()) {
     const state = stateByList.get(card.list_ref);
     if (!state) {
@@ -239,27 +284,62 @@ export function planRun(input = {}) {
       blocked.push({ card_ref: card.ref, key: card.key, reason: "CARD_KEY_INVALID" });
       continue;
     }
-    const reason = blockedReason(card, state);
-    if (reason) {
-      blocked.push({ card_ref: card.ref, key: card.key, state, reason });
-      continue;
-    }
-    const routeCandidate = routeCard(state, card.signals);
-    const route = routeCandidate ? withExecutionRequest(routeCandidate) : undefined;
-    if (!route) {
-      blocked.push({ card_ref: card.ref, key: card.key, state, reason: "NO_AUTOMATIC_ROUTE" });
-      continue;
-    }
-    eligible.push({
+    const candidate = {
       card_ref: card.ref,
       key: card.key,
       title: card.title ?? basename(card.ref),
       position: card.position,
       snapshot_index: index,
       state,
-      ...(card.delivery_group ? { delivery_group: card.delivery_group } : {}),
-      ...route
-    });
+      ...(card.delivery_group ? { delivery_group: card.delivery_group } : {})
+    };
+    if (candidate.key) cardsByKey.set(candidate.key, candidate);
+    const reason = blockedReason(card, state);
+    if (reason) {
+      baseBlocked.set(candidate.card_ref, reason);
+      continue;
+    }
+    const routeCandidate = routeCard(state, card.signals);
+    const route = routeCandidate ? withExecutionRequest(routeCandidate) : undefined;
+    if (!route) {
+      baseBlocked.set(candidate.card_ref, "NO_AUTOMATIC_ROUTE");
+      continue;
+    }
+    candidates.push({ ...candidate, ...route });
+  }
+
+  const groups = deliveryGroups(snapshot, cardsByKey);
+  const groupBlocked = groupBlockers(groups, cardsByKey, baseBlocked);
+  const eligible = [];
+  for (const candidate of candidates) {
+    const groupBlock = candidate.delivery_group ? groupBlocked.get(candidate.delivery_group.id) : undefined;
+    const reason = groupBlock?.reason ?? baseBlocked.get(candidate.card_ref);
+    if (reason) {
+      blocked.push({
+        card_ref: candidate.card_ref,
+        key: candidate.key,
+        state: candidate.state,
+        reason,
+        ...(groupBlock ? { block_scope: groupBlock.scope, delivery_group_id: candidate.delivery_group.id, ...(groupBlock.dependency_group_id ? { dependency_group_id: groupBlock.dependency_group_id } : {}) } : { block_scope: "card" })
+      });
+      continue;
+    }
+    eligible.push(candidate);
+  }
+  for (const [cardRef, reason] of baseBlocked) {
+    const card = [...cardsByKey.values()].find((item) => item.card_ref === cardRef);
+    const groupBlock = card?.delivery_group ? groupBlocked.get(card.delivery_group.id) : undefined;
+    if (card && !blocked.some((item) => item.card_ref === cardRef)) {
+      blocked.push({
+        card_ref: cardRef,
+        key: card.key,
+        state: card.state,
+        reason: groupBlock?.reason ?? reason,
+        ...(groupBlock
+          ? { block_scope: groupBlock.scope, delivery_group_id: card.delivery_group.id, ...(groupBlock.dependency_group_id ? { dependency_group_id: groupBlock.dependency_group_id } : {}) }
+          : { block_scope: "card" })
+      });
+    }
   }
 
   eligible.sort(
@@ -275,7 +355,7 @@ export function planRun(input = {}) {
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
       status: "EMPTY",
-      batch_policy: "single-card-v0.1",
+      batch_policy: "single-card-v0.2",
       doctor,
       blocked,
       guarantees
@@ -292,18 +372,28 @@ export function planRun(input = {}) {
     if (declaredGroup.cards.length > adapter.batching.max_cards) {
       return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_TOO_LARGE", delivery_group: declaredGroup.id, doctor, blocked, guarantees };
     }
-    const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
-    const missing = declaredGroup.cards.filter((key) => !eligibleByKey.has(key));
-    batchMembers = declaredGroup.cards.map((key) => eligibleByKey.get(key)).filter(Boolean);
-    const inconsistent = batchMembers.filter((card) => card.delivery_group?.id !== declaredGroup.id || card.delivery_group?.defined_by !== "pipeline-po" || JSON.stringify(card.delivery_group.cards) !== JSON.stringify(declaredGroup.cards));
-    const states = new Set(batchMembers.map((card) => card.state));
-    const routes = new Set(batchMembers.map((card) => `${card.skill}:${card.action}`));
-    if (missing.length || inconsistent.length || states.size !== 1 || routes.size !== 1) {
-      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: missing.length || inconsistent.length ? "DELIVERY_GROUP_INCOMPLETE" : "DELIVERY_GROUP_STATE_DIVERGED", delivery_group: declaredGroup.id, missing_cards: missing, inconsistent_cards: inconsistent.map((card) => card.key), doctor, blocked, guarantees };
+    const allByKey = new Map([...cardsByKey.values()].map((card) => [card.key, card]));
+    const missing = declaredGroup.cards.filter((key) => !allByKey.has(key));
+    const inconsistent = declaredGroup.cards.map((key) => allByKey.get(key)).filter(Boolean).filter((card) => card.delivery_group?.id !== declaredGroup.id || card.delivery_group?.defined_by !== "pipeline-po" || JSON.stringify(card.delivery_group.cards) !== JSON.stringify(declaredGroup.cards));
+    if (missing.length || inconsistent.length) {
+      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_INCOMPLETE", delivery_group: declaredGroup.id, missing_cards: missing, inconsistent_cards: inconsistent.map((card) => card.key), doctor, blocked, guarantees };
     }
+    const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
+    const sameWork = declaredGroup.cards.map((key) => eligibleByKey.get(key)).filter((card) => card && card.state === selected.state && card.skill === selected.skill && card.action === selected.action);
+    if (declaredGroup.mode === "dependency" && sameWork.length !== declaredGroup.cards.length) {
+      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_STATE_DIVERGED", delivery_group: declaredGroup.id, doctor, blocked, guarantees };
+    }
+    if (sameWork.length >= 2) batchMembers = sameWork;
   }
   const id = input.continueRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
-  const batchPolicy = declaredGroup ? "cohesive-delivery-v0.1" : "single-card-v0.1";
+  const refinementQueue = selected.state === "refinement"
+    ? eligible.filter((card) => card.state === "refinement").map(({ snapshot_index, ...card }) => card)
+    : [];
+  const batchPolicy = refinementQueue.length
+    ? "refinement-queue-v0.2"
+    : declaredGroup && batchMembers.length >= 2
+      ? "cohesive-delivery-v0.2"
+      : "single-card-v0.2";
   const memberRefs = new Set(batchMembers.map((card) => card.card_ref));
   return {
     contract_version: "0.1",
@@ -317,13 +407,21 @@ export function planRun(input = {}) {
     selected: {
       ...selected,
       continuation_policy: {
-        mode: "until-human-gate-or-blocker",
+        mode: "drain-independent-work-v0.2",
         preserve_run_id: true,
         continue_after_role_handoff: true,
-        stop_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure", "queue_complete"]
+        defer_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure"],
+        stop_on: ["queue_complete"]
       },
+      ...(refinementQueue.length ? {
+        refinement_queue: {
+          scope: "all-eligible-refinement-cards",
+          cards: refinementQueue,
+          blocked_cards: blocked.filter((card) => card.state === "refinement")
+        }
+      } : {}),
       ...(declaredGroup ? {
-        delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, cards: batchMembers.map(({ snapshot_index, ...card }) => card) },
+        delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, mode: declaredGroup.mode, ...(declaredGroup.depends_on?.length ? { depends_on: declaredGroup.depends_on } : {}), cards: batchMembers.map(({ snapshot_index, ...card }) => card) },
         card_refs: batchMembers.map((card) => card.card_ref)
       } : {}),
       comment_gate: commentGate,

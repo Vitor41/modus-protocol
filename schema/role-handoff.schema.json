@@ -36,6 +36,7 @@
     "risks": { "$ref": "#/$defs/stringArray" },
     "next_step": { "$ref": "#/$defs/nonEmptyString" },
     "blocker": { "$ref": "#/$defs/blocker" },
+    "delivery_group": { "$ref": "#/$defs/deliveryGroup" },
     "deliverable": { "type": "object" }
   },
   "allOf": [
@@ -46,6 +47,20 @@
     {
       "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
       "then": { "required": ["deliverable"], "properties": { "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "blocker": {
+            "properties": { "scope": { "enum": ["delivery_group", "dependency_group"] } },
+            "required": ["scope"]
+          }
+        },
+        "required": ["blocker"]
+      },
+      "then": {
+        "properties": { "blocker": { "required": ["delivery_group_id"] } }
+      }
     },
     {
       "if": { "properties": { "role": { "const": "pipeline-po" } }, "required": ["role"] },
@@ -184,7 +199,22 @@
       "properties": {
         "reason": { "$ref": "#/$defs/nonEmptyString" },
         "requires_human": { "type": "boolean" },
+        "scope": { "enum": ["card", "delivery_group", "dependency_group"] },
+        "delivery_group_id": { "$ref": "#/$defs/nonEmptyString" },
         "return_to": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] }
+      }
+    },
+    "deliveryGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cards", "mode", "defined_by"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "cards": { "$ref": "#/$defs/stringArray" },
+        "branch": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "enum": ["optimization", "dependency"] },
+        "depends_on": { "$ref": "#/$defs/stringArray" },
+        "defined_by": { "const": "pipeline-po" }
       }
     },
     "criterion": {

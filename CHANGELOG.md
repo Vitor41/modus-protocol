@@ -8,10 +8,17 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.1.12` transforma o refinamento em fila: o PO recebe todos os cards elegíveis, normaliza título/descrição/labels e define Delivery Groups após analisar o conjunto.
+- Delivery Groups passam a declarar `optimization` ou `dependency`, precedência explícita entre grupos e escopo de bloqueio (`card`, `delivery_group` ou `dependency_group`).
+
 - Kernel `0.1.11` adiciona status de versão fail-fast antes do Trello, expondo runtime ativo, origem física, piso do adapter, versões do cache e tarefa obsoleta.
 - Guia público de início rápido cobre instalação, adapter, credenciais, trecho canônico do `AGENTS.md`, gatilho, cutover e primeiro teste.
 
 ### Alterado
+
+- O orquestrador drena cards e grupos independentes na mesma execução; gates humanos e bloqueios localizados deixam de interromper a fila inteira.
+- Snapshot Trello preserva a declaração do Delivery Group na descrição e inclui membros terminais estritamente necessários para resolver precedências, sem varredura completa de comentários.
+- Contratos, documentação, Skills e testes passam a validar a semântica de grupos e o bloqueio de escopo correto.
 
 - `pipeline-run` e `pipeline-doctor` exigem comprovação da versão antes de acessar o tracker.
 - Documentação de empacotamento e operação deixa de apresentar versões históricas como configuração atual.

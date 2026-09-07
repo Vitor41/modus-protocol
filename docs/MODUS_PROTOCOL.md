@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.1.11` |
-| Versão do Kernel | `0.1.11` |
+| Versão pública | `0.1.12` |
+| Versão do Kernel | `0.1.12` |
 | Estado | Candidata a release pública |
 | Data | 2026-08-31 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -292,7 +292,7 @@ Loops previstos:
 
 Cada retorno cria evidência nova e incrementa o ciclo. No terceiro retorno do mesmo loop e escopo, o card recebe `Aguardando resposta humana`. Não existe quarto ciclo automático.
 
-O bloqueio é propriedade do card ou da unidade técnica inseparável. Os demais cards independentes continuam elegíveis.
+O bloqueio possui escopo explícito: `card` para uma pendência isolada, `delivery_group` para membros com dependência determinante e `dependency_group` para um grupo que aguarda outro grupo. Um Delivery Group pode ser `optimization`, quando compartilha esforço mas seus cards continuam independentes, ou `dependency`, quando um bloqueio deve paralisar todos os membros. Os demais cards e grupos independentes continuam elegíveis.
 
 ## 11. Papéis
 
@@ -303,6 +303,7 @@ Responsável por:
 - consultar o estado oficial;
 - verificar lock, dependências, gates e elegibilidade;
 - formar o lote;
+- entregar ao PO todos os cards elegíveis em refinamento antes de qualquer agrupamento;
 - escolher o papel ativo;
 - classificar complexidade e perfil de execução;
 - acionar especializações quando justificadas;
@@ -315,7 +316,7 @@ O ORCHESTRATOR não resolve silenciosamente o trabalho especializado que deve en
 
 ### 11.2 PO
 
-Responsável por transformar a demanda em comportamento verificável, separar regras confirmadas de hipóteses, resolver ambiguidades de negócio dentro de sua autonomia e produzir critérios de aceite.
+Responsável por transformar a demanda em comportamento verificável, separar regras confirmadas de hipóteses, resolver ambiguidades de negócio dentro de sua autonomia e produzir critérios de aceite. Ao receber uma fila de refinamento, normaliza todos os cards elegíveis, aplica labels e decide explicitamente quais seguem isolados, em grupo de otimização ou em grupo de dependência.
 
 Não prescreve solução técnica e não altera código.
 

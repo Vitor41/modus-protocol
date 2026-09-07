@@ -25,3 +25,5 @@ Comprove o comportamento do candidato fixado sem corrigir a entrega durante a va
 - `blocked`: ambiente ou precondição impede conclusão; permaneça no estado e não invente resultado.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-qa` e valide com `../../runtime/src/role-gate.mjs`. QA não concede `APROVADO PARA PRD`.
+
+Preserve o `delivery_group` que veio do PO. Reprovação ou bloqueio de QA é de `card` por padrão; só use escopo de grupo quando a dependência determinante estiver declarada.

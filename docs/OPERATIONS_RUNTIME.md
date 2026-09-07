@@ -54,9 +54,9 @@ Status:
 
 Quando existe execução unificada ativa, `READY` só representa retomada se `RUN_ID`, card, estado, papel, lock e cápsula permanecerem consistentes. Execução legada ativa, cápsula ausente ou divergência de estado produz `BLOCKED`.
 
-## Política de lote v0.1
+## Política de fila e Delivery Groups v0.2
 
-A política é `single-card-v0.1`. O planner ordena:
+O planner prioriza:
 
 1. release já aprovada;
 2. QA pendente;
@@ -65,13 +65,20 @@ A política é `single-card-v0.1`. O planner ordena:
 5. UX/UI;
 6. refinamento.
 
-Dentro do mesmo estado, prevalecem posição do card e chave. Cards adicionais permanecem em `deferred`; não recebem lock nem transição.
+Dentro do mesmo estado, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 
-Essa política reduz WIP e impede que uma fila nova interrompa entrega em validação. Processamento automático de lote permanece fora da v0.1 até os três pilotos controlados aprovados.
+Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra a fila enquanto houver outro card ou grupo elegível.
+
+`DELIVERY GROUP` é declarado somente pelo PO e pode ser:
+
+- `optimization`: compartilha esforço técnico quando conveniente, sem criar dependência. Um card bloqueado não interrompe os demais membros.
+- `dependency`: representa uma premissa determinante. Um bloqueio em qualquer membro bloqueia todos os membros do grupo.
+
+`DEPENDS ON` declara precedência entre grupos; o grupo posterior espera a conclusão terminal de todos os membros do anterior. O planner só agrega para a mesma execução os membros que estão na mesma rota e estado, preservando o avanço individual quando a semântica for `optimization`.
 
 ## Snapshot do tracker
 
-O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário.
+O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário. Quando necessário para resolver precedência, inclui `delivery_groups` e membros terminais do grupo, sem executar leitura completa de comentários do board.
 
 O integrador é responsável por derivar sinais como aprovação humana, implementação concluída e espera humana a partir de evidência real. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
 
