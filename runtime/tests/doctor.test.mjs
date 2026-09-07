@@ -221,9 +221,10 @@ test("cutover válido exige snapshot e roteamento unificado", async () => {
   }
 });
 
-test("doctor aceita patch mais novo na mesma linha por padrão", async () => {
+test("doctor aceita adapter sem pinagem de versão do Kernel", async () => {
   const fixture = JSON.parse(await readFile(FIXTURE_PATH, "utf8"));
-  fixture.kernel.version = "0.1.7";
+  delete fixture.kernel.version;
+  delete fixture.kernel.update_policy;
   const { root, adapterPath } = await createProject(fixture);
   try {
     const result = runDoctor({ projectRoot: root, adapterPath, schemaPath: SCHEMA_PATH, mode: "shadow" });
@@ -231,14 +232,14 @@ test("doctor aceita patch mais novo na mesma linha por padrão", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("doctor mantém igualdade exata quando adapter usa pinned", async () => {
+test("doctor ignora campos legados de pinagem do Kernel", async () => {
   const fixture = JSON.parse(await readFile(FIXTURE_PATH, "utf8"));
   fixture.kernel.version = "0.1.7";
   fixture.kernel.update_policy = "pinned";
   const { root, adapterPath } = await createProject(fixture);
   try {
     const result = runDoctor({ projectRoot: root, adapterPath, schemaPath: SCHEMA_PATH, mode: "shadow" });
-    assert.ok(result.diagnostics.some((item) => item.code === "KERNEL_VERSION_MISMATCH"), JSON.stringify(result.diagnostics));
+    assert.ok(!result.diagnostics.some((item) => item.code === "KERNEL_VERSION_MISMATCH"), JSON.stringify(result.diagnostics));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -104,7 +104,7 @@
     "kernel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "version", "distribution"],
+      "required": ["name", "distribution"],
       "properties": {
         "name": {
           "const": "unified-development-pipeline"
@@ -115,7 +115,7 @@
         },
         "update_policy": {
           "enum": ["latest-compatible", "pinned"],
-          "default": "latest-compatible"
+          "deprecated": true
         },
         "distribution": {
           "enum": ["source", "local-plugin", "public-plugin"]

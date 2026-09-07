@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.1.13` torna o plugin instalado a única fonte de versão ativa; adapters deixam de fixar ou comparar versão de Kernel e o gatilho não executa preflight de versão.
 - Kernel `0.1.12` transforma o refinamento em fila: o PO recebe todos os cards elegíveis, normaliza título/descrição/labels e define Delivery Groups após analisar o conjunto.
 - Delivery Groups passam a declarar `optimization` ou `dependency`, precedência explícita entre grupos e escopo de bloqueio (`card`, `delivery_group` ou `dependency_group`).
 

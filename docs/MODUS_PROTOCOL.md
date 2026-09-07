@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.1.12` |
-| Versão do Kernel | `0.1.12` |
+| Versão pública | `0.1.13` |
+| Versão do Kernel | `0.1.13` |
 | Estado | Candidata a release pública |
 | Data | 2026-08-31 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -75,7 +75,7 @@ Uma regra possui uma fonte canônica. Outros documentos apontam para ela. Duplic
 
 ### 4.7 Atualização controlada
 
-Nenhum arquivo de projeto consumidor é alterado silenciosamente. O adapter adota por padrão patches mais novos da mesma linha compatível, após instalação versionada do plugin; downgrade e mudanças incompatíveis continuam bloqueados. Projetos que exigem igualdade exata usam `update_policy: pinned`.
+Nenhum arquivo de projeto consumidor é alterado silenciosamente. A versão ativa é sempre a do plugin carregado pelo Codex; adapters não fixam nem comparam versão de Kernel. Atualizar o plugin atualiza todos os projetos que o utilizam após abrir uma nova tarefa.
 
 ## 5. Arquitetura conceitual
 

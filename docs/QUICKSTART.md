@@ -51,10 +51,10 @@ O gatilho entra no roteador. O loop continua automaticamente entre PO, UX/UI, DE
 Em uma nova tarefa do Codex, execute primeiro:
 
 ```powershell
-<runtime-do-plugin>\pipeline.ps1 status --project-root <projeto> --format json
+<runtime-do-plugin>\pipeline.ps1 doctor --project-root <projeto> --mode structural --format json
 ```
 
-O resultado deve ser `PASS` e mostrar versão ativa, origem física e piso do adapter. Depois execute doctor estrutural, shadow com snapshot somente leitura e um shadow run. Não prossiga com `ACTIVE_RUNTIME_INCOMPATIBLE` ou `STALE_TASK_PLUGIN`.
+O resultado deve ser `PASS`. Depois execute doctor shadow com snapshot somente leitura e um shadow run. O gatilho operacional usa diretamente o plugin carregado pela nova tarefa.
 
 ## 5. Faça o cutover e o primeiro teste
 
@@ -67,4 +67,4 @@ Após revisar adapter, `AGENTS.md`, Trello e rollback:
 5. confira versão, origem, `RUN_ID`, card/lote, papel, modelo e esforço;
 6. confirme no Trello comentários, anexos e movimentos por releitura.
 
-Para atualizar, leia o changelog, reinstale a release, reinicie o Codex, abra nova tarefa e eleve `kernel.version` somente após validação. Consulte [Instalação e atualizações](INSTALLATION_AND_UPDATES.md) e [Rollback](ROLLBACK.md).
+Para atualizar, leia o changelog, reinstale a release, reinicie o Codex e abra nova tarefa. Não altere o adapter apenas para refletir versão: o plugin ativo é a fonte única. Consulte [Instalação e atualizações](INSTALLATION_AND_UPDATES.md) e [Rollback](ROLLBACK.md).

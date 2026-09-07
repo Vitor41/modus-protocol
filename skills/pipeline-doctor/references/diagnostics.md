@@ -16,7 +16,6 @@ Diagnósticos principais:
 | `ADAPTER_LOCATION_NONCANONICAL` | O cutover não usa `.pipeline/project.adapter.yaml`. | Mover/versionar o adapter canônico antes do cutover. |
 | `ADAPTER_SCHEMA_INVALID` | O adapter viola o schema canônico. | Corrigir o contrato antes de continuar. |
 | `INLINE_SECRET_KEY` | Há uma chave com aparência de segredo embutido. | Migrar o segredo para provedor externo sem expor o valor. |
-| `KERNEL_VERSION_MISMATCH` | A versão fixada difere do runtime. | Instalar a versão exata ou executar migração explícita. |
 | `REQUIRED_CONTEXT_MISSING` | Um contexto obrigatório não existe. | Criar ou corrigir a referência. |
 | `OPTIONAL_CONTEXT_MISSING` | Um contexto opcional não existe. | Registrar como aviso; não bloqueia shadow. |
 | `TRACKER_CREDENTIAL_PATH_OUTSIDE_PROJECT` | O arquivo externo de credenciais escaparia da raiz. | Corrigir para caminho relativo contido no projeto. |

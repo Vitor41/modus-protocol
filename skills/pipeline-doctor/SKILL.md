@@ -1,6 +1,6 @@
 ---
 name: pipeline-doctor
-description: Diagnostica a instalação e a compatibilidade da Modus Protocol em um projeto, validando adapter, versão, contexto, roteamento e tracker sem alterar o projeto. Use para checagem pré-instalação, shadow run, cutover ou troubleshooting; não use para migrar, corrigir ou processar cards.
+description: Diagnostica a instalação da Modus Protocol em um projeto, validando adapter, contexto, roteamento e tracker sem alterar o projeto. Use para checagem pré-instalação, shadow run, cutover ou troubleshooting; não use para migrar, corrigir ou processar cards.
 ---
 
 # Pipeline Doctor
@@ -10,8 +10,7 @@ Diagnostique a esteira de modo determinístico e somente leitura.
 ## Executar
 
 1. Determine a raiz do projeto consumidor e localize `.pipeline/project.adapter.yaml`.
-2. Execute primeiro `../../runtime/pipeline.ps1 status --project-root <projeto> --format json` para comprovar versão ativa, origem física, piso do adapter e possível tarefa obsoleta. Pare se o status falhar.
-3. Localize esta Skill e execute o runtime compartilhado em `../../runtime/src/doctor.mjs` com Node.js 20 ou superior.
+2. Localize esta Skill e execute o runtime compartilhado em `../../runtime/src/doctor.mjs` com Node.js 20 ou superior.
 3. Use `--mode shadow` por padrão. Use `--mode cutover` somente quando o usuário estiver preparando ou autorizando a troca da rota ativa.
 4. Para validar o Trello, obtenha por integração somente leitura um snapshot normalizado das listas abertas e passe-o com `--tracker-snapshot`. Nunca altere o board durante o diagnóstico.
 5. Se houver falha ou preparação de cutover, leia `references/diagnostics.md` antes de interpretar o resultado.

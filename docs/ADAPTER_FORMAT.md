@@ -30,20 +30,18 @@ Cada projeto consumidor terá:
 
 O nome e a localização são fixos na v0.1 para impedir descoberta ambígua. Não haverá busca recursiva por múltiplos adapters.
 
-## 3. Compatibilidade do Kernel
+## 3. Runtime do Kernel
 
-O bloco `kernel` usa uma versão SemVer como piso da linha compatível:
+O bloco `kernel` identifica a distribuição que fornece o runtime e as Skills:
 
 ```yaml
 kernel:
   name: unified-development-pipeline
-  version: "0.1.12"
-  update_policy: latest-compatible
   distribution: local-plugin
   plugin_name: unified-development-pipeline
 ```
 
-`latest-compatible` aceita automaticamente patches instalados mais novos dentro do mesmo `major.minor`, mas bloqueia downgrade e mudança de linha. Use `pinned` quando o projeto exigir igualdade exata. Intervalos textuais como `^0.1`, `latest` ou branch móvel continuam proibidos; a compatibilidade é calculada pelo doctor.
+O plugin instalado é a fonte única da versão ativa. O adapter não fixa, não compara e não escolhe versões: ao instalar uma atualização e abrir uma nova tarefa, todo projeto consumidor passa a usar o runtime e as Skills carregados pelo Codex. Campos legados `version` e `update_policy` são tolerados apenas para compatibilidade e ignorados.
 
 `schema_version` evolui separadamente da versão do Kernel. Uma versão nova do Kernel pode continuar aceitando schema `0.1`; uma mudança incompatível do adapter exige migração declarada.
 

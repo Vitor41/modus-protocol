@@ -67,10 +67,5 @@
       }
     ],
     "expected_codes": ["ENVIRONMENT_COMMAND_UNKNOWN"]
-  },
-  {
-    "name": "kernel-version-mismatch",
-    "operations": [{ "op": "set", "path": "kernel.version", "value": "9.9.9" }],
-    "expected_codes": ["KERNEL_VERSION_MISMATCH"]
   }
 ]

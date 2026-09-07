@@ -49,39 +49,20 @@ export function getVersionStatus(input = {}) {
   const adapter = existsSync(adapterPath)
     ? YAML.parse(readFileSync(adapterPath, "utf8"))
     : undefined;
-  const required = adapter?.kernel?.version;
-  const policy = adapter?.kernel?.update_policy ?? "latest-compatible";
   const active = semver(PACKAGE.version);
-  const floor = semver(required);
-  const compatible = !floor || (policy === "pinned"
-    ? compare(active, floor) === 0
-    : active[0] === floor[0] && active[1] === floor[1] && compare(active, floor) >= 0);
   const installed = cacheVersions(pluginRoot);
-  const newerInstalled = installed.find((version) => compare(semver(version), active) > 0);
   const diagnostics = [];
-  if (!compatible) diagnostics.push({
-    code: "ACTIVE_RUNTIME_INCOMPATIBLE",
-    message: `O projeto exige ${required} (${policy}), mas esta tarefa carregou o runtime ${PACKAGE.version}.`
-  });
-  if (pluginManifest && semver(pluginManifest.version) && compare(semver(pluginManifest.version), active) !== 0) diagnostics.push({
-    code: "PLUGIN_RUNTIME_VERSION_DIVERGED",
-    message: `O manifest do plugin informa ${pluginManifest.version}, mas o runtime ativo informa ${PACKAGE.version}.`
-  });
-  if (newerInstalled) diagnostics.push({
-    code: "STALE_TASK_PLUGIN",
-    message: `Esta tarefa usa ${PACKAGE.version}, mas o cache já contém ${newerInstalled}. Reinicie o Codex e abra uma nova tarefa.`
-  });
   return {
     contract_version: "0.1",
     tool: { name: "modus-version-status", version: PACKAGE.version },
-    status: diagnostics.length ? "FAIL" : "PASS",
+    status: "PASS",
     active: {
       runtime_version: PACKAGE.version,
       plugin_version: pluginManifest?.version ?? null,
       runtime_root: RUNTIME_DIR,
       plugin_root: pluginRoot ?? null
     },
-    project: { root: projectRoot, adapter: adapterPath, required_kernel: required ?? null, update_policy: policy },
+    project: { root: projectRoot, adapter: adapterPath },
     installed_cache_versions: installed,
     diagnostics
   };
@@ -116,7 +97,6 @@ if (invokedDirectly) {
       else {
         process.stdout.write(`Modus Protocol ${result.active.runtime_version} | ${result.status}\n`);
         process.stdout.write(`origem=${result.active.runtime_root}\n`);
-        process.stdout.write(`exigida=${result.project.required_kernel ?? "não declarada"} política=${result.project.update_policy}\n`);
         for (const diagnostic of result.diagnostics) process.stdout.write(`[ERROR] ${diagnostic.code} - ${diagnostic.message}\n`);
       }
       process.exitCode = result.status === "PASS" ? 0 : 1;

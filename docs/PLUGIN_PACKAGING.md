@@ -51,7 +51,7 @@ Identidades locais:
 
 - marketplace: `unified-development-pipeline-local`;
 - plugin: `unified-development-pipeline`;
-- versão atual: `0.1.12`.
+- versão atual: `0.1.13`.
 
 Instalação inicial:
 
@@ -72,7 +72,7 @@ Após alterar a fonte:
 4. aplicar um único cachebuster ao manifest gerado usando o helper oficial;
 5. reinstalar `unified-development-pipeline@unified-development-pipeline-local`;
 6. reiniciar completamente o Codex e iniciar uma nova tarefa para carregar a versão atualizada;
-7. executar `pipeline.ps1 status` e confirmar versão, origem e piso do adapter antes do tracker.
+7. abrir uma nova tarefa após a instalação para carregar as Skills e o runtime do plugin atualizado.
 
 O cachebuster não altera a versão funcional do Kernel. Releases promovidas incrementam SemVer; cachebuster serve apenas à iteração local.
 

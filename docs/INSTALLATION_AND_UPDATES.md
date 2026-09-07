@@ -30,7 +30,7 @@ Após os dois pilotos, documentação, licença, segurança e atualização esta
 |---|---|
 | Workflow e gates | Kernel central |
 | Skills comuns | Pacote central/plugin |
-| Piso compatível | `kernel.version` e `kernel.update_policy` no adapter do projeto |
+| Versão ativa | Plugin instalado pelo Codex |
 | Configuração local | `.pipeline/project.adapter.yaml` |
 | Domínio e arquitetura | Documentação do projeto consumidor |
 | Credenciais | Provedor externo autorizado |
@@ -47,14 +47,12 @@ unified-development-pipeline
 
 O produto público se chama **Modus Protocol**. O identificador permanece estável na série v0.1 para não quebrar adapters já instalados. A versão do plugin segue SemVer e corresponde à release do Kernel incluída no pacote.
 
-Adapter, Kernel e plugin registram versões separadas quando necessário:
+Adapter e plugin têm responsabilidades separadas:
 
 - `schema_version`: contrato do adapter;
-- `kernel.version`: piso de comportamento desejado pelo projeto;
-- `kernel.update_policy`: `latest-compatible` por padrão ou `pinned` para igualdade exata;
 - `plugin.version`: artefato instalado que fornece o Kernel e as Skills.
 
-Doctor aceita patches mais novos na mesma linha quando a política é `latest-compatible`; bloqueia downgrade, mudança de linha e qualquer divergência quando a política é `pinned`.
+O plugin instalado é a fonte única da versão em execução. O adapter não fixa nem compara versão do Kernel; campos legados `kernel.version` e `kernel.update_policy` são ignorados para facilitar migração de projetos existentes.
 
 ## 4. Instalação inicial
 
@@ -75,7 +73,7 @@ Instalação do plugin não autoriza migrar nenhum projeto.
 
 O passo a passo executável, incluindo o trecho exato do `AGENTS.md` e o gatilho `Processe a fila do Trello.`, está em [Início rápido](QUICKSTART.md).
 
-Antes de qualquer consulta ao tracker, execute `pipeline.ps1 status --project-root <projeto> --format json`. O comando comprova versão e origem do runtime que a tarefa realmente carregou, compara o piso do adapter e detecta um cache mais novo que a tarefa ativa. `FAIL` impede acesso ao Trello; reinstale quando necessário, reinicie o Codex e abra uma nova tarefa.
+Após instalar uma atualização, reinicie o Codex e abra uma nova tarefa. A Skill `pipeline-run` usa diretamente o runtime carregado pelo plugin, sem uma verificação de versão antes de acessar o tracker.
 
 ## 5. Atualização de um projeto
 
