@@ -69,7 +69,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.1.16");
+  assert.equal(status.active.runtime_version, "0.1.17");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {
@@ -113,6 +113,13 @@ test("artefato inclui launcher determinístico", async () => {
   assert.match(launcher, /codex-primary-runtime/);
   assert.match(launcher, /não crie scripts substitutos/);
   assert.match(launcher, /'status' = 'version-status\.mjs'/);
+  assert.match(launcher, /'role-launch' = 'role-launcher\.mjs'/);
+});
+
+test("artefato inclui launcher alternativo de agentes", async () => {
+  const launcher = await readFile(join(built.targetRoot, "runtime", "src", "role-launcher.mjs"), "utf8");
+  assert.match(launcher, /pipeline-role-launcher/);
+  assert.match(launcher, /explicit-codex-exec/);
 });
 
 test("artefato inclui executor oficial de comandos do adapter", async () => {

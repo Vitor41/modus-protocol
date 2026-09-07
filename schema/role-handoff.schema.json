@@ -108,7 +108,7 @@
         "status": { "enum": ["confirmed", "not_observable"] },
         "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "not_observable"] },
         "reasoning_effort": { "enum": ["low", "medium", "high", "max", "not_observable"] },
-        "configuration_source": { "enum": ["explicit-agent-launch", "inherited", "not_observable"] },
+        "configuration_source": { "enum": ["explicit-agent-launch", "explicit-codex-exec", "inherited", "not_observable"] },
         "evidence_ref": { "type": "string", "pattern": "^agent:[A-Za-z0-9][A-Za-z0-9._:/-]*$" },
         "fallback_used": { "type": "boolean" },
         "fallback_reason": { "$ref": "#/$defs/nonEmptyString" }

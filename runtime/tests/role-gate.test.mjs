@@ -207,6 +207,14 @@ test("handoff rejeita configuração herdada", async () => {
   assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_CONFIGURATION_SOURCE_INVALID"));
 });
 
+test("handoff aceita lançamento explícito pelo Codex CLI", async () => {
+  const handoff = await fixture("valid-po.json");
+  handoff.execution.observation.configuration_source = "explicit-codex-exec";
+  handoff.execution.observation.evidence_ref = "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86";
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "PASS", JSON.stringify(result.diagnostics));
+});
+
 test("handoff rejeita fallback mesmo quando produz saída", async () => {
   const handoff = await fixture("valid-dev.json");
   handoff.execution.observation.fallback_used = true;

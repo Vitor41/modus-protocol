@@ -22,7 +22,7 @@ Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência 
 2. Validação da capacidade de comentário conforme `tracker-comment-protocol.md`.
 3. Registro de lock ativo com `RUN_ID`, card, estado, papel e timestamp, seguido de releitura.
 4. Registro ou atualização da cápsula, seguido de releitura.
-5. Lançamento explícito do agente de papel com modelo e esforço do planner.
+5. Lançamento explícito do agente de papel com modelo e esforço do planner pela colaboração da conversa ou pelo `pipeline.ps1 role-launch` quando aquela capacidade não estiver exposta.
 6. Registro do recibo de lançamento e execução do papel selecionado.
 7. Publicação e releitura da evidência do gate.
 8. Nova releitura do lock e do estado.
@@ -60,13 +60,13 @@ O planner resolve o perfil semântico antes de qualquer escrita. O ORCHESTRATOR 
 O ORCHESTRATOR substitui qualquer valor proposto pelo papel: copia o `execution_request` do plano em `execution.request` e carimba `execution.observation` a partir da chamada real de lançamento; o papel não pode autodeclarar sua configuração. A evidência usa `agent:<id-real-retornado>`, nunca placeholder. O recibo registra:
 
 - modelo e esforço aceitos no lançamento;
-- fonte `explicit-agent-launch`;
+- fonte `explicit-agent-launch` ou `explicit-codex-exec`, conforme a rota efetivamente usada;
 - referência do agente ou da operação que comprova o lançamento;
 - `fallback_used: false`.
 
 Uso de tokens e horários entram em `execution.usage` somente quando o ambiente os expuser. Ausência de telemetria deve ser registrada como `not_observable`, nunca estimada.
 
-Em execução ao vivo, `not_observable`, herança implícita, divergência ou fallback falham no role gate antes de qualquer transição. Em shadow, o planner exibe apenas a configuração solicitada e não afirma que um papel foi executado.
+As duas fontes aceitas iniciam uma execução separada com configuração explícita e referência real. O launcher `role-launch` usa uma tarefa efêmera do Codex e carimba deterministicamente o recibo com o identificador retornado. Em execução ao vivo, `not_observable`, herança implícita, divergência ou fallback falham no role gate antes de qualquer transição. Em shadow, o planner exibe apenas a configuração solicitada e não afirma que um papel foi executado.
 
 ## Roteamento canônico
 

@@ -1,0 +1,45 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { buildCodexArguments, finalizeHandoff } from "../src/role-launcher.mjs";
+
+const request = {
+  mapping_version: "gpt-5.6-2026-08-28",
+  profile: "PROFUNDO",
+  model: "gpt-5.6-sol",
+  reasoning_effort: "high",
+  agent_mode: "delegated",
+  configuration_source: "kernel-profile-map",
+  fallback_policy: "block"
+};
+
+test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-"));
+  const promptFile = join(root, "prompt.txt");
+  await writeFile(promptFile, "Refine o card informado.", "utf8");
+  try {
+    const { args } = buildCodexArguments({ projectRoot: root, role: "pipeline-po", promptFile, handoffPath: join(root, "handoff.json"), request });
+    assert.ok(args.includes("gpt-5.6-sol"));
+    assert.ok(args.includes('model_reasoning_effort="high"'));
+    assert.ok(args.includes("--approve-for-me"));
+    assert.ok(args.includes("--ephemeral"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("launcher carimba recibo com thread real e sem fallback", () => {
+  const result = finalizeHandoff({ handoff: { role: "pipeline-po", execution: {} }, request, role: "pipeline-po", threadId: "01a07e2e-8af0-70f3-b763-3588c5f9df86" });
+  assert.equal(result.execution.request, request);
+  assert.deepEqual(result.execution.observation, {
+    status: "confirmed",
+    model: "gpt-5.6-sol",
+    reasoning_effort: "high",
+    configuration_source: "explicit-codex-exec",
+    evidence_ref: "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86",
+    fallback_used: false
+  });
+});

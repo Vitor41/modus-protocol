@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.1.17` torna `pipeline-run` descobrível pelo gatilho em linguagem natural e adiciona `role-launch`, uma rota oficial pelo Codex CLI para lançar papéis com modelo/esforço explícitos quando a conversa não expõe colaboração.
 - Kernel `0.1.16` exige acesso externo autorizado já no primeiro snapshot oficial do Trello e expõe a causa original de falha de acesso, sem mascará-la como rede genérica.
 - Kernel `0.1.15` reconhece bloqueio humano estruturado no lock e obriga replanejamento completo após qualquer gate localizado antes de encerrar a execução.
 - Kernel `0.1.14` resolve labels declaradas por nome para IDs oficiais do board antes da escrita e releitura, preservando suporte a adapters existentes que já usam IDs.
@@ -29,6 +30,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- O orquestrador só pode declarar lançamento de papel indisponível após falhas concretas nas duas rotas oficiais; diferenças de catálogo ou ferramentas entre Luna, Terra e Sol não encerram mais PO, UX/UI ou DEV por presunção.
 - Kernel `0.1.10` confirma upload pela coleção de anexos do card, sem depender do campo opcional `idCard`, e adiciona remoção segura com releitura de ausência.
 - Kernel `0.1.9` preserva mecanicamente o `RUN_ID` com `--continue-run-id`, documenta as interfaces reais de `plan` e `transition-gate` e rejeita placeholders no recibo do agente.
 - Adapters passam a aceitar automaticamente patches mais novos da mesma linha compatível, mantendo opção `pinned` para igualdade exata e bloqueando downgrade ou linha incompatível.

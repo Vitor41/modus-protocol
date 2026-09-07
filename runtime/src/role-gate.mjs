@@ -213,12 +213,12 @@ function validateExecutionReceipt(handoff, diagnostics) {
       "Execução ao vivo exige confirmação observável do modelo e do esforço."
     );
   }
-  if (observation.configuration_source !== "explicit-agent-launch") {
+  if (!["explicit-agent-launch", "explicit-codex-exec"].includes(observation.configuration_source)) {
     diagnostic(
       diagnostics,
       "EXECUTION_CONFIGURATION_SOURCE_INVALID",
       "execution.observation.configuration_source",
-      "O recibo deve vir do lançamento explícito do agente de papel."
+      "O recibo deve vir de um lançamento explícito e identificável do agente de papel."
     );
   }
   if (/(placeholder|todo|pending|replace|agent-id|unknown|temp)/iu.test(observation.evidence_ref ?? "")) {

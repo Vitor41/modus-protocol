@@ -3,4 +3,4 @@ interface:
   short_description: "Orquestra um card pelo Modus Protocol"
   default_prompt: "Use $pipeline-run para processar a fila do Trello conforme o adapter deste projeto."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

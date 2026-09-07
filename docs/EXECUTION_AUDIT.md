@@ -31,7 +31,7 @@ execution_request:
 
 Isso comprova a decisão da Esteira, mas ainda não comprova a execução. O agente de papel recebe modelo e esforço como parâmetros explícitos. Seu handoff registra `execution.request` e `execution.observation`, incluindo a referência retornada pelo lançamento.
 
-`confirmed` significa que o ambiente aceitou um lançamento explícito com os parâmetros registrados. Não significa acesso ao raciocínio interno do modelo. A Esteira audita configuração e evidência operacional, não expõe chain of thought.
+`confirmed` significa que o ambiente aceitou um lançamento explícito com os parâmetros registrados. A fonte é `explicit-agent-launch` quando a conversa fornece colaboração ou `explicit-codex-exec` quando o runtime inicia uma tarefa efêmera pelo executável local do Codex. Ambas preservam modelo, esforço, isolamento e referência real; a segunda evita que diferenças de exposição de ferramentas entre modelos interrompam a fila. Isso não significa acesso ao raciocínio interno do modelo. A Esteira audita configuração e evidência operacional, não expõe chain of thought.
 
 ## Regras do gate ao vivo
 
