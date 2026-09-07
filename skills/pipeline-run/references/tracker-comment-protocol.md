@@ -4,7 +4,7 @@ Use este protocolo em toda execução live. O comentário é evidência operacio
 
 ## Gate físico
 
-Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello`: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-readback` para publicação e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Uma falha encerra o gate; não faça fallback, nova implementação ad hoc ou leitura integral de comentários do board.
+Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado/elevado já na primeira e única chamada: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-readback` para publicação e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Uma falha encerra o gate; não faça fallback, nova implementação ad hoc ou leitura integral de comentários do board.
 
 Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 

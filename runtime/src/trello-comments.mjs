@@ -67,8 +67,9 @@ async function responseJson(response, operation) {
 async function safeFetch(fetchImpl, url, options, operation) {
   try {
     return await fetchImpl(url, options);
-  } catch {
-    throw new Error(`Falha de rede durante ${operation}.`);
+  } catch (error) {
+    const cause = String(error?.message ?? error ?? "causa não informada").replace(/[\r\n]+/gu, " ").slice(0, 240);
+    throw new Error(`Falha de acesso ao Trello durante ${operation}: ${cause}`);
   }
 }
 
