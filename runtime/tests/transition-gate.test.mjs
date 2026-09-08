@@ -67,6 +67,8 @@ test("falha na releitura bloqueia a movimentação", async () => {
   });
   assert.equal(result.authorization, "DENIED");
   assert.ok(result.diagnostics.some((item) => item.code === "TRANSITION_COMMENT_READBACK_UNCONFIRMED"));
+  assert.equal(result.recovery.requires_human, false);
+  assert.deepEqual(result.recovery.actions, ["reread-existing-comment"]);
 });
 
 test("provider diferente do adapter bloqueia a movimentação", async () => {
@@ -97,6 +99,7 @@ test("handoff sem aprovação do role gate bloqueia a movimentação", async () 
     receipt.role_gate_status = "FAIL";
   });
   assert.ok(result.diagnostics.some((item) => item.code === "TRANSITION_ROLE_GATE_NOT_PASS"));
+  assert.ok(result.recovery.actions.includes("repair-role-handoff"));
 });
 
 test("timestamps inválidos ou fora de ordem bloqueiam a movimentação", async () => {
@@ -121,6 +124,7 @@ test("release sem integração Git confirmada não pode ir para PRD", async () =
   const result = await validateObject((receipt) => { receipt.transition = { from: "ready_for_release", to: "ready_for_production" }; });
   assert.equal(result.authorization, "DENIED");
   assert.ok(result.diagnostics.some((item) => item.code === "TRANSITION_RECEIPT_SCHEMA_INVALID"));
+  assert.equal(result.recovery.disposition, "auto-reconcile");
 });
 
 test("release com push, PR, checks, conflitos e merge confirmados pode ir para PRD", async () => {

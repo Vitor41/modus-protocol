@@ -17,7 +17,7 @@ Diagnósticos principais:
 | `ADAPTER_SCHEMA_INVALID` | O adapter viola o schema canônico. | Corrigir o contrato antes de continuar. |
 | `INLINE_SECRET_KEY` | Há uma chave com aparência de segredo embutido. | Migrar o segredo para provedor externo sem expor o valor. |
 | `REQUIRED_CONTEXT_MISSING` | Um contexto obrigatório não existe. | Criar ou corrigir a referência. |
-| `OPTIONAL_CONTEXT_MISSING` | Um contexto opcional não existe. | Registrar como aviso; não bloqueia shadow. |
+| `OPTIONAL_CONTEXT_MISSING` | Um contexto opcional não existe. | Registrar como aviso; não bloqueia shadow nem live. |
 | `TRACKER_CREDENTIAL_PATH_OUTSIDE_PROJECT` | O arquivo externo de credenciais escaparia da raiz. | Corrigir para caminho relativo contido no projeto. |
 | `TRACKER_CREDENTIAL_FILE_MISSING` | O provider `environment` não possui o arquivo local declarado. | Provisionar o arquivo sem versionar seus valores. |
 | `TRACKER_NOT_CHECKED` | Não houve snapshot do tracker. | Consultar o board em modo somente leitura. Em cutover, bloqueia. |

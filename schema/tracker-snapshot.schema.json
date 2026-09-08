@@ -88,13 +88,16 @@
         "implementation_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "review_approved": { "type": "boolean" },
         "review_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
-        "qa_approved": { "type": "boolean" }
-        ,"pending_transition": { "type": "boolean" }
-        ,"pending_transition_from": { "$ref": "#/$defs/nonEmptyString" }
-        ,"pending_transition_to": { "$ref": "#/$defs/nonEmptyString" }
-        ,"pending_transition_role": { "$ref": "#/$defs/nonEmptyString" }
-        ,"pending_transition_run_id": { "$ref": "#/$defs/nonEmptyString" }
-        ,"pending_transition_evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
+        "qa_approved": { "type": "boolean" },
+        "human_gate_kind": {
+          "enum": ["business_rule", "screen_approval", "production_approval", "loop_limit", "structural_scope", "systemic_risk", "external_authorization"]
+        },
+        "pending_transition": { "type": "boolean" },
+        "pending_transition_from": { "$ref": "#/$defs/nonEmptyString" },
+        "pending_transition_to": { "$ref": "#/$defs/nonEmptyString" },
+        "pending_transition_role": { "$ref": "#/$defs/nonEmptyString" },
+        "pending_transition_run_id": { "$ref": "#/$defs/nonEmptyString" },
+        "pending_transition_evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
       }
     },
     "lock": {
@@ -125,8 +128,8 @@
           "additionalProperties": { "type": "integer", "minimum": 0 }
         },
         "loop_state": { "$ref": "#/$defs/nonEmptyString" },
-        "lock": { "$ref": "#/$defs/lock" }
-        ,"delivery_group": { "$ref": "#/$defs/deliveryGroup" }
+        "lock": { "$ref": "#/$defs/lock" },
+        "delivery_group": { "$ref": "#/$defs/deliveryGroup" }
       }
     },
     "deliveryGroup": {

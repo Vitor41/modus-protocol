@@ -34,7 +34,7 @@ Comentários, bloqueios e aprovações anteriores à entrada na lista atual são
 11. Novo snapshot e novo plano com `plan --tracker-snapshot <arquivo> --continue-run-id <RUN_ID atual>` após cada transição técnica confirmada.
 12. Lançamento imediato do próximo papel elegível até alcançar uma condição de parada canônica.
 
-Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma sucesso e não repita cegamente. Consulte o estado oficial e reconcilie antes de continuar.
+Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma sucesso e não repita cegamente. Consulte o estado oficial e reconcilie antes de continuar. Leituras idempotentes usam até três tentativas totais; escrita incerta é resolvida por referência, `RUN_ID` e estado oficial, nunca por duplicação.
 
 ## Continuação automática
 
@@ -42,7 +42,7 @@ O gatilho drena o trabalho independente elegível, e não apenas um papel ou um 
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 
-Retorno técnico de Review ou QA não é gate: `changes_required` e `rejected` materializam correção pendente e devolvem a mesma lane ao DEV. Uma transição aprovada que ficou pendente por relógio, snapshot ou releitura aparece como slot operacional e deve ser reconciliada sem repetir o papel. Somente depois de esgotar essa autorrecuperação limitada uma falha técnica pode ser reportada; ela continua sem exigir decisão humana.
+Retorno técnico de Review ou QA não é gate: `changes_required` e `rejected` materializam correção pendente e devolvem a mesma lane ao DEV. Uma transição aprovada que ficou pendente por relógio, snapshot ou releitura aparece como slot operacional e deve ser reconciliada sem repetir o papel. Role gate ou transition gate reprovado fornece `recovery.actions`; execute-as e valide novamente. Somente depois de esgotar essa autorrecuperação limitada uma falha técnica pode ser reportada; ela continua sem exigir decisão humana.
 
 ## Cápsula mínima
 
@@ -71,7 +71,7 @@ O ORCHESTRATOR substitui qualquer valor proposto pelo papel: copia o `execution_
 
 Uso de tokens e horários entram em `execution.usage` somente quando o ambiente os expuser. Ausência de telemetria deve ser registrada como `not_observable`, nunca estimada.
 
-As duas fontes aceitas iniciam uma execução separada com configuração explícita e referência real. O launcher `role-launch` usa uma tarefa efêmera do Codex e carimba deterministicamente o recibo com o identificador retornado. Em execução ao vivo, `not_observable`, herança implícita, divergência ou fallback falham no role gate antes de qualquer transição. Em shadow, o planner exibe apenas a configuração solicitada e não afirma que um papel foi executado.
+As duas fontes aceitas iniciam uma execução separada com configuração explícita e referência real. O launcher `role-launch` usa uma tarefa efêmera do Codex e carimba deterministicamente o recibo com o identificador retornado. Em execução ao vivo, `not_observable`, herança implícita, divergência ou fallback falham no role gate antes de qualquer transição e acionam reparo ou relançamento com a mesma configuração; não são decisão humana. Em shadow, o planner exibe apenas a configuração solicitada e não afirma que um papel foi executado.
 
 ## Roteamento canônico
 
@@ -84,4 +84,4 @@ As duas fontes aceitas iniciam uma execução separada com configuração explí
 | `ready_for_validation` | `pipeline-qa` | Validar critérios e regressão. |
 | `ready_for_release` | `pipeline-dev` | Com aprovação humana válida, concluir push, PR, checks, conflitos e merge antes de mover para `ready_for_production`. |
 
-Retorno por dúvida de negócio roteia ao PO. Reprovação de review ou QA retorna ao DEV sem criar uma coluna adicional. No terceiro retorno do mesmo loop e escopo, registrar espera humana e encerrar a automação daquele card.
+Retorno por dúvida de negócio roteia ao PO. Reprovação de review ou QA retorna ao DEV sem criar uma coluna adicional. No terceiro retorno do mesmo loop e escopo, registrar espera humana com `blocker.kind: loop_limit` e encerrar a automação daquele card.

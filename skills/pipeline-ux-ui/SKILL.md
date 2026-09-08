@@ -7,6 +7,8 @@ description: Classifica impacto de interface e produz especificação UX/UI veri
 
 Converta critérios aprovados em comportamento de interface implementável e verificável.
 
+Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. Produzir, corrigir, converter, anexar e reconciliar a evidência visual pertence ao especialista; somente a aprovação humana da tela ou uma regra material realmente ausente interrompe este card.
+
 ## Classificar e especificar
 
 1. Confirme `RUN_ID`, card, lock, estado `ux_ui`, critérios vigentes e capsule.
@@ -15,10 +17,10 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 3. Em `no_frontend`, registre a justificativa e o aval sem criar trabalho visual artificial.
 4. Em `frontend`, leia `references/design-gate.md` e descreva fluxo, hierarquia, estados, feedback, teclado, foco, acessibilidade e responsividade proporcionais ao card.
 5. Reuse o design system e os padrões reais do produto antes de propor componente novo.
-6. Se faltar regra de negócio, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente.
+6. Se faltar regra de negócio material, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente e não solicite diretamente ao humano antes da investigação do PO.
 7. Não implemente código de produção durante este papel.
 8. Em toda classificação `frontend`, gere ao menos um mock ou protótipo visual consultável que represente a solução proposta; descrição textual isolada não atende ao gate.
-9. Anexe cada mock ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID`, versão da especificação e `readback_status: confirmed`.
+9. Anexe cada mock ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID`, versão da especificação e `readback_status: confirmed`. Falha de formato, caminho, upload ou releitura exige correção/reconciliação pelo próprio papel; não registre `requires_human` por esse motivo.
 10. Somente depois de gerar, anexar e reler a evidência visual registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar mock ou espera artificial.
 11. Preserve no handoff o `delivery_group` definido pelo PO quando existir; UX/UI não cria, remove nem altera membros, modo ou dependências. Dúvida visual ou de negócio é bloqueio de `card`, salvo dependência determinante já declarada pelo PO.
 
@@ -26,7 +28,7 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 
 - Alteração de frontend exige evidência de `Tela aprovada` posterior à especificação vigente.
 - Frontend sem ao menos um anexo visual com releitura confirmada falha o role gate e permanece em `ux_ui`.
-- Sem aprovação, permaneça em `ux_ui` com status bloqueado.
+- Sem aprovação, permaneça em `ux_ui` com status bloqueado, `blocker.kind: screen_approval` e `requires_human: true`.
 - `no_frontend` concluído pode seguir para `ready_for_development` sem simular aprovação visual.
 - Uma especificação substituída invalida a aprovação anterior.
 - `Tela aprovada` deve ser posterior ao anexo/especificação vigente; um mock apenas enviado não constitui aprovação.

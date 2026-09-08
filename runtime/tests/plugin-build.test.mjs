@@ -44,6 +44,12 @@ test("Skills empacotadas são byte a byte iguais à fonte", async () => {
   }
 });
 
+test("artefato inclui a política canônica de autonomia referenciada pelas Skills", async () => {
+  const source = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"));
+  const artifact = await readFile(join(built.targetRoot, "docs", "AUTONOMY_POLICY.md"));
+  assert.equal(hash(artifact), hash(source));
+});
+
 test("runtime standalone executa doctor sem node_modules no plugin", () => {
   const result = spawnSync(
     NODE,
@@ -69,7 +75,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.2.1");
+  assert.equal(status.active.runtime_version, "0.2.2");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

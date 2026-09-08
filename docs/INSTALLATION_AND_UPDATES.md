@@ -100,7 +100,7 @@ Rollback restaura em conjunto:
 - schema compatível;
 - bootstrap canônico, quando alterado pela release.
 
-O processo preserva código funcional, histórico do Trello, locks e cápsulas. Uma execução iniciada por outra versão exige reconciliação humana antes de retomar.
+O processo preserva código funcional, histórico do Trello, locks e cápsulas. Uma execução iniciada por versão compatível é reconciliada automaticamente a partir do tracker fresco; intervenção humana só é exigida quando houver incompatibilidade estrutural comprovada ou risco sistêmico.
 
 ## 7. Prevenção de duplicidade
 

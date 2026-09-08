@@ -7,6 +7,8 @@ description: Revisa um diff fixado do Modus Protocol de forma independente nos e
 
 Avalie a entrega fixada sem assumir autoria ou corrigir durante a revisão.
 
+Use `../../docs/AUTONOMY_POLICY.md` para classificar o destino dos achados. Defeito técnico dentro do escopo sempre retorna ao DEV; severidade alta não significa, por si só, intervenção humana.
+
 ## Revisar
 
 1. Confirme `RUN_ID`, card, lock, estado `in_development`, baseline, commit/diff fixado, critérios e evidências do DEV.
@@ -21,6 +23,7 @@ Avalie a entrega fixada sem assumir autoria ou corrigir durante a revisão.
 
 - `approved`: permanece tecnicamente íntegro e pode ir a `ready_for_validation`.
 - `changes_required`: retorno técnico normal ao DEV, permanece em `in_development` e exige ao menos um achado acionável. Não é bloqueio humano nem condição para encerrar o loop; o ORCHESTRATOR deve disparar a correção automaticamente.
+- `blocked`: use somente quando o achado comprovar `structural_scope`, `systemic_risk` ou `external_authorization`; declare o `blocker.kind`. Não use para quantidade, severidade ou dificuldade de correções pertencentes ao card.
 - Code Review não movimenta para uma coluna própria e não substitui QA.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-code-review` e valide com `../../runtime/src/role-gate.mjs`. Somente `PASS` pode ser aplicado pelo ORCHESTRATOR.

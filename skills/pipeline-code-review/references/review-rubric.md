@@ -27,3 +27,5 @@
 - `low`: melhoria concreta, não preferência estética.
 
 Um achado deve permitir ação: explique condição, impacto e mudança esperada. Não escreva a solução completa nem modifique o diff durante a revisão.
+
+Severidade mede impacto, não necessidade de intervenção humana. Achados `critical` e `high` dentro do escopo retornam ao DEV; somente mudança estrutural fora do card, risco sistêmico não contido ou autorização externa ausente justificam bloqueio humano.

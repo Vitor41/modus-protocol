@@ -23,6 +23,24 @@ const STATE_PRIORITY = {
   ux_ui: 4,
   refinement: 5
 };
+const HUMAN_GATE_KINDS = new Set([
+  "business_rule",
+  "screen_approval",
+  "production_approval",
+  "loop_limit",
+  "structural_scope",
+  "systemic_risk",
+  "external_authorization"
+]);
+const RECOVERY_POLICY = {
+  mode: "specialist-autonomy-v0.2",
+  tracker_read_attempts: 3,
+  role_launch_attempts: 2,
+  handoff_repair_attempts: 1,
+  technical_failures_require_human: false,
+  continue_independent_lanes: true,
+  human_gate_kinds: [...HUMAN_GATE_KINDS]
+};
 
 function parseDataFile(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado: ${path}`);
@@ -98,7 +116,9 @@ function blockedReason(card, state, { ignoredLockRunId } = {}) {
     (state === "ux_ui" && card.signals?.screen_approval_valid === true) ||
     (state === "ready_for_release" && card.signals?.production_approval_valid === true);
   if (state === "ux_ui" && card.signals?.screen_approval_required === true) return "SCREEN_APPROVAL_REQUIRED";
-  if (card.signals?.awaiting_human === true && !gateResolved) return "AWAITING_HUMAN";
+  if (card.signals?.awaiting_human === true && !gateResolved && HUMAN_GATE_KINDS.has(card.signals?.human_gate_kind)) {
+    return `HUMAN_GATE_${card.signals.human_gate_kind.toUpperCase()}`;
+  }
   if (card.lock?.status === "active" && card.lock.run_id !== ignoredLockRunId && (!card.lock.state || card.lock.state === state)) return "ACTIVE_LOCK";
   if (card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
@@ -177,14 +197,15 @@ export function planRun(input = {}) {
     role_executed: false,
     transition_gate_required: true
   };
-  if (doctor.status === "FAIL" || (mode === "live" && doctor.status !== "PASS")) {
+  if (doctor.status === "FAIL") {
     return {
       contract_version: "0.1",
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
       status: "BLOCKED",
-      reason: doctor.status === "FAIL" ? "DOCTOR_FAILED" : "DOCTOR_WARNINGS_BLOCK_LIVE",
+      reason: "DOCTOR_FAILED",
       doctor,
+      recovery_policy: RECOVERY_POLICY,
       guarantees
     };
   }
@@ -205,6 +226,7 @@ export function planRun(input = {}) {
         message: error.message
       })),
       doctor,
+      recovery_policy: RECOVERY_POLICY,
       guarantees
     };
   }
@@ -239,6 +261,7 @@ export function planRun(input = {}) {
       expected_card_refs: expectedObservedRefs,
       observed_card_refs: actualObservedRefs,
       doctor,
+      recovery_policy: RECOVERY_POLICY,
       guarantees
     };
   }
@@ -250,6 +273,7 @@ export function planRun(input = {}) {
       status: "BLOCKED",
       reason: "LEGACY_EXECUTION_ACTIVE",
       doctor,
+      recovery_policy: RECOVERY_POLICY,
       guarantees
     };
   }
@@ -372,6 +396,7 @@ export function planRun(input = {}) {
       batch_policy: "single-card-v0.2",
       doctor,
       blocked,
+      recovery_policy: RECOVERY_POLICY,
       guarantees
     };
   }
@@ -448,7 +473,7 @@ export function planRun(input = {}) {
   const scheduledRefs = new Set();
   for (const [lane, seed] of seeds) {
     const materialized = materializeJob(seed, lane === "ux_ui" ? "ux_ui" : lane);
-    if (materialized.error) return { contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", ...materialized.error, doctor, blocked, guarantees };
+    if (materialized.error) return { contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", ...materialized.error, doctor, blocked, recovery_policy: RECOVERY_POLICY, guarantees };
     workSlots.push(materialized.job);
     for (const ref of materialized.memberRefs) scheduledRefs.add(ref);
   }
@@ -456,7 +481,7 @@ export function planRun(input = {}) {
     const deferred = eligible.map(({ snapshot_index, ...card }) => ({ ...card, reason: card.state === "ready_for_development" && technicalOccupied ? "TECHNICAL_WIP_LIMIT" : "LANE_CAPACITY" }));
     return {
       contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode,
-      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", doctor, blocked, deferred, guarantees
+      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", doctor, blocked, deferred, recovery_policy: RECOVERY_POLICY, guarantees
     };
   }
   const selected = workSlots[0];
@@ -477,6 +502,7 @@ export function planRun(input = {}) {
       technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation", "ready_for_release"] },
       completion: "drain-all-eligible-work-before-stop"
     },
+    recovery_policy: RECOVERY_POLICY,
     doctor,
     run_id: id,
     continuing: Boolean(continuationRunId),

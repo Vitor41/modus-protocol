@@ -1,6 +1,6 @@
 # Empacotamento do Plugin Local v0.1
 
-O plugin `unified-development-pipeline` distribui as oito Skills, quatro schemas e seis executáveis do runtime sem transformar o artefato instalado em fonte editável.
+O plugin `unified-development-pipeline` distribui as oito Skills, a política canônica de autonomia, quatro schemas e nove executáveis do runtime sem transformar o artefato instalado em fonte editável.
 
 ## Fonte e artefato
 
@@ -27,7 +27,7 @@ Ele:
 
 1. verifica que existem exatamente as oito Skills aprovadas;
 2. recria somente o destino conhecido e validado do plugin;
-3. copia Skills e schemas da fonte canônica;
+3. copia Skills, política de autonomia e schemas da fonte canônica;
 4. empacota doctor, setup, planner e role gate como ESM standalone;
 5. remove a necessidade de `node_modules` no plugin;
 6. grava `build-info.json` com catálogo, versões e hashes das entradas principais.
@@ -51,7 +51,7 @@ Identidades locais:
 
 - marketplace: `unified-development-pipeline-local`;
 - plugin: `unified-development-pipeline`;
-- versão atual: `0.2.1`.
+- versão atual: `0.2.2`.
 
 Instalação inicial:
 

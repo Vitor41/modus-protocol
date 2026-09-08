@@ -11,6 +11,17 @@ const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_DIR = resolve(SOURCE_DIR, "..");
 const PACKAGE = JSON.parse(readFileSync(resolve(RUNTIME_DIR, "package.json"), "utf8"));
 const API_ROOT = "https://api.trello.com/1";
+const IDEMPOTENT_READ_ATTEMPTS = 3;
+const TRANSIENT_HTTP_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const HUMAN_GATE_KINDS = new Set([
+  "business_rule",
+  "screen_approval",
+  "production_approval",
+  "loop_limit",
+  "structural_scope",
+  "systemic_risk",
+  "external_authorization"
+]);
 
 function parseData(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
@@ -65,12 +76,21 @@ async function responseJson(response, operation) {
 }
 
 async function safeFetch(fetchImpl, url, options, operation) {
-  try {
-    return await fetchImpl(url, options);
-  } catch (error) {
-    const cause = String(error?.message ?? error ?? "causa não informada").replace(/[\r\n]+/gu, " ").slice(0, 240);
-    throw new Error(`Falha de acesso ao Trello durante ${operation}: ${cause}`);
+  const method = String(options?.method ?? "GET").toUpperCase();
+  const attempts = method === "GET" ? IDEMPOTENT_READ_ATTEMPTS : 1;
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, options);
+      if (attempt < attempts && TRANSIENT_HTTP_STATUS.has(response.status)) continue;
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+    }
   }
+  const cause = String(lastError?.message ?? lastError ?? "causa não informada").replace(/[\r\n]+/gu, " ").slice(0, 240);
+  throw new Error(`Falha de acesso ao Trello durante ${operation} após ${attempts} tentativas de leitura: ${cause}`);
 }
 
 function publicComment(action) {
@@ -119,33 +139,39 @@ function structuredField(text, name) {
 }
 
 function structuredHumanBlock(text, state) {
-  if (!/^STATUS:\s*blocked\s*$/imu.test(text) || !/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text)) return false;
+  if (!/^STATUS:\s*blocked\s*$/imu.test(text) || !/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text)) return undefined;
   const role = structuredField(text, "ROLE")?.toLowerCase();
   const kind = structuredField(text, "(?:BLOCK_KIND|HUMAN_GATE)")?.toLowerCase().replaceAll("-", "_");
-  if (["business_rule", "screen_approval", "production_approval", "loop_limit"].includes(kind)) return true;
-  if (role === "pipeline-po") return true;
-  if (role === "pipeline-ux-ui") return state === "ux_ui";
-  if (state === "ux_ui" && /\bUX\/UI\b/iu.test(text)) return true;
-  if (state === "refinement" && /\b(?:PO|PRODUTO)\b/iu.test(text)) return true;
-  return false;
+  if (HUMAN_GATE_KINDS.has(kind)) return kind;
+
+  // Compatibilidade apenas para comentários antigos semanticamente explícitos.
+  // O nome do papel, sozinho, nunca transforma uma falha técnica em decisão humana.
+  if (role === "pipeline-po" && state === "refinement" && /\b(?:regra de neg[oó]cio|decis[aã]o de neg[oó]cio|pergunta ao usu[aá]rio)\b/iu.test(text)) return "business_rule";
+  if (role === "pipeline-ux-ui" && state === "ux_ui" && /\b(?:tela aprovada|aprova[cç][aã]o visual)\b/iu.test(text)) return "screen_approval";
+  return undefined;
 }
 
-function humanWaitState(comments, { state, unblockPrefix, exactResolutions = [] } = {}) {
+function humanWaitState(comments, { state, unblockPrefix, exactResolutions = [], exactResolutionKind } = {}) {
   let value = false;
+  let kind;
   let waitAt;
   let resolutionAt;
   for (const comment of chronological(comments)) {
     const text = String(comment.text ?? "").trim();
-    if (structuredHumanBlock(text, state)) {
+    const blockKind = structuredHumanBlock(text, state);
+    if (blockKind) {
       value = true;
+      kind = blockKind;
       waitAt = comment.date;
     }
-    if ((unblockPrefix && text.startsWith(unblockPrefix)) || exactResolutions.includes(text)) {
+    const exactResolutionMatches = exactResolutions.includes(text) && (!kind || kind === exactResolutionKind);
+    if ((unblockPrefix && text.startsWith(unblockPrefix)) || exactResolutionMatches) {
       value = false;
+      kind = undefined;
       resolutionAt = comment.date;
     }
   }
-  return { value, waitAt, resolutionAt };
+  return { value, kind, waitAt, resolutionAt };
 }
 
 function transitionBoundaryComments(comments, enteredAt, windowMinutes = 15) {
@@ -160,6 +186,10 @@ function roleIs(text, role) {
 
 function positiveVerdict(text) {
   return /^(?:VERDICT|STATUS):\s*(?:PASS|APPROVED|COMPLETED)\s*$/imu.test(text);
+}
+
+function transitionReadyVerdict(text) {
+  return positiveVerdict(text) || /^STATUS:.*\b(?:RETURN|REJECTED|CHANGES_REQUIRED)\b.*$/imu.test(text);
 }
 
 function technicalProgress(comments, enteredAt, state) {
@@ -196,7 +226,7 @@ function pendingTransition(comments, state) {
     const to = structuredField(text, "STATE_TO")?.toLowerCase();
     const role = structuredField(text, "ROLE")?.toLowerCase();
     return from === state && to && to !== state && ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"].includes(role) &&
-      /^(?:EVENT|EVENTS):.*\btransition\b.*$/imu.test(text) && positiveVerdict(text);
+      /^(?:EVENT|EVENTS):.*\btransition\b.*$/imu.test(text) && transitionReadyVerdict(text);
   });
   const handoff = handoffs.at(-1);
   if (!handoff) return {};
@@ -342,10 +372,11 @@ export async function executeTrelloComment(input = {}) {
         groupByCard.set(card.id, group);
       }
       const exactResolutions = [];
-      if (card.idList === adapter.tracker.states.ux_ui) exactResolutions.push(gate.screen_approval ?? "Tela aprovada");
-      if (card.idList === adapter.tracker.states.ready_for_release) exactResolutions.push(gate.production_approval ?? "APROVADO PARA PRD");
       const state = Object.entries(adapter.tracker.states).find(([, ref]) => ref === card.idList)?.[0];
-      const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions });
+      const exactResolutionKind = state === "ux_ui" ? "screen_approval" : state === "ready_for_release" ? "production_approval" : undefined;
+      if (exactResolutionKind === "screen_approval") exactResolutions.push(gate.screen_approval ?? "Tela aprovada");
+      if (exactResolutionKind === "production_approval") exactResolutions.push(gate.production_approval ?? "APROVADO PARA PRD");
+      const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions, exactResolutionKind });
       const progress = technicalProgress(allComments, enteredAt, state);
       const transition = pendingTransition(comments, state);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);
@@ -357,6 +388,7 @@ export async function executeTrelloComment(input = {}) {
         observed_at: observedAt,
         ...(enteredAt ? { state_entered_at: enteredAt } : {}),
         awaiting_human: wait.value,
+        ...(wait.kind ? { human_gate_kind: wait.kind } : {}),
         ...(wait.waitAt ? { human_wait_at: wait.waitAt } : {}),
         ...(wait.resolutionAt ? { human_resolution_at: wait.resolutionAt } : {}),
         screen_evidence_present: Boolean(screenEvidenceAt),

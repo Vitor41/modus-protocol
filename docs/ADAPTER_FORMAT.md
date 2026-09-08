@@ -149,7 +149,7 @@ Validação externa começa somente leitura. Desde a v0.1.4, a integração forn
 | Nível | Efeito | Exemplos |
 |---|---|---|
 | `ERROR` | Bloqueia qualquer execução. | Versão incompatível, lista ausente, comentário não verificável, segredo, roteador concorrente. |
-| `WARNING` | Permite shadow; bloqueia cutover até revisão. | Referência opcional ausente, componente sem licença registrada. |
+| `WARNING` | Permite shadow e execução live; permanece visível para correção posterior. | Referência opcional ausente, componente sem licença registrada. |
 | `INFO` | Observação sem impacto. | Capability opcional não configurada. |
 
 ## 9. Compatibilidade

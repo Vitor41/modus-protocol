@@ -26,6 +26,28 @@ function diagnostic(diagnostics, code, path, message) {
   diagnostics.push({ code, severity: "error", path, message });
 }
 
+function recoveryAction(code) {
+  if (/^(?:ROLE_SOURCE_STATE_INVALID|BLOCKED_TRANSITION_FORBIDDEN|PO_TRANSITION_INVALID|UX_SOURCE_STATE_INVALID|UX_TRANSITION_INVALID|DEV_(?:RELEASE_)?TRANSITION_INVALID|REVIEW_SOURCE_STATE_INVALID|REVIEW_TRANSITION_INVALID|QA_SOURCE_STATE_INVALID|QA_TRANSITION_INVALID)$/u.test(code)) {
+    return "refresh-state-and-replan";
+  }
+  if (/^EXECUTION_/u.test(code)) return "relaunch-or-restamp-execution";
+  if (/^(?:UX_VISUAL_ATTACHMENT_MISSING|UX_SPEC_INCOMPLETE|DEV_FAILED_EVIDENCE|DEV_PASSED_TEST_REQUIRED|DEV_PASSED_VALIDATION_REQUIRED|REVIEW_|QA_)/u.test(code)) {
+    return "return-to-specialist";
+  }
+  return "repair-handoff";
+}
+
+function recoveryPlan(diagnostics) {
+  const actions = [...new Set(diagnostics.map((item) => recoveryAction(item.code)))];
+  return {
+    required: diagnostics.length > 0,
+    requires_human: false,
+    disposition: diagnostics.length > 0 ? "auto-repair" : "none",
+    max_repair_attempts: diagnostics.length > 0 ? 1 : 0,
+    actions
+  };
+}
+
 function findSensitiveKeys(value, diagnostics, path = "$", seen = new Set()) {
   if (!value || typeof value !== "object" || seen.has(value)) return;
   seen.add(value);
@@ -276,7 +298,8 @@ export function validateRoleHandoff(input = {}) {
     status: diagnostics.length > 0 ? "FAIL" : "PASS",
     role: handoff.role,
     run_id: handoff.run_id,
-    diagnostics
+    diagnostics,
+    recovery: recoveryPlan(diagnostics)
   };
 }
 

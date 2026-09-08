@@ -6,7 +6,7 @@ Traduza cada critério em um ponto observável no produto e em evidência previs
 
 ## 2. Baseline
 
-Execute o comando declarado pelo adapter antes de editar. Se falhar previamente, registre a falha conhecida e prove que ela é independente; caso contrário, bloqueie. Não “adote” uma falha sem evidência.
+Execute o comando declarado pelo adapter antes de editar. Se falhar previamente, diagnostique e corrija causas locais autorizadas antes de concluir o checkpoint. Se provar que a falha é preexistente e independente, registre-a sem incorporá-la à entrega; se pertencer ao card, resolva-a. Só escale conforme a política de autonomia, nunca pela mera existência de uma saída não zero.
 
 ## 3. Fatias e feedback
 

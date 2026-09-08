@@ -237,13 +237,27 @@ test("bloqueio individual não paralisa card independente do grupo de otimizaç�
     await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
     const group = { id: "fx-201-202", cards: ["FX-201", "FX-202"], mode: "optimization", defined_by: "pipeline-po" };
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
-      { ref: "c1", key: "FX-201", title: "Bloqueado", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true } },
+      { ref: "c1", key: "FX-201", title: "Bloqueado", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true, human_gate_kind: "structural_scope" } },
       { ref: "c2", key: "FX-202", title: "Independente", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: group }
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-202");
-    assert.ok(result.blocked.some((item) => item.key === "FX-201" && item.reason === "AWAITING_HUMAN" && item.block_scope === "card"));
+    assert.ok(result.blocked.some((item) => item.key === "FX-201" && item.reason === "HUMAN_GATE_STRUCTURAL_SCOPE" && item.block_scope === "card"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("sinal requires_human sem categoria canônica não bloqueia especialista", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "technical-noise", key: "FX-209", title: "Recuperar falha local", list_ref: adapter.tracker.states.in_development, position: 1, signals: { awaiting_human: true } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.skill, "pipeline-dev");
+    assert.equal(result.selected.action, "implement-or-correct");
+    assert.equal(result.blocked.length, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -308,6 +322,8 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
     assert.deepEqual(result.work_slots[2].refinement_queue.cards.map((card) => card.card_ref), ["po-one", "po-two"]);
     assert.ok(result.deferred.some((item) => item.key === "FX-222" && item.reason === "TECHNICAL_WIP_LIMIT"));
     assert.deepEqual(result.schedule.capacities, { po: 1, ux_ui: 1, technical: 1 });
+    assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.2");
+    assert.equal(result.recovery_policy.technical_failures_require_human, false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -336,7 +352,7 @@ test("gate humano na faixa técnica preserva WIP um sem paralisar PO e UX", asyn
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
-      { ref: "release", key: "FX-224", title: "Aguardar produção", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { awaiting_human: true, production_approval_valid: false } },
+      { ref: "release", key: "FX-224", title: "Aguardar produção", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { awaiting_human: true, human_gate_kind: "production_approval", production_approval_valid: false } },
       { ref: "next-dev", key: "FX-225", title: "Não abrir segunda branch", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
       { ref: "ux", key: "FX-226", title: "Desenhar", list_ref: adapter.tracker.states.ux_ui, position: 3 },
       { ref: "po", title: "Refinar", list_ref: adapter.tracker.states.refinement, position: 4 }
@@ -344,7 +360,7 @@ test("gate humano na faixa técnica preserva WIP um sem paralisar PO e UX", asyn
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "READY");
     assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["ux_ui", "po"]);
-    assert.ok(result.blocked.some((item) => item.key === "FX-224" && item.reason === "AWAITING_HUMAN"));
+    assert.ok(result.blocked.some((item) => item.key === "FX-224" && item.reason === "HUMAN_GATE_PRODUCTION_APPROVAL"));
     assert.ok(result.deferred.some((item) => item.key === "FX-225" && item.reason === "TECHNICAL_WIP_LIMIT"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -385,7 +401,7 @@ test("bloqueio em grupo de dependência impede todos os membros", async () => {
     await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
     const group = { id: "fx-301-302", cards: ["FX-301", "FX-302"], mode: "dependency", defined_by: "pipeline-po" };
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
-      { ref: "c1", key: "FX-301", title: "Premissa bloqueada", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true } },
+      { ref: "c1", key: "FX-301", title: "Premissa bloqueada", list_ref: adapter.tracker.states.ready_for_development, position: 1, delivery_group: group, signals: { awaiting_human: true, human_gate_kind: "business_rule" } },
       { ref: "c2", key: "FX-302", title: "Depende da premissa", list_ref: adapter.tracker.states.ready_for_development, position: 2, delivery_group: group }
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
@@ -755,7 +771,7 @@ test("modo live bloqueia quando comentários não possuem escrita e releitura ve
   }
 });
 
-test("modo live bloqueia avisos que seriam tolerados em shadow", async () => {
+test("modo live mantém avisos não estruturais sem bloquear especialistas", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
     adapter.context.references.push({ path: "docs/context/optional.md", read_when: "Quando existir.", optional: true });
@@ -773,8 +789,9 @@ test("modo live bloqueia avisos que seriam tolerados em shadow", async () => {
       schemaPath: SCHEMA_PATH,
       mode: "live"
     });
-    assert.equal(result.status, "BLOCKED");
-    assert.equal(result.reason, "DOCTOR_WARNINGS_BLOCK_LIVE");
+    assert.equal(result.status, "READY");
+    assert.equal(result.doctor.status, "WARN");
+    assert.ok(result.doctor.diagnostics.some((item) => item.code === "OPTIONAL_CONTEXT_MISSING"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

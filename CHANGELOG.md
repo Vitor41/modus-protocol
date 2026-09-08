@@ -8,6 +8,10 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.2.2` formaliza a política de autonomia: falhas técnicas locais retornam ao especialista, enquanto espera humana exige categoria canônica explícita.
+- Gates de papel e transição passam a emitir ações estruturadas de autorreparo sem enfraquecer a autorização `PASS / GRANTED`.
+- Cliente Trello recupera leituras idempotentes transitórias em até três tentativas, sem repetir escritas nem trocar de integração.
+- Transições técnicas de retorno, como `QA → DEV` e `UX/UI → PO`, também podem ser reconciliadas sem repetir o trabalho do papel.
 - Kernel `0.2.1` classifica reconciliação de transição como trabalho operacional: reutiliza handoff e comentário confirmados, renova a releitura e conclui o movimento sem relançar o papel.
 - Releitura individual de comentário passa a devolver hash, UTF-8 e timestamps suficientes para renovar um recibo de transição sem nova escrita.
 - Kernel `0.2.0` introduz agenda com até três lanes independentes (`po`, `ux_ui` e `technical`), execução paralela por colaboração ou manifest e WIP técnico igual a um até o merge.
@@ -27,6 +31,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Alterado
 
+- Avisos não estruturais do doctor permanecem visíveis, mas deixam de bloquear execução live.
+- `REQUIRES_HUMAN` isolado ou o nome do papel não criam mais gate humano; o comentário deve declarar `blocker.kind` válido.
 - O orquestrador drena cards e grupos independentes na mesma execução; gates humanos e bloqueios localizados deixam de interromper a fila inteira.
 - Snapshot Trello preserva a declaração do Delivery Group na descrição e inclui membros terminais estritamente necessários para resolver precedências, sem varredura completa de comentários.
 - Contratos, documentação, Skills e testes passam a validar a semântica de grupos e o bloqueio de escopo correto.

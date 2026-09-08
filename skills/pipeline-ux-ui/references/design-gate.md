@@ -14,7 +14,7 @@
 
 ## Limites
 
-Não transforme preferência estética em requisito universal. Diferencie padrão existente, decisão aprovada e recomendação. Se a interface depender de permissão, regra financeira ou conteúdo ainda indefinido, bloqueie a parte afetada.
+Não transforme preferência estética em requisito universal. Diferencie padrão existente, decisão aprovada e recomendação. Se a interface depender de permissão, regra financeira ou conteúdo material ainda indefinido, retorne a parte afetada ao PO; somente o PO decide se a investigação exige pergunta humana.
 
 ## Aprovação
 

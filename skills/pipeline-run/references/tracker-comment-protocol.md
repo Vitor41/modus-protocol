@@ -4,7 +4,7 @@ Use este protocolo em toda execução live. O comentário é evidência operacio
 
 ## Gate físico
 
-Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-readback` para publicação e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de bloquear por uma falha recuperável, use a reconciliação limitada abaixo.
+Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-readback` para publicação e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
 
 Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 
@@ -27,7 +27,7 @@ Se um snapshot posterior encontrar `STATUS: completed`, `STATE_FROM`, `STATE_TO`
 - `lock`: `CODEX LOCK`, `RUN_ID`, papel, estado e status;
 - `capsule`: `CONTEXT CAPSULE`, decisões, evidências, riscos e próximo passo;
 - `role_handoff`: prefixo do papel, commit/artefato fixado, veredito e evidências;
-- `blocker`: causa, estado preservado, retorno esperado e necessidade humana;
+- `blocker`: causa, estado preservado, retorno esperado, `requires_human` e `blocker.kind`; falha técnica usa `requires_human: false`;
 - `transition`: estado de origem, destino e referência do handoff que autorizou a mudança.
 
 Um único comentário pode representar `role_handoff` e `transition` quando declarar ambos explicitamente. Aprovações humanas continuam sendo comentários separados e posteriores à evidência que aprovam.

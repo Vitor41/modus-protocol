@@ -7,6 +7,8 @@ description: Refina demandas da Modus Protocol em escopo, regras confirmadas, cr
 
 Transforme intenção em comportamento verificável sem inventar regra de negócio.
 
+Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. Pesquisar produto, histórico, código e decisões existentes faz parte do papel; falta de estrutura no texto ou trabalho de normalização nunca é motivo para pedir ajuda humana.
+
 ## Refinar
 
 1. Confirme `RUN_ID`, fila `refinement_queue`, locks, estado `refinement`, capsule e motivo da iteração. Quando o plano trouxer `refinement_queue`, ela é o escopo obrigatório do PO nesta execução: percorra todos os cards elegíveis antes de devolver o controle ao ORCHESTRATOR.
@@ -17,13 +19,13 @@ Transforme intenção em comportamento verificável sem inventar regra de negóc
 6. Divida demandas amplas em unidades independentes quando isso reduzir ambiguidade ou risco.
 7. Produza critérios observáveis com identificador, comportamento esperado e evidência capaz de comprová-lo.
 8. Classifique impactos em frontend, backend, banco, BI/dados e segurança; não prescreva arquivos, classes ou arquitetura.
-9. Se faltar regra ou decisão material para concluir, bloqueie somente o card, preserve `refinement` e faça perguntas objetivas ao humano. Registre `blocker.scope: card`; a dúvida não interrompe os demais cards independentes da fila. Não invente nem escolha silenciosamente uma regra plausível.
+9. Se, depois da investigação, restarem duas ou mais interpretações materiais que alterem o comportamento do produto, bloqueie somente o card, preserve `refinement`, use `blocker.kind: business_rule` e faça perguntas objetivas ao humano. Registre `blocker.scope: card`; a dúvida não interrompe os demais cards independentes da fila. Lacuna recuperável, preferência editorial ou detalhe dedutível não autoriza espera humana.
 10. Antes de concluir o refinamento, normalize fisicamente o card: use `trello --action list-card-names` para considerar também cards arquivados, resolva a próxima chave pela regra de nomenclatura do projeto, preserve uma chave válida já existente, atualize o título no padrão local e substitua a descrição original pela história de usuário refinada. Use `trello --action update-card-readback` e só aceite a atualização com releitura confirmada.
 11. Classifique cada card com `trello --action update-labels-readback`: mantenha exatamente uma label de tipo e uma ou mais labels oficiais de domínio declaradas no adapter. Use os valores do adapter; eles podem ser IDs ou nomes oficiais, pois o runtime resolve nome único para ID antes da escrita e releitura. Não crie labels de módulo, prioridade ou bloqueio. Cards do mesmo `DELIVERY GROUP` devem compartilhar as labels de domínio que identificam o lote, preservando a label de tipo correta de cada card.
 
 Um título curto ou uma descrição incompleta não autoriza rejeição automática. Bloqueie somente quando, mesmo após investigação proporcional, a intenção continuar incompreensível ou uma decisão humana for necessária para fechar escopo, regra ou critério.
 
-A descrição final é a fonte legível do refinamento e deve conter, mesmo quando a entrada veio em texto livre: contexto, problema, história de usuário, solução esperada, escopo, fora do escopo, regras e exceções, critérios de aceite identificados, impactos, riscos/dependências e decisões pendentes. Não deixe a especificação completa apenas em comentário ou handoff. Se o projeto não fornecer regra suficiente para calcular uma chave sem colisão, bloqueie e peça a decisão humana; não invente numeração.
+A descrição final é a fonte legível do refinamento e deve conter, mesmo quando a entrada veio em texto livre: contexto, problema, história de usuário, solução esperada, escopo, fora do escopo, regras e exceções, critérios de aceite identificados, impactos, riscos/dependências e decisões pendentes. Não deixe a especificação completa apenas em comentário ou handoff. Se o projeto não fornecer regra suficiente para calcular uma chave sem colisão, esgote o inventário do board e as convenções documentadas. Só peça decisão humana quando escolher uma nova convenção alterar a governança do produto; erro de ferramenta ou leitura é impedimento técnico, não dúvida de negócio.
 
 Leia `references/refinement-gate.md` quando a demanda for ampla, ambígua, financeira, regulatória ou estiver retornando de outro papel.
 

@@ -68,6 +68,22 @@ test("lista nomes de cards abertos e arquivados para numeração canônica", asy
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("leituras idempotentes recuperam duas falhas transitórias sem trocar integração", async () => {
+  const root = await projectFixture();
+  let calls = 0;
+  try {
+    const result = await executeTrelloComment({ action: "list-card-names", projectRoot: root, fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("conexão reiniciada");
+      if (calls === 2) return new Response("indisponível", { status: 503 });
+      return new Response(JSON.stringify([{ id: "card-1", name: "FP-011 - Recuperado", closed: false }]));
+    }});
+    assert.equal(result.status, "PASS");
+    assert.equal(result.cards[0].key, "FP-011");
+    assert.equal(calls, 3);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("escreve e relê exatamente o comentário UTF-8", async () => {
   const root = await projectFixture();
   const textPath = join(root, ".pipeline", "tmp", "comment.txt");
@@ -198,7 +214,7 @@ test("aprovação visual posterior resolve a espera humana no card de UX", async
       if (String(url).includes("/cards?")) return new Response(JSON.stringify([{ id: "card-ux", name: "FP-214 Tela", idList: "ux", pos: 1 }]));
       if (String(url).includes("/actions/")) return new Response(JSON.stringify({ data: { card: { id: "verify-card" } } }));
       return new Response(JSON.stringify([
-        { id: "blocked", date: "2026-09-07T20:00:00Z", data: { card: { id: "card-ux" }, text: "Aguardando resposta humana" } },
+        { id: "blocked", date: "2026-09-07T20:00:00Z", data: { card: { id: "card-ux" }, text: "ROLE: pipeline-ux-ui\nSTATUS: blocked\nREQUIRES_HUMAN: true\nBLOCK_KIND: screen_approval" } },
         { id: "approved", date: "2026-09-07T21:00:00Z", data: { card: { id: "card-ux" }, text: "Tela aprovada" } }
       ]));
     }});
@@ -233,7 +249,7 @@ test("snapshot deriva gates somente do estado atual e da revisão visual vigente
       ]));
       if (value.includes("card-dev/attachments")) return new Response(JSON.stringify([]));
       if (value.includes("card-ux/actions")) return new Response(JSON.stringify([
-        { id: "blocked-17", type: "commentCard", date: "2026-09-08T01:22:00Z", data: { card: { id: "card-ux" }, text: "CODEX UX/UI: ROLE HANDOFF + BLOQUEIO\nSTATUS: blocked\nEVENTS: role_handoff, blocker\nREQUIRES_HUMAN: true" } },
+        { id: "blocked-17", type: "commentCard", date: "2026-09-08T01:22:00Z", data: { card: { id: "card-ux" }, text: "CODEX UX/UI: ROLE HANDOFF + BLOQUEIO\nROLE: pipeline-ux-ui\nSTATUS: blocked\nEVENTS: role_handoff, blocker\nREQUIRES_HUMAN: true\nBLOCK_KIND: screen_approval" } },
         { id: "old-approval-17", type: "commentCard", date: "2026-09-08T00:30:00Z", data: { card: { id: "card-ux" }, text: "Tela aprovada" } },
         { id: "move-17", type: "updateCard", date: "2026-09-08T00:06:00Z", data: { listAfter: { id: "ux" } } }
       ]));
@@ -250,9 +266,32 @@ test("snapshot deriva gates somente do estado atual e da revisão visual vigente
     assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
     assert.equal(byRef.get("card-dev").signals.state_entered_at, "2026-09-08T01:08:00Z");
     assert.equal(byRef.get("card-ux").signals.awaiting_human, true);
+    assert.equal(byRef.get("card-ux").signals.human_gate_kind, "screen_approval");
     assert.equal(byRef.get("card-ux").signals.screen_approval_valid, false);
     assert.equal(byRef.get("card-ux").signals.screen_approval_required, true);
     assert.equal(byRef.get("card-po").signals.awaiting_human, false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("nome do papel e requires_human isolado não transformam falha técnica em gate humano", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "refinement", pos: 1 }]));
+      if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([{ id: "card-po", name: "Demanda", idList: "refinement", pos: 1 }]));
+      if (value.includes("card-po/actions")) return new Response(JSON.stringify([{ id: "technical", type: "commentCard", date: "2026-09-08T12:00:00Z", data: { card: { id: "card-po" }, text: "ROLE: pipeline-po\nSTATUS: blocked\nREQUIRES_HUMAN: true\nCAUSE: arquivo temporário ausente" } }]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    assert.equal(snapshot.cards[0].signals.awaiting_human, false);
+    assert.equal(snapshot.cards[0].signals.human_gate_kind, undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -286,7 +325,7 @@ test("snapshot preserva handoff DEV na fronteira da transição e ignora falso b
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("snapshot transforma retorno de Review e transição PO pendente em ações recuperáveis", async () => {
+test("snapshot transforma retornos técnicos e transição PO pendente em ações recuperáveis", async () => {
   const root = await projectFixture();
   const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
   const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
@@ -297,10 +336,11 @@ test("snapshot transforma retorno de Review e transição PO pendente em ações
   try {
     await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", now: new Date("2026-09-08T12:00:00Z"), fetchImpl: async (url) => {
       const value = String(url);
-      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev", pos: 1 }, { id: "refinement", pos: 2 }]));
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev", pos: 1 }, { id: "qa", pos: 2 }, { id: "refinement", pos: 3 }]));
       if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([
         { id: "card-dev", name: "FP-228 Corrigir", idList: "dev", pos: 1 },
-        { id: "card-po", name: "FP-229 Refinado", idList: "refinement", pos: 2 }
+        { id: "card-po", name: "FP-229 Refinado", idList: "refinement", pos: 2 },
+        { id: "card-qa", name: "FP-230 Reprovado", idList: "qa", pos: 3 }
       ]));
       if (value.includes("/attachments")) return new Response(JSON.stringify([]));
       if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
@@ -311,6 +351,9 @@ test("snapshot transforma retorno de Review e transição PO pendente em ações
       if (value.includes("card-po/actions")) return new Response(JSON.stringify([
         { id: "technical-note", type: "commentCard", date: "2026-09-08T11:02:00Z", data: { card: { id: "card-po" }, text: "CODEX BLOCKER\nCAUSE: diferença de relógio\nHUMAN ACTION: Não requerida." } },
         { id: "po-handoff", type: "commentCard", date: "2026-09-08T11:01:00Z", data: { card: { id: "card-po" }, text: "RUN_ID: RUN-20260908-ABCDEF12\nROLE: pipeline-po\nSTATUS: completed\nSTATE_FROM: refinement\nSTATE_TO: ux_ui\nEVENT: role_handoff, transition" } }
+      ]));
+      if (value.includes("card-qa/actions")) return new Response(JSON.stringify([
+        { id: "qa-return", type: "commentCard", date: "2026-09-08T11:03:00Z", data: { card: { id: "card-qa" }, text: "RUN_ID: RUN-20260908-ABCDEF13\nROLE: pipeline-qa\nSTATUS: return / rejected\nSTATE_FROM: ready_for_validation\nSTATE_TO: in_development\nEVENT: role_handoff, transition" } }
       ]));
       return new Response(JSON.stringify([]));
     }});
@@ -323,6 +366,9 @@ test("snapshot transforma retorno de Review e transição PO pendente em ações
     assert.equal(byRef.get("card-po").signals.pending_transition_to, "ux_ui");
     assert.equal(byRef.get("card-po").signals.pending_transition_run_id, "RUN-20260908-ABCDEF12");
     assert.equal(byRef.get("card-po").signals.pending_transition_evidence_ref, "po-handoff");
+    assert.equal(byRef.get("card-qa").signals.pending_transition, true);
+    assert.equal(byRef.get("card-qa").signals.pending_transition_to, "in_development");
+    assert.equal(byRef.get("card-qa").signals.pending_transition_evidence_ref, "qa-return");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

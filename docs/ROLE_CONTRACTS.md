@@ -14,13 +14,15 @@ O schema [role-handoff.schema.json](../schema/role-handoff.schema.json) exige:
 - evidências, riscos, resumo e próximo passo;
 - entrega específica do papel ou bloqueio explícito.
 
+Bloqueio humano exige `blocker.kind` canônico. Falha técnica ou contratual reparável mantém `requires_human: false` e volta ao especialista ou à reconciliação indicada pelo gate. Consulte [AUTONOMY_POLICY.md](AUTONOMY_POLICY.md).
+
 O gate é somente leitura:
 
 ```text
 node runtime/src/role-gate.mjs --handoff <arquivo> --format json
 ```
 
-`PASS` permite que o ORCHESTRATOR considere o handoff. Ele não aplica transição, não escreve no tracker e não substitui avaliação humana de regra de negócio ou design.
+`PASS` permite que o ORCHESTRATOR considere o handoff. Em `FAIL`, o gate devolve `recovery.actions` para reparo automático antes de qualquer isolamento. Ele não aplica transição, não escreve no tracker e não substitui avaliação humana de regra de negócio ou design.
 
 ## Saída por papel
 

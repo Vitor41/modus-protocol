@@ -25,6 +25,19 @@ function diagnostic(diagnostics, code, path, message) {
   diagnostics.push({ code, severity: "error", path, message });
 }
 
+function recoveryAction(code) {
+  if (["TRANSITION_COMMENT_READBACK_UNCONFIRMED", "TRANSITION_COMMENT_TIMESTAMPS_INVALID", "TRANSITION_COMMENT_RECEIPT_STALE"].includes(code)) {
+    return "reread-existing-comment";
+  }
+  if (["TRANSITION_COMMENT_LINK_MISMATCH", "TRANSITION_COMMENT_PROVIDER_MISMATCH"].includes(code)) {
+    return "rebuild-receipt-from-authoritative-readback";
+  }
+  if (code === "TRANSITION_ROLE_GATE_NOT_PASS") return "repair-role-handoff";
+  if (code === "RELEASE_GIT_INTEGRATION_INCOMPLETE") return "resume-release-integration";
+  if (code === "TRANSITION_STATE_UNCHANGED") return "refresh-state-and-replan";
+  return "rebuild-transition-receipt";
+}
+
 export function validateTransitionReceipt(input = {}) {
   if (!input.receiptPath) throw new Error("receiptPath é obrigatório.");
   if (!input.adapterPath) throw new Error("adapterPath é obrigatório.");
@@ -128,6 +141,13 @@ export function validateTransitionReceipt(input = {}) {
     comment_ref: receipt.comment?.ref,
     transition: receipt.transition,
     diagnostics,
+    recovery: {
+      required: diagnostics.length > 0,
+      requires_human: false,
+      disposition: diagnostics.length > 0 ? "auto-reconcile" : "none",
+      max_reconciliation_attempts: diagnostics.length > 0 ? 1 : 0,
+      actions: [...new Set(diagnostics.map((item) => recoveryAction(item.code)))]
+    },
     guarantees: {
       tracker_writes_performed: false,
       ...(receipt.comment && Number.isFinite(Date.parse(receipt.comment.written_at)) && Number.isFinite(Date.parse(receipt.comment.read_at)) && Date.parse(receipt.comment.read_at) < Date.parse(receipt.comment.written_at)

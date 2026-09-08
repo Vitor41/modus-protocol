@@ -7,6 +7,8 @@ description: Implementa uma fatia vertical completa para um card aprovado do Mod
 
 Entregue a menor fatia ponta a ponta que comprove os critérios sem transferir lacunas aos papéis seguintes.
 
+Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. O DEV possui autonomia para corrigir implementação, testes, ambiente local autorizado, conflitos e refatorações locais necessárias ao card. Escale somente expansão estrutural de escopo, risco sistêmico ou autorização externa ausente.
+
 ## Checkpoint antes de editar
 
 1. Confirme `RUN_ID`, card, lock, estado, branch, critérios e aprovação UX/UI quando aplicável.
@@ -14,7 +16,7 @@ Entregue a menor fatia ponta a ponta que comprove os critérios sem transferir l
 3. Inspecione mudanças preexistentes e preserve tudo que não pertence ao card.
 4. Mapeie comportamento atual/desejado, pontos públicos de verificação, frontend, backend, banco, BI/dados, segurança e rollback.
 5. Execute a capacidade `baseline` exclusivamente por `../../runtime/pipeline.ps1 command --name baseline --project-root <raiz>` e registre resultado real. O executor resolve o runtime oficial do projeto; não tente o executável cru nem trate o venv declarado como fallback.
-6. Conclua `APTO PARA IMPLEMENTAR` ou `BLOQUEADO`. Nenhum arquivo é alterado antes de `APTO PARA IMPLEMENTAR`.
+6. Conclua `APTO PARA IMPLEMENTAR` ou um impedimento fundamentado. Nenhum arquivo é alterado antes de `APTO PARA IMPLEMENTAR`. Baseline falho, sozinho, exige diagnóstico e correção proporcional; não constitui espera humana.
 
 Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/specialization-routing.md` somente se os impactos justificarem apoio especializado. Para bug difícil ou causa desconhecida, leia `references/difficult-bugs.md` antes de propor correção.
 
@@ -27,6 +29,7 @@ Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/
 - Revise o diff completo, procurando comportamento ausente, escopo extra, regressão e complexidade desnecessária.
 - Execute regressão completa uma vez ao final quando aplicável.
 - Não esconda falha como `not_applicable`; justifique somente quando a capacidade realmente não se aplica.
+- Se a correção exigir alterar contrato público, classe/fundação transversal ou arquitetura aprovada além do card, use `blocker.kind: structural_scope`. Se houver risco não contido de perda de dados, segurança ou quebra sistêmica, use `systemic_risk`. Refatoração local e correção arquitetural contida continuam sob autonomia do DEV.
 
 ## Entregar
 

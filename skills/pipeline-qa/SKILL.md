@@ -7,6 +7,8 @@ description: Valida um commit candidato do Modus Protocol contra critérios e re
 
 Comprove o comportamento do candidato fixado sem corrigir a entrega durante a validação.
 
+Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. QA recupera ambiente e massa de teste dentro das capacidades autorizadas; defeito do candidato retorna ao DEV e nunca vira pedido de decisão humana.
+
 ## Preparar
 
 1. Confirme `RUN_ID`, card, lock, estado `ready_for_validation`, commit fixado, critérios, handoff de review e ambiente autorizado.
@@ -22,7 +24,7 @@ Comprove o comportamento do candidato fixado sem corrigir a entrega durante a va
 - Não altere código, banco de produto ou critérios para fazer o teste passar.
 - `approved`: todos os cenários aplicáveis passam e o card pode ir a `ready_for_release`.
 - `rejected`: ao menos um cenário falha; retorne ao DEV em `in_development` com evidência reproduzível.
-- `blocked`: ambiente ou precondição impede conclusão; permaneça no estado e não invente resultado.
+- `blocked`: depois da recuperação proporcional, ambiente ou precondição externa ainda impede conclusão; permaneça no estado e não invente resultado. Use `requires_human: true` somente com `blocker.kind: external_authorization` ou `systemic_risk`; demais impedimentos técnicos são localizados e não encerram outras lanes.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-qa` e valide com `../../runtime/src/role-gate.mjs`. QA não concede `APROVADO PARA PRD`.
 

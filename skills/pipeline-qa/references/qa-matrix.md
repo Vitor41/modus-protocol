@@ -24,4 +24,4 @@ Não multiplique combinações sem risco real. Prefira cenários que discriminem
 
 ## Reprovação acionável
 
-Registre passos mínimos, esperado, observado, ambiente, commit e evidência. Agrupe falhas independentes antes do retorno. Se a causa for ambiente, classifique como bloqueio em vez de defeito de implementação.
+Registre passos mínimos, esperado, observado, ambiente, commit e evidência. Agrupe falhas independentes antes do retorno. Se a causa for ambiente, tente recuperar as precondições locais autorizadas; persistindo, classifique como impedimento técnico localizado. Só solicite humano quando faltar autorização externa ou houver risco sistêmico.

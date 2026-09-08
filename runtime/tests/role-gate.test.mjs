@@ -50,7 +50,7 @@ test("bloqueio de grupo exige identificador do Delivery Group", async () => {
   const handoff = await fixture("valid-po.json");
   handoff.status = "blocked";
   handoff.state.to = "refinement";
-  handoff.blocker = { reason: "Premissa compartilhada pendente.", requires_human: true, scope: "delivery_group", return_to: "pipeline-po" };
+  handoff.blocker = { reason: "Premissa compartilhada pendente.", requires_human: true, kind: "business_rule", scope: "delivery_group", return_to: "pipeline-po" };
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
 });
@@ -67,6 +67,8 @@ test("UX não conclui frontend sem estados verificáveis", async () => {
   handoff.deliverable.states = [];
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "UX_SPEC_INCOMPLETE"));
+  assert.equal(result.recovery.requires_human, false);
+  assert.ok(result.recovery.actions.includes("return-to-specialist"));
 });
 
 test("UX frontend exige mock anexado e relido no RUN_ID atual", async () => {
@@ -155,7 +157,7 @@ test("release DEV exige todas as ações de integração Git", async () => {
 test("papel bloqueado não movimenta estado", async () => {
   const handoff = await fixture("valid-po.json");
   handoff.status = "blocked";
-  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true };
+  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule" };
   delete handoff.deliverable;
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "BLOCKED_TRANSITION_FORBIDDEN"));
@@ -165,7 +167,7 @@ test("papel bloqueado ainda precisa partir do estado correto", async () => {
   const handoff = await fixture("valid-po.json");
   handoff.status = "blocked";
   handoff.state = { from: "ux_ui", to: "ux_ui" };
-  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true };
+  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule" };
   delete handoff.deliverable;
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
@@ -176,6 +178,19 @@ test("handoff rejeita chave com aparência de segredo", async () => {
   handoff.password = "não-exibir";
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "HANDOFF_SENSITIVE_KEY"));
+});
+
+test("bloqueio humano exige categoria grande ou gate canônico", async () => {
+  const handoff = await fixture("valid-dev.json");
+  handoff.status = "blocked";
+  handoff.state.to = "in_development";
+  handoff.blocker = { reason: "Um teste local falhou.", requires_human: true, kind: "technical", return_to: "pipeline-dev" };
+  delete handoff.deliverable;
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+  assert.equal(result.recovery.disposition, "auto-repair");
+  assert.equal(result.recovery.requires_human, false);
 });
 
 test("handoff rejeita modelo diferente do perfil solicitado", async () => {

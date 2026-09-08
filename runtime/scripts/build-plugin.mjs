@@ -29,6 +29,7 @@ const SCHEMAS = [
   "role-handoff.schema.json",
   "tracker-transition-receipt.schema.json"
 ];
+const DOCUMENTS = ["AUTONOMY_POLICY.md"];
 
 function assertSafeTarget() {
   const allowedRoot = resolve(REPOSITORY_DIR, "local-marketplace", "plugins");
@@ -67,6 +68,7 @@ export async function buildPlugin() {
   await mkdir(join(TARGET_ROOT, ".codex-plugin"), { recursive: true });
   await mkdir(join(TARGET_ROOT, "runtime", "src"), { recursive: true });
   await mkdir(join(TARGET_ROOT, "schema"), { recursive: true });
+  await mkdir(join(TARGET_ROOT, "docs"), { recursive: true });
   await cp(join(REPOSITORY_DIR, "skills"), join(TARGET_ROOT, "skills"), { recursive: true });
   await cp(join(REPOSITORY_DIR, "packaging", "plugin.json"), join(TARGET_ROOT, ".codex-plugin", "plugin.json"));
   await cp(join(RUNTIME_DIR, "pipeline.ps1"), join(TARGET_ROOT, "runtime", "pipeline.ps1"));
@@ -91,6 +93,9 @@ export async function buildPlugin() {
   for (const schema of SCHEMAS) {
     await cp(join(REPOSITORY_DIR, "schema", schema), join(TARGET_ROOT, "schema", schema));
   }
+  for (const document of DOCUMENTS) {
+    await cp(join(REPOSITORY_DIR, "docs", document), join(TARGET_ROOT, "docs", document));
+  }
   for (const entry of RUNTIME_ENTRIES) {
     await build({
       entryPoints: [join(RUNTIME_DIR, "src", entry)],
@@ -113,7 +118,7 @@ export async function buildPlugin() {
     contract_version: "0.1",
     plugin: { name: manifest.name, version: manifest.version },
     source: { runtime_version: runtimePackage.version, skill_hashes: await collectSkillHashes() },
-    contents: { skills: EXPECTED_SKILLS, runtime_entries: RUNTIME_ENTRIES, launcher: "runtime/pipeline.ps1", schemas: SCHEMAS }
+    contents: { skills: EXPECTED_SKILLS, runtime_entries: RUNTIME_ENTRIES, launcher: "runtime/pipeline.ps1", schemas: SCHEMAS, documents: DOCUMENTS }
   };
   await writeFile(
     join(TARGET_ROOT, ".codex-plugin", "build-info.json"),

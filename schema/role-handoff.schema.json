@@ -63,6 +63,29 @@
       }
     },
     {
+      "if": {
+        "properties": {
+          "blocker": {
+            "properties": { "requires_human": { "const": true } },
+            "required": ["requires_human"]
+          }
+        },
+        "required": ["blocker"]
+      },
+      "then": {
+        "properties": {
+          "blocker": {
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "enum": ["business_rule", "screen_approval", "production_approval", "loop_limit", "structural_scope", "systemic_risk", "external_authorization"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "if": { "properties": { "role": { "const": "pipeline-po" } }, "required": ["role"] },
       "then": { "properties": { "deliverable": { "$ref": "#/$defs/poDeliverable" } } }
     },
@@ -199,6 +222,9 @@
       "properties": {
         "reason": { "$ref": "#/$defs/nonEmptyString" },
         "requires_human": { "type": "boolean" },
+        "kind": {
+          "enum": ["technical", "business_rule", "screen_approval", "production_approval", "loop_limit", "structural_scope", "systemic_risk", "external_authorization"]
+        },
         "scope": { "enum": ["card", "delivery_group", "dependency_group"] },
         "delivery_group_id": { "$ref": "#/$defs/nonEmptyString" },
         "return_to": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] }

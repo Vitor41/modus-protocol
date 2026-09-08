@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.1` |
-| Versão do Kernel | `0.2.1` |
+| Versão pública | `0.2.2` |
+| Versão do Kernel | `0.2.2` |
 | Estado | Publicada |
 | Data | 2026-09-08 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -282,9 +282,9 @@ A v0.1 reutiliza os gates do Projeto Piloto B, sem criar colunas adicionais.
 
 O contrato exato de comparação, autoria e validade temporal dos comentários será definido no adaptador Trello. Como baseline, a aprovação deve ser posterior à evidência que pretende aprovar e perde validade quando essa evidência é substituída.
 
-O humano só interrompe a automação por quatro motivos: regra de negócio material ausente, aprovação de tela, validação da atividade para PRD ou limite de retornos. Esses gates pertencem à fase em que foram criados. Uma transição confirmada invalida bloqueios, locks e conclusões da fase anterior; o `RUN_ID` permanece para rastreabilidade, mas a lista e as evidências atuais prevalecem. Falhas técnicas podem isolar um card ou impedir globalmente uma execução sem acesso confiável ao tracker, porém nunca são apresentadas como decisão humana.
+O humano interrompe a automação pelos gates previstos — regra de negócio material, aprovação de tela, autorização para PRD e limite de retornos — ou por exceção grande e explícita: expansão estrutural além do card, risco sistêmico não contido ou autorização externa ausente. Todo bloqueio humano declara `blocker.kind`. Esses gates pertencem à fase em que foram criados. Uma transição confirmada invalida bloqueios, locks e conclusões da fase anterior; o `RUN_ID` permanece para rastreabilidade, mas a lista e as evidências atuais prevalecem. Falhas técnicas locais podem isolar um card depois da recuperação limitada, porém nunca são apresentadas como decisão humana e não encerram lanes independentes. A classificação canônica está em [AUTONOMY_POLICY.md](AUTONOMY_POLICY.md).
 
-Antes de isolar uma falha técnica, o orquestrador esgota a autorrecuperação segura e limitada: renova snapshot obsoleto, relê uma escrita pela referência já retornada, tolera pequena diferença causal de relógio e retoma uma transição cujo handoff foi aprovado. Isso não autoriza duplicar comentários, repetir trabalho especializado ou ignorar divergência de conteúdo. Retornos de Code Review e QA são trabalho normal da lane técnica e voltam automaticamente ao DEV.
+Antes de isolar uma falha técnica, o orquestrador esgota a autorrecuperação segura e limitada: renova snapshot obsoleto, repete leituras idempotentes até o orçamento, relê uma escrita pela referência já retornada, repara handoff/receipt, tolera pequena diferença causal de relógio e retoma uma transição cujo handoff foi aprovado. Isso não autoriza duplicar comentários, repetir trabalho especializado sem necessidade ou ignorar divergência de conteúdo. Retornos de Code Review e QA são trabalho normal da lane técnica e voltam automaticamente ao DEV.
 
 ### 10.2 Loops automáticos
 
