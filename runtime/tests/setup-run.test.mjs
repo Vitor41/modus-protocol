@@ -42,10 +42,15 @@ function trackerSnapshot(adapter, cards, extra = {}) {
     "ready_for_production",
     "done"
   ];
+  const actionableRefs = new Set(order.slice(1, 7).map((state) => adapter.tracker.states[state]));
+  const observedAt = "2026-08-28T12:00:00Z";
+  const observedCards = cards.map((card) => actionableRefs.has(card.list_ref)
+    ? { ...card, signals: { ...card.signals, observed_list_ref: card.list_ref, observed_at: observedAt } }
+    : card);
   return {
     board_ref: adapter.tracker.board_ref,
     open_lists: order.map((state, index) => ({ ref: adapter.tracker.states[state], position: index + 1 })),
-    cards,
+    cards: observedCards,
     integration: {
       comments: {
         read: "verified",
@@ -54,8 +59,8 @@ function trackerSnapshot(adapter, cards, extra = {}) {
         write_provider: adapter.tracker.comments.write_provider,
         observation: {
           scope: "all-actionable-cards",
-          observed_at: "2026-08-28T12:00:00Z",
-          card_refs: cards.filter((card) => ![adapter.tracker.states.ideas, adapter.tracker.states.ready_for_production, adapter.tracker.states.done].includes(card.list_ref)).map((card) => card.ref)
+          observed_at: observedAt,
+          card_refs: observedCards.filter((card) => actionableRefs.has(card.list_ref)).map((card) => card.ref)
         },
         evidence_ref: "trello-comment-test-fixture",
         verified_at: "2026-08-28T12:00:00Z"
@@ -253,6 +258,32 @@ test("aprovação visual atual torna card de UX elegível mesmo com sinal antigo
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("planner avança desenvolvimento, bloqueia somente UX pendente e mantém PO elegível", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const cards = [
+      { ref: "card-dev", key: "FX-216", title: "Desenvolver", list_ref: adapter.tracker.states.ready_for_development, position: 1, signals: { awaiting_human: false } },
+      { ref: "card-ux", key: "FX-217", title: "Aguardar tela", list_ref: adapter.tracker.states.ux_ui, position: 2, signals: { awaiting_human: true, screen_evidence_present: true, screen_approval_required: true, screen_approval_valid: false } },
+      { ref: "card-po", key: "FX-218", title: "Refinar", list_ref: adapter.tracker.states.refinement, position: 3, signals: { awaiting_human: false } }
+    ];
+    const firstPath = await writeSnapshot(root, trackerSnapshot(adapter, cards));
+    const first = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: firstPath, mode: "live", continueRunId: "RUN-20260908-ABCDEF12" });
+    assert.equal(first.status, "READY");
+    assert.equal(first.selected.key, "FX-216");
+    assert.equal(first.selected.skill, "pipeline-dev");
+    assert.ok(first.blocked.some((item) => item.key === "FX-217" && item.reason === "SCREEN_APPROVAL_REQUIRED"));
+    assert.ok(first.deferred.some((item) => item.key === "FX-218"));
+
+    const secondSnapshot = trackerSnapshot(adapter, cards.filter((card) => card.ref !== "card-dev"));
+    const secondPath = await writeSnapshot(root, secondSnapshot);
+    const second = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: secondPath, mode: "live", continueRunId: first.run_id });
+    assert.equal(second.status, "READY");
+    assert.equal(second.selected.key, "FX-218");
+    assert.equal(second.selected.skill, "pipeline-po");
+    assert.equal(second.run_id, first.run_id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("live bloqueia snapshot que não comprova releitura de todos os cards acionáveis", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
@@ -445,7 +476,7 @@ test("planner retoma execução unificada somente com lock e cápsula consistent
   }
 });
 
-test("planner bloqueia retomada sem cápsula", async () => {
+test("planner reconcilia retomada sem cápsula a partir do tracker fresco", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
     const snapshotPath = await writeSnapshot(
@@ -475,11 +506,56 @@ test("planner bloqueia retomada sem cápsula", async () => {
       )
     );
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH });
-    assert.equal(result.status, "BLOCKED");
-    assert.equal(result.reason, "RESUME_CAPSULE_MISSING");
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, "RUN-EXISTING");
+    assert.equal(result.continuing, true);
+    assert.equal(result.guarantees.stale_execution_reconciled, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("planner supera execução UX antiga após transição e preserva RUN_ID no DEV", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [{
+      ref: "card-transitioned",
+      key: "FX-219",
+      title: "Desenvolver após UX",
+      list_ref: adapter.tracker.states.ready_for_development,
+      position: 1,
+      lock: { run_id: "RUN-20260908-ABCDEF19", status: "active", role: "pipeline-ux-ui", state: "ux_ui" }
+    }], { active_execution: {
+      architecture: "unified", status: "active", run_id: "RUN-20260908-ABCDEF19", card_ref: "card-transitioned",
+      role: "pipeline-ux-ui", state: "ux_ui", capsule_present: true
+    }}));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.skill, "pipeline-dev");
+    assert.equal(result.run_id, "RUN-20260908-ABCDEF19");
+    assert.equal(result.guarantees.stale_execution_reconciled, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("execução UX ativa não atravessa evidência visual sem nova aprovação", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [{
+      ref: "card-ux-wait",
+      key: "FX-220",
+      title: "Aguardar nova tela",
+      list_ref: adapter.tracker.states.ux_ui,
+      position: 1,
+      signals: { awaiting_human: true, screen_evidence_present: true, screen_approval_required: true, screen_approval_valid: false },
+      lock: { run_id: "RUN-20260908-ABCDEF20", status: "active", role: "pipeline-ux-ui", state: "ux_ui" }
+    }], { active_execution: {
+      architecture: "unified", status: "active", run_id: "RUN-20260908-ABCDEF20", card_ref: "card-ux-wait",
+      role: "pipeline-ux-ui", state: "ux_ui", capsule_present: true
+    }}));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "EMPTY");
+    assert.ok(result.blocked.some((item) => item.key === "FX-220" && item.reason === "SCREEN_APPROVAL_REQUIRED"));
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("planner não cria quarto ciclo automático", async () => {
@@ -493,7 +569,8 @@ test("planner não cria quarto ciclo automático", async () => {
           key: "FX-005",
           list_ref: adapter.tracker.states.in_development,
           position: 1,
-          loop_counts: { dev_qa: 3 }
+          loop_counts: { dev_qa: 3 },
+          loop_state: "in_development"
         }
       ])
     );

@@ -192,6 +192,53 @@ test("aprovação visual posterior resolve a espera humana no card de UX", async
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("snapshot deriva gates somente do estado atual e da revisão visual vigente", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const cards = [
+    { id: "card-dev", name: "FP-016 Desenvolvimento", idList: "dev-ready", pos: 1 },
+    { id: "card-ux", name: "FP-017 UX", idList: "ux", pos: 2 },
+    { id: "card-po", name: "FP-018 Refinamento", idList: "refinement", pos: 3 }
+  ];
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", now: new Date("2026-09-08T02:00:00Z"), fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev-ready", pos: 1 }, { id: "ux", pos: 2 }, { id: "refinement", pos: 3 }]));
+      if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify(cards));
+      if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
+        { id: "move-16", type: "updateCard", date: "2026-09-08T01:08:00Z", data: { listAfter: { id: "dev-ready" } } },
+        { id: "old-block-16", type: "commentCard", date: "2026-09-07T22:00:00Z", data: { card: { id: "card-dev" }, text: "STATUS: blocked\nREQUIRES_HUMAN: true" } }
+      ]));
+      if (value.includes("card-dev/attachments")) return new Response(JSON.stringify([]));
+      if (value.includes("card-ux/actions")) return new Response(JSON.stringify([
+        { id: "blocked-17", type: "commentCard", date: "2026-09-08T01:22:00Z", data: { card: { id: "card-ux" }, text: "CODEX UX/UI: ROLE HANDOFF + BLOQUEIO\nSTATUS: blocked\nEVENTS: role_handoff, blocker\nREQUIRES_HUMAN: true" } },
+        { id: "old-approval-17", type: "commentCard", date: "2026-09-08T00:30:00Z", data: { card: { id: "card-ux" }, text: "Tela aprovada" } },
+        { id: "move-17", type: "updateCard", date: "2026-09-08T00:06:00Z", data: { listAfter: { id: "ux" } } }
+      ]));
+      if (value.includes("card-ux/attachments")) return new Response(JSON.stringify([{ id: "mock-v2", name: "UX v2.html", date: "2026-09-08T01:18:00Z" }]));
+      if (value.includes("card-po/actions")) return new Response(JSON.stringify([
+        { id: "unblock-18", type: "commentCard", date: "2026-09-08T00:41:00Z", data: { card: { id: "card-po" }, text: "BLOQUEIO RESOLVIDO: Opção B" } },
+        { id: "blocked-18", type: "commentCard", date: "2026-09-08T00:02:00Z", data: { card: { id: "card-po" }, text: "STATUS: blocked\nEVENT: role_handoff, blocker\nREQUIRES_HUMAN: true" } }
+      ]));
+      if (value.includes("card-po/attachments")) return new Response(JSON.stringify([]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    const byRef = new Map(snapshot.cards.map((card) => [card.ref, card]));
+    assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
+    assert.equal(byRef.get("card-dev").signals.state_entered_at, "2026-09-08T01:08:00Z");
+    assert.equal(byRef.get("card-ux").signals.awaiting_human, true);
+    assert.equal(byRef.get("card-ux").signals.screen_approval_valid, false);
+    assert.equal(byRef.get("card-ux").signals.screen_approval_required, true);
+    assert.equal(byRef.get("card-po").signals.awaiting_human, false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("snapshot preserva Delivery Group da descrição e membro terminal para precedência", async () => {
   const root = await projectFixture();
   const adapterPath = join(root, ".pipeline", "project.adapter.yaml");

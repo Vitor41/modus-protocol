@@ -282,6 +282,8 @@ A v0.1 reutiliza os gates do Projeto Piloto B, sem criar colunas adicionais.
 
 O contrato exato de comparação, autoria e validade temporal dos comentários será definido no adaptador Trello. Como baseline, a aprovação deve ser posterior à evidência que pretende aprovar e perde validade quando essa evidência é substituída.
 
+O humano só interrompe a automação por quatro motivos: regra de negócio material ausente, aprovação de tela, validação da atividade para PRD ou limite de retornos. Esses gates pertencem à fase em que foram criados. Uma transição confirmada invalida bloqueios, locks e conclusões da fase anterior; o `RUN_ID` permanece para rastreabilidade, mas a lista e as evidências atuais prevalecem. Falhas técnicas podem isolar um card ou impedir globalmente uma execução sem acesso confiável ao tracker, porém nunca são apresentadas como decisão humana.
+
 ### 10.2 Loops automáticos
 
 Loops previstos:

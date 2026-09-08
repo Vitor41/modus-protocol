@@ -70,9 +70,19 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "observed_list_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "observed_at": { "$ref": "#/$defs/nonEmptyString" },
+        "state_entered_at": { "$ref": "#/$defs/nonEmptyString" },
         "awaiting_human": { "type": "boolean" },
+        "human_wait_at": { "$ref": "#/$defs/nonEmptyString" },
+        "human_resolution_at": { "$ref": "#/$defs/nonEmptyString" },
+        "screen_evidence_present": { "type": "boolean" },
+        "screen_approval_required": { "type": "boolean" },
         "screen_approval_valid": { "type": "boolean" },
+        "screen_evidence_at": { "$ref": "#/$defs/nonEmptyString" },
+        "screen_approval_at": { "$ref": "#/$defs/nonEmptyString" },
         "production_approval_valid": { "type": "boolean" },
+        "production_approval_at": { "$ref": "#/$defs/nonEmptyString" },
         "business_question": { "type": "boolean" },
         "implementation_complete": { "type": "boolean" },
         "review_approved": { "type": "boolean" },
@@ -106,6 +116,7 @@
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 0 }
         },
+        "loop_state": { "$ref": "#/$defs/nonEmptyString" },
         "lock": { "$ref": "#/$defs/lock" }
         ,"delivery_group": { "$ref": "#/$defs/deliveryGroup" }
       }

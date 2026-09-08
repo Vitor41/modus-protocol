@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.1.19` deriva gates por fase a partir da lista atual, histórico de movimentações, comentários e anexos frescos de cada card acionável.
 - Kernel `0.1.18` comprova no snapshot a releitura de todos os cards acionáveis e bloqueia planejamento live quando essa cobertura estiver incompleta.
 - Kernel `0.1.17` torna `pipeline-run` descobrível pelo gatilho em linguagem natural e adiciona `role-launch`, uma rota oficial pelo Codex CLI para lançar papéis com modelo/esforço explícitos quando a conversa não expõe colaboração.
 - Kernel `0.1.16` exige acesso externo autorizado já no primeiro snapshot oficial do Trello e expõe a causa original de falha de acesso, sem mascará-la como rede genérica.
@@ -31,6 +32,9 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- Locks, cápsulas e bloqueios de fases anteriores deixam de sobrepor uma transição confirmada; o planner preserva o `RUN_ID`, reconstrói a continuidade pelo tracker e não cria gate humano por estado operacional obsoleto.
+- Nova evidência visual posterior invalida `Tela aprovada` anterior, e handoffs estruturados com `STATUS: blocked` e `REQUIRES_HUMAN: true` passam a ser reconhecidos independentemente do título do comentário.
+- Replay real de três cards confirma: DEV elegível após UX/UI, nova aprovação visual isolada e PO elegível após `BLOQUEIO RESOLVIDO:`.
 - Aprovações humanas posteriores agora resolvem o bloqueio correspondente em ordem cronológica; o planner também não deixa um `awaiting_human` obsoleto prevalecer sobre `Tela aprovada` ou `APROVADO PARA PRD` válidos no estado correto.
 - Cards de UX/UI com aprovação visual vigente recebem a ação `handoff-approved-design` e reutilizam especificação e anexos aprovados, evitando regeneração e nova solicitação de aprovação.
 - O orquestrador só pode declarar lançamento de papel indisponível após falhas concretas nas duas rotas oficiais; diferenças de catálogo ou ferramentas entre Luna, Terra e Sol não encerram mais PO, UX/UI ou DEV por presunção.

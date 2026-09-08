@@ -13,10 +13,11 @@ O snapshot normalizado contém:
 - `delivery_groups[]` quando houver grupos ou dependências, inclusive membros em estados terminais necessários para resolver precedência;
 - `active_execution` quando existir lote em andamento no projeto.
 - `integration.comments` com leitura, escrita e referência do teste observadas.
-- `integration.comments.observation` com horário e referências de todos os cards acionáveis relidos naquela captura.
+- `integration.comments.observation` com horário e referências de todos os cards acionáveis relidos naquela captura;
+- por card acionável, `signals.observed_list_ref` e `signals.observed_at`, comprovando que os sinais pertencem à lista atual.
 
 Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência de sinal nunca equivale a aprovação.
-Uma aprovação humana posterior resolve a espera correspondente no mesmo card; um bloqueio posterior volta a prevalecer pela ordem cronológica. O planner rejeita execução ao vivo quando a cobertura não coincide exatamente com todos os cards acionáveis presentes no snapshot.
+Comentários, bloqueios e aprovações anteriores à entrada na lista atual são históricos e não participam do gate presente. Em UX/UI, uma nova evidência visual posterior invalida a aprovação anterior e exige nova `Tela aprovada`; uma aprovação posterior à evidência vigente libera o handoff. Um `BLOQUEIO RESOLVIDO:` posterior encerra o bloqueio de negócio correspondente. O planner rejeita execução ao vivo quando a cobertura não coincide exatamente com todos os cards acionáveis ou quando os sinais não comprovam a lista observada.
 
 ## Sequência de escrita
 
@@ -53,7 +54,7 @@ Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno
 - próximo passo;
 - fontes consultadas.
 
-A cápsula reduz releitura, mas não substitui card, diff, teste, gate humano ou evidência atual.
+A cápsula reduz releitura do domínio, mas não substitui card, lista, diff, teste, gate humano ou evidência atual. Se cápsula, lock ou execução ativa descreverem uma fase anterior à lista confirmada, preserve o `RUN_ID`, descarte a conclusão obsoleta e reconstrua a continuidade a partir do tracker fresco. Essa reconciliação não é gate humano.
 
 ## Recibo de execução
 

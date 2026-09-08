@@ -81,13 +81,14 @@ function withExecutionRequest(route) {
   return { ...route, execution_request: resolveExecutionProfile(route.profile, route.skill) };
 }
 
-function blockedReason(card, state) {
+function blockedReason(card, state, { ignoredLockRunId } = {}) {
   const gateResolved =
     (state === "ux_ui" && card.signals?.screen_approval_valid === true) ||
     (state === "ready_for_release" && card.signals?.production_approval_valid === true);
+  if (state === "ux_ui" && card.signals?.screen_approval_required === true) return "SCREEN_APPROVAL_REQUIRED";
   if (card.signals?.awaiting_human === true && !gateResolved) return "AWAITING_HUMAN";
-  if (card.lock?.status === "active") return "ACTIVE_LOCK";
-  if (Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
+  if (card.lock?.status === "active" && card.lock.run_id !== ignoredLockRunId && (!card.lock.state || card.lock.state === state)) return "ACTIVE_LOCK";
+  if (card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
   if (state === "ready_for_release" && card.signals?.production_approval_valid !== true) {
     return "PRODUCTION_APPROVAL_REQUIRED";
@@ -211,7 +212,9 @@ export function planRun(input = {}) {
   const observationComplete =
     observation?.scope === "all-actionable-cards" &&
     expectedObservedRefs.length === actualObservedRefs.length &&
-    expectedObservedRefs.every((ref, index) => ref === actualObservedRefs[index]);
+    expectedObservedRefs.every((ref, index) => ref === actualObservedRefs[index]) &&
+    (snapshot.cards ?? []).filter((card) => actionableListRefs.has(card.list_ref))
+      .every((card) => card.signals?.observed_list_ref === card.list_ref && card.signals?.observed_at === observation.observed_at);
   guarantees.all_actionable_cards_refreshed = observationComplete;
   if (observation?.observed_at) guarantees.snapshot_observed_at = observation.observed_at;
   if (mode === "live" && !observationComplete) {
@@ -241,6 +244,8 @@ export function planRun(input = {}) {
 
   const stateByList = new Map(Object.entries(adapter.tracker.states).map(([state, ref]) => [ref, state]));
   const activeExecution = snapshot.active_execution?.status === "active" ? snapshot.active_execution : undefined;
+  let ignoredLockRunId;
+  let continuationRunId = input.continueRunId;
   if (activeExecution?.architecture === "unified") {
     const activeCard = snapshot.cards.find((card) => card.ref === activeExecution.card_ref);
     const activeState = activeCard ? stateByList.get(activeCard.list_ref) : undefined;
@@ -252,20 +257,9 @@ export function planRun(input = {}) {
       activeCard.lock.run_id === activeExecution.run_id &&
       activeState === activeExecution.state &&
       activeRoute?.skill === activeExecution.role;
-    const activeCardDeferred = activeCard && (blockedReason(activeCard, activeState) === "AWAITING_HUMAN" || activeCard.lock?.status === "blocked");
-    if (!resumeConsistent && !activeCardDeferred) {
-      return {
-        contract_version: "0.1",
-        tool: { name: "pipeline-run-planner", version: PACKAGE.version },
-        mode,
-        status: "BLOCKED",
-        reason:
-          activeExecution.capsule_present === true ? "RESUME_STATE_INCONSISTENT" : "RESUME_CAPSULE_MISSING",
-        doctor,
-        guarantees
-      };
-    }
-    if (!activeCardDeferred) return {
+    const activeBlockReason = activeCard ? blockedReason(activeCard, activeState, { ignoredLockRunId: activeExecution.run_id }) : undefined;
+    const activeCardDeferred = activeCard && (["AWAITING_HUMAN", "SCREEN_APPROVAL_REQUIRED", "PRODUCTION_APPROVAL_REQUIRED", "LOOP_LIMIT_REACHED"].includes(activeBlockReason) || activeCard.lock?.status === "blocked");
+    if (resumeConsistent && !activeCardDeferred) return {
       contract_version: "0.1",
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
@@ -292,6 +286,9 @@ export function planRun(input = {}) {
       apply_required: mode === "live",
       guarantees
     };
+    continuationRunId ??= activeExecution.run_id;
+    ignoredLockRunId = activeExecution.run_id;
+    guarantees.stale_execution_reconciled = true;
   }
 
   const candidates = [];
@@ -326,7 +323,7 @@ export function planRun(input = {}) {
       ...(card.delivery_group ? { delivery_group: card.delivery_group } : {})
     };
     if (candidate.key) cardsByKey.set(candidate.key, candidate);
-    const reason = blockedReason(card, state);
+    const reason = blockedReason(card, state, { ignoredLockRunId });
     if (reason) {
       baseBlocked.set(candidate.card_ref, reason);
       continue;
@@ -417,7 +414,7 @@ export function planRun(input = {}) {
     }
     if (sameWork.length >= 2) batchMembers = sameWork;
   }
-  const id = input.continueRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
+  const id = continuationRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
   const refinementQueue = selected.state === "refinement"
     ? eligible.filter((card) => card.state === "refinement").map(({ snapshot_index, ...card }) => card)
     : [];
@@ -435,7 +432,7 @@ export function planRun(input = {}) {
     batch_policy: batchPolicy,
     doctor,
     run_id: id,
-    continuing: Boolean(input.continueRunId),
+    continuing: Boolean(continuationRunId),
     selected: {
       ...selected,
       continuation_policy: {

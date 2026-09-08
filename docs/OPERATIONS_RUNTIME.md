@@ -50,9 +50,9 @@ Status:
 
 - `READY`: um card foi selecionado;
 - `EMPTY`: não existe trabalho automático elegível;
-- `BLOCKED`: contrato, doctor, execução ativa ou snapshot impedem a operação.
+- `BLOCKED`: uma falha global comprovada de contrato, doctor ou snapshot impede iniciar com segurança.
 
-Quando existe execução unificada ativa, `READY` só representa retomada se `RUN_ID`, card, estado, papel, lock e cápsula permanecerem consistentes. Execução legada ativa, cápsula ausente ou divergência de estado produz `BLOCKED`.
+Quando existe execução unificada ativa, o planner retoma diretamente se `RUN_ID`, card, estado, papel, lock e cápsula permanecerem consistentes. Se o tracker comprovar que o card já mudou de lista ou papel, a execução antiga é reconciliada: o `RUN_ID` é preservado, lock/cápsula obsoletos não prevalecem e o contexto operacional é reconstruído. Cápsula ausente não transforma uma fila atual e legível em gate humano. Execução legada ativa continua bloqueante.
 
 ## Política de fila e Delivery Groups v0.2
 
@@ -80,7 +80,7 @@ Depois disso, o orquestrador drena o trabalho independente na mesma execução. 
 
 O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário. Quando necessário para resolver precedência, inclui `delivery_groups` e membros terminais do grupo, sem executar leitura completa de comentários do board.
 
-O integrador é responsável por derivar sinais como aprovação humana, implementação concluída e espera humana a partir de evidência real. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
+O integrador deriva sinais da lista atual e somente dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
 
 ## Limites atuais
 
