@@ -299,6 +299,31 @@ test("nome do papel e requires_human isolado não transformam falha técnica em 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("snapshot reconhece BLOCKER_KIND e não libera PO antes da resolução humana", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "refinement", pos: 1 }]));
+      if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([{ id: "card-po", name: "FP-070 Reporte", idList: "refinement", pos: 1 }]));
+      if (value.includes("card-po/actions")) return new Response(JSON.stringify([
+        { id: "po-completed-invalid", type: "commentCard", date: "2026-09-08T16:57:40Z", data: { card: { id: "card-po" }, text: "ROLE: pipeline-po\nSTATUS: PASS\nEVENTS: role_handoff, transition\nSTATE_FROM: refinement\nSTATE_TO: ux_ui" } },
+        { id: "po-block", type: "commentCard", date: "2026-09-08T14:40:04Z", data: { card: { id: "card-po" }, text: "ROLE: pipeline-po\nSTATUS: blocked\nREQUIRES_HUMAN: true\nBLOCKER_KIND: business_rule" } }
+      ]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    assert.equal(snapshot.cards[0].signals.awaiting_human, true);
+    assert.equal(snapshot.cards[0].signals.human_gate_kind, "business_rule");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("snapshot preserva handoff DEV na fronteira da transição e ignora falso bloqueio técnico", async () => {
   const root = await projectFixture();
   const adapterPath = join(root, ".pipeline", "project.adapter.yaml");

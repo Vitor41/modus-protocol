@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.4` |
-| Versão do Kernel | `0.2.4` |
+| Versão pública | `0.2.5` |
+| Versão do Kernel | `0.2.5` |
 | Estado | Publicada |
 | Data | 2026-09-08 |
 | Plataforma inicial | Codex local e ChatGPT desktop |

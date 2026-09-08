@@ -57,7 +57,7 @@ test("launcher inicia lanes independentes antes de aguardar suas conclusões", a
   try {
     const execution = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { launchAsync: (job) => {
       started.push(job.lane);
-      return new Promise((resolve) => pending.push(() => resolve({ lane: job.lane, status: "PASS" })));
+      return new Promise((resolve) => pending.push(() => resolve({ lane: job.lane, status: "PASS", job_status: "completed" })));
     }});
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(started, ["technical", "ux_ui", "po"]);
@@ -65,6 +65,8 @@ test("launcher inicia lanes independentes antes de aguardar suas conclusões", a
     const result = await execution;
     assert.equal(result.status, "PASS");
     assert.equal(result.launch_strategy, "parallel");
+    assert.equal(result.completion_barrier, "all-jobs-terminal");
+    assert.equal(result.active_jobs, 0);
     assert.equal(result.jobs.length, 3);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

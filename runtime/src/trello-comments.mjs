@@ -158,7 +158,7 @@ function structuredField(text, name) {
 function structuredHumanBlock(text, state) {
   if (!/^STATUS:\s*blocked\s*$/imu.test(text) || !/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text)) return undefined;
   const role = structuredField(text, "ROLE")?.toLowerCase();
-  const kind = structuredField(text, "(?:BLOCK_KIND|HUMAN_GATE)")?.toLowerCase().replaceAll("-", "_");
+  const kind = structuredField(text, "(?:BLOCKER_KIND|BLOCK_KIND|HUMAN_GATE)")?.toLowerCase().replaceAll("-", "_");
   if (HUMAN_GATE_KINDS.has(kind)) return kind;
 
   // Compatibilidade apenas para comentários antigos semanticamente explícitos.

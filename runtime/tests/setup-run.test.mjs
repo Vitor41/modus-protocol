@@ -323,6 +323,7 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
     assert.deepEqual(result.work_slots[2].refinement_queue.cards.map((card) => card.card_ref), ["po-one", "po-two"]);
     assert.ok(result.deferred.some((item) => item.key === "FX-222" && item.reason === "TECHNICAL_WIP_LIMIT"));
     assert.deepEqual(result.schedule.capacities, { po: 1, ux_ui: 1, technical: 1 });
+    assert.equal(result.schedule.agent_completion_barrier, "terminal-handoff-before-replan");
     assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.2");
     assert.equal(result.recovery_policy.technical_failures_require_human, false);
   } finally { await rm(root, { recursive: true, force: true }); }

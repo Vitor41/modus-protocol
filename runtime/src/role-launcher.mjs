@@ -125,6 +125,8 @@ export function launchRole(input = {}, dependencies = {}) {
     contract_version: "0.1",
     tool: { name: "pipeline-role-launcher", version: PACKAGE.version },
     status: "PASS",
+    job_status: "completed",
+    completion_barrier: "terminal-handoff-consumed",
     role: input.role,
     model: request.model,
     reasoning_effort: request.reasoning_effort,
@@ -168,6 +170,7 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
   writeFileSync(handoffPath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
   return {
     contract_version: "0.2", tool: { name: "pipeline-role-launcher", version: PACKAGE.version }, status: "PASS",
+    job_status: "completed", completion_barrier: "terminal-handoff-consumed",
     lane: input.lane, role: input.role, model: request.model, reasoning_effort: request.reasoning_effort,
     configuration_source: "explicit-codex-exec", evidence_ref: `agent:codex-thread:${threadId}`,
     handoff: relative(projectRoot, handoffPath).replaceAll("\\", "/"), fallback_used: false
@@ -195,7 +198,18 @@ export async function launchRoles(input = {}, dependencies = {}) {
   const launch = dependencies.launchAsync ?? launchRoleAsync;
   const jobs = manifest.jobs.map((job) => launch({ projectRoot, ...job }, dependencies));
   const results = await Promise.all(jobs);
-  return { contract_version: "0.2", tool: { name: "pipeline-role-launcher", version: PACKAGE.version }, status: "PASS", launch_strategy: "parallel", jobs: results };
+  if (results.some((result) => result.status !== "PASS" || result.job_status !== "completed")) {
+    throw new Error("O launcher recebeu resultado não terminal de uma lane.");
+  }
+  return {
+    contract_version: "0.2",
+    tool: { name: "pipeline-role-launcher", version: PACKAGE.version },
+    status: "PASS",
+    launch_strategy: "parallel",
+    completion_barrier: "all-jobs-terminal",
+    active_jobs: 0,
+    jobs: results
+  };
 }
 
 const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);

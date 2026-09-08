@@ -504,7 +504,8 @@ export function planRun(input = {}) {
       launch_strategy: "parallel-when-independent",
       capacities: { po: 1, ux_ui: 1, technical: 1 },
       technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation", "ready_for_release"] },
-      completion: "drain-all-eligible-work-before-stop"
+      completion: "drain-all-eligible-work-before-stop",
+      agent_completion_barrier: "terminal-handoff-before-replan"
     },
     recovery_policy: RECOVERY_POLICY,
     doctor,

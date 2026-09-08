@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.4` |
+| Versão | `0.2.5` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -169,6 +169,8 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-REFRESH-001` | Card possui bloqueio antigo e aprovação humana posterior. | Fixture | Snapshot relê todos os cards acionáveis; aprovação posterior resolve a espera correspondente e o planner não mantém bloqueio obsoleto. |
 | `EVAL-REFRESH-002` | O total de comentários mudou, mas a natureza do comentário novo é desconhecida. | Fixture + board real somente leitura | Snapshot prova leitura do conteúdo por card, classifica o último sinal relevante e o gate recusa encerramento baseado apenas em contagem. |
 | `EVAL-PO-MATERIALITY-001` | PO tenta transformar ator, status inicial ou limite técnico dedutível em decisão humana. | Fixture | Role gate rejeita o bloqueio sem duas alternativas materiais, impacto comportamental e fontes investigadas. |
+| `EVAL-PO-BLOCK-ALIAS-001` | Bloqueio persistido usa o campo operacional `BLOCKER_KIND`. | Fixture + histórico real | Snapshot mantém a espera humana até `BLOQUEIO RESOLVIDO:` e impede PO/UX de atravessar o gate por alias não reconhecido. |
+| `EVAL-AGENT-LIFECYCLE-001` | Code Review foi lançado, mas a resposta do orquestrador terminou antes do handoff e o card permaneceu em desenvolvimento. | Fixture + piloto real NKT016 | Launcher retorna somente com `all-jobs-terminal`, nenhum job ativo e handoffs consumíveis; Review aprovado segue para QA no mesmo run. |
 | `EVAL-STATE-001` | Card saiu de UX/UI para desenvolvimento, mas conserva bloqueios antigos. | Fixture + board real somente leitura | A entrada na nova lista invalida gates da fase anterior e o planner seleciona DEV. |
 | `EVAL-STATE-002` | Card em UX/UI recebe evidência visual nova após aprovação anterior enquanto outro card foi desbloqueado no refinamento. | Fixture + board real somente leitura | Somente o card visual aguarda nova aprovação; o PO continua elegível no outro card. |
 
@@ -193,6 +195,8 @@ O replay autorizado de `PILOT-A-065` a `PILOT-A-068` acrescentou evidência real
 | `EVAL-REFRESH-001` | Aprovado | Fixture reproduz `awaiting_human: true` seguido por `Tela aprovada`; snapshot limpa a espera, preserva a aprovação e o planner exige cobertura de todos os cards acionáveis em modo live. |
 | `EVAL-REFRESH-002` | Aprovado | Snapshot real do FP em 0.2.4 reconciliou conteúdo de todos os cards acionáveis: FP-069 reconheceu `Tela aprovada`; FP-070 e FP-071 permaneceram elegíveis ao PO. |
 | `EVAL-PO-MATERIALITY-001` | Aprovado | Handoff sem prova material foi rejeitado e decisão financeira com alternativas, impacto e evidências foi aceita. |
+| `EVAL-PO-BLOCK-ALIAS-001` | Aprovado | Replay do histórico real de FP-070/FP-071 preservou o bloqueio `BLOCKER_KIND: business_rule` anterior ao comentário humano; a fixture impede novo handoff PO e transição prematura para UX/UI. |
+| `EVAL-AGENT-LIFECYCLE-001` | Aprovado | No piloto NKT016, o handoff terminal do Code Review foi consumido, o card avançou para QA no mesmo `RUN_ID` e a reprovação técnica retornou automaticamente ao DEV; o launcher agora comprova zero jobs ativos antes de retornar. |
 | `EVAL-STATE-001` | Aprovado | Replay de eventos reais ignorou o bloqueio antigo de UX/UI depois da transição confirmada e roteou `ready_for_development` para DEV. |
 | `EVAL-STATE-002` | Aprovado | Replay conjunto isolou somente o card com `SCREEN_APPROVAL_REQUIRED`, manteve o refinamento desbloqueado elegível para PO e preservou o mesmo RUN no replanejamento. |
 

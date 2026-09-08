@@ -25,7 +25,7 @@ Comentários, bloqueios e aprovações anteriores à entrada na lista atual são
 2. Validação da capacidade de comentário conforme `tracker-comment-protocol.md`.
 3. Registro de lock ativo com `RUN_ID`, card, estado, papel e timestamp, seguido de releitura.
 4. Registro ou atualização da cápsula, seguido de releitura.
-5. Lançamento explícito e simultâneo de todos os slots independentes com modelo e esforço do planner, pela colaboração da conversa ou por `pipeline.ps1 role-launch --manifest`.
+5. Lançamento explícito e simultâneo de todos os slots independentes com modelo e esforço do planner pelo `pipeline.ps1 role-launch --manifest`. O launcher é a rota canônica e só retorna depois de todos os jobs alcançarem estado terminal; colaboração direta é recuperação após falha concreta do launcher e exige espera equivalente.
 6. Registro do recibo de lançamento e execução do papel selecionado.
 7. Publicação e releitura da evidência do gate.
 8. Nova releitura do lock e do estado.
@@ -44,7 +44,7 @@ O gatilho drena o trabalho independente elegível, e não apenas um papel ou um 
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 
-Delegar não conclui trabalho. O orquestrador é proprietário do ciclo de vida de cada agente lançado: deve aguardar seu estado terminal, consumir o handoff, aplicar o gate e despachar o papel seguinte. Não existe execução “em segundo plano” que autorize devolver o controle ao usuário. Review concluído continua para QA; QA aprovado libera a próxima unidade técnica sob WIP, e QA reprovado retorna imediatamente ao DEV.
+Delegar não conclui trabalho. O orquestrador é proprietário do ciclo de vida de cada agente lançado: deve atravessar a barreira terminal do launcher, consumir cada handoff, aplicar o gate e despachar o papel seguinte. Não existe execução “em segundo plano” que autorize devolver o controle ao usuário. Review concluído continua para QA; QA aprovado libera a próxima unidade técnica sob WIP, e QA reprovado retorna imediatamente ao DEV.
 
 Retorno técnico de Review ou QA não é gate: `changes_required` e `rejected` materializam correção pendente e devolvem a mesma lane ao DEV. Uma transição aprovada que ficou pendente por relógio, snapshot ou releitura aparece como slot operacional e deve ser reconciliada sem repetir o papel. Role gate ou transition gate reprovado fornece `recovery.actions`; execute-as e valide novamente. Somente depois de esgotar essa autorrecuperação limitada uma falha técnica pode ser reportada; ela continua sem exigir decisão humana.
 
