@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.2` |
-| Versão do Kernel | `0.2.2` |
+| Versão pública | `0.2.3` |
+| Versão do Kernel | `0.2.3` |
 | Estado | Publicada |
 | Data | 2026-09-08 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -312,9 +312,10 @@ Responsável por:
 - classificar complexidade e perfil de execução;
 - acionar especializações quando justificadas;
 - lançar simultaneamente as lanes independentes e preservar a ordem interna de cada uma;
+- aguardar e consumir todo agente lançado, continuando Review → QA → DEV ou próxima unidade técnica sem devolver o controle no meio do trabalho;
 - impedir escrita paralela insegura;
 - atualizar locks e resumos;
-- encerrar quando não houver trabalho automático elegível.
+- encerrar somente após o gate executável comprovar ausência de agentes ativos, trabalho automático elegível e snapshot obsoleto.
 
 O ORCHESTRATOR não resolve silenciosamente o trabalho especializado que deve encaminhar.
 

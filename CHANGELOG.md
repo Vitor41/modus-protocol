@@ -8,6 +8,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.2.3` adiciona um gate executável de encerramento: a resposta final é negada enquanto houver agente ativo, resultado técnico não consumido, plano com trabalho elegível ou snapshot anterior ao último evento.
 - Kernel `0.2.2` formaliza a política de autonomia: falhas técnicas locais retornam ao especialista, enquanto espera humana exige categoria canônica explícita.
 - Gates de papel e transição passam a emitir ações estruturadas de autorreparo sem enfraquecer a autorização `PASS / GRANTED`.
 - Cliente Trello recupera leituras idempotentes transitórias em até três tentativas, sem repetir escritas nem trocar de integração.
@@ -42,6 +43,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- O orquestrador não pode mais encerrar a conversa alegando que Code Review ou outro papel “continua em andamento”; ele deve aguardar o resultado, despachar QA/DEV e drenar a lane técnica até um gate humano real.
 - Diferenças causais de relógio de até cinco segundos entre tracker e host deixam de invalidar o gate; a reconciliação fica explícita no recibo.
 - Vereditos de Review no formato `return / changes_required` agora retornam automaticamente ao DEV e nunca encerram a fila como bloqueio humano.
 - Bloqueios técnicos genéricos publicados pelo orquestrador deixam de ser interpretados como decisão humana; somente regra de negócio, tela, aprovação para PRD e limite de loop formam gates humanos.

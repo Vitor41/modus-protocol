@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unified-development-pipeline:schema:run-close-receipt:0.1",
+  "title": "Modus Protocol Run Close Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "run_id", "jobs", "last_job_event_at", "final_snapshot_observed_at", "final_plan"],
+  "properties": {
+    "contract_version": { "const": "0.1" },
+    "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_ref", "role", "status"],
+        "properties": {
+          "evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
+          "role": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] },
+          "status": { "enum": ["queued", "running", "completed", "isolated", "failed", "cancelled"] }
+        }
+      }
+    },
+    "last_job_event_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" },
+    "final_snapshot_observed_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" },
+    "final_plan": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "work_slots", "guarantees"],
+      "properties": {
+        "status": { "enum": ["READY", "EMPTY", "BLOCKED"] },
+        "work_slots": { "type": "array" },
+        "guarantees": {
+          "type": "object",
+          "required": ["all_actionable_cards_refreshed"],
+          "properties": { "all_actionable_cards_refreshed": { "type": "boolean" } }
+        }
+      }
+    }
+  },
+  "$defs": { "nonEmptyString": { "type": "string", "minLength": 1 } }
+}

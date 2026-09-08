@@ -22,12 +22,13 @@ const EXPECTED_SKILLS = [
   "pipeline-setup",
   "pipeline-ux-ui"
 ];
-const RUNTIME_ENTRIES = ["version-status.mjs", "doctor.mjs", "setup.mjs", "run-planner.mjs", "role-launcher.mjs", "role-gate.mjs", "transition-gate.mjs", "trello-comments.mjs", "command-runner.mjs"];
+const RUNTIME_ENTRIES = ["version-status.mjs", "doctor.mjs", "setup.mjs", "run-planner.mjs", "role-launcher.mjs", "role-gate.mjs", "transition-gate.mjs", "run-close-gate.mjs", "trello-comments.mjs", "command-runner.mjs"];
 const SCHEMAS = [
   "project-adapter.schema.json",
   "tracker-snapshot.schema.json",
   "role-handoff.schema.json",
-  "tracker-transition-receipt.schema.json"
+  "tracker-transition-receipt.schema.json",
+  "run-close-receipt.schema.json"
 ];
 const DOCUMENTS = ["AUTONOMY_POLICY.md"];
 

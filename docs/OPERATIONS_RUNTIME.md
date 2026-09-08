@@ -10,6 +10,7 @@ Esta versão implementa as operações centrais e os gates executáveis da estei
 | Status de versão | `runtime/src/version-status.mjs` | Exibe runtime e origem carregados para diagnóstico manual; não participa do gatilho operacional. |
 | Gate de papel | `runtime/src/role-gate.mjs` | Validação de handoff; nenhuma transição direta. |
 | Gate de transição | `runtime/src/transition-gate.mjs` | Valida o recibo de comentário persistido e relido; autoriza ou nega, sem movimentar o tracker. |
+| Gate de encerramento | `runtime/src/run-close-gate.mjs` | Nega a resposta final enquanto houver agente ativo, trabalho elegível ou snapshot final obsoleto. |
 | Comentários Trello | `runtime/src/trello-comments.mjs` | Lista, publica e relê comentários pelo provider `environment`, sem imprimir credenciais. |
 
 ## Pipeline Setup
@@ -73,6 +74,8 @@ Quando as três capacidades possuem trabalho elegível, `work_slots` contém as 
 Dentro do mesmo estado, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 
 Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra as outras lanes. Uma nova entrega em `PRONTO PARA DESENVOLVER` só começa quando a unidade técnica anterior sai do fluxo automatizado, evitando branches funcionais simultâneas.
+
+Depois de lançar um papel, o orquestrador precisa aguardar seu resultado terminal e consumi-lo. Code Review em andamento não é condição de encerramento: o resultado deve ser aplicado, QA deve ser lançado quando elegível e a lane técnica deve continuar. Antes de responder ao usuário, o orquestrador produz o recibo de [run-close-receipt.schema.json](../schema/run-close-receipt.schema.json) e exige `PASS / FINAL_RESPONSE_GRANTED` de `pipeline.ps1 run-close-gate`.
 
 Quando colaboração não estiver exposta, o launcher recebe um manifest de até três jobs:
 

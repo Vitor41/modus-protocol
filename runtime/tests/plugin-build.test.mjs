@@ -50,6 +50,13 @@ test("artefato inclui a política canônica de autonomia referenciada pelas Skil
   assert.equal(hash(artifact), hash(source));
 });
 
+test("artefato inclui gate e schema de encerramento da execução", async () => {
+  const gate = await readFile(join(built.targetRoot, "runtime", "src", "run-close-gate.mjs"));
+  const schema = await readFile(join(built.targetRoot, "schema", "run-close-receipt.schema.json"));
+  assert.ok(gate.length > 0);
+  assert.ok(schema.length > 0);
+});
+
 test("runtime standalone executa doctor sem node_modules no plugin", () => {
   const result = spawnSync(
     NODE,
@@ -75,7 +82,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.2.2");
+  assert.equal(status.active.runtime_version, "0.2.3");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0, Mandatory = $true)]
-  [ValidateSet('status', 'doctor', 'setup', 'plan', 'role-launch', 'role-gate', 'transition-gate', 'trello', 'command')]
+  [ValidateSet('status', 'doctor', 'setup', 'plan', 'role-launch', 'role-gate', 'transition-gate', 'run-close-gate', 'trello', 'command')]
   [string]$Command,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs
@@ -17,6 +17,7 @@ $entries = @{
   'role-launch' = 'role-launcher.mjs'
   'role-gate' = 'role-gate.mjs'
   'transition-gate' = 'transition-gate.mjs'
+  'run-close-gate' = 'run-close-gate.mjs'
   'trello' = 'trello-comments.mjs'
   'command' = 'command-runner.mjs'
 }

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.2` |
+| Versão | `0.2.3` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -148,6 +148,9 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-AUTONOMY-002` | Doctor encontra somente contexto opcional ausente. | Fixture | Execução live permanece `READY`, preservando o aviso sem parar a fila. |
 | `EVAL-TRACKER-RETRY-001` | Duas leituras idempotentes do Trello falham transitoriamente. | Fixture | A terceira leitura usa o mesmo provider e conclui; nenhuma escrita ou fallback ocorre. |
 | `EVAL-RETURN-RECOVERY-001` | Handoff de retorno do QA foi confirmado, mas o movimento para DEV não ocorreu. | Fixture | Snapshot materializa reconciliação operacional e retoma somente a transição, sem repetir QA. |
+| `EVAL-RUN-CLOSE-001` | Code Review foi lançado e ainda está executando. | Fixture | Gate nega a resposta final e exige aguardar o agente. |
+| `EVAL-RUN-CLOSE-002` | Review terminou, mas o plano final ainda contém QA elegível. | Fixture | Gate exige despachar e continuar a lane técnica. |
+| `EVAL-RUN-CLOSE-003` | O plano foi produzido antes do último resultado de agente. | Fixture | Gate exige novo snapshot e replanejamento antes de encerrar. |
 | `EVAL-RUN-LOCK-001` | Card ou projeto possui execução ativa. | Fixture | Nenhum novo `RUN_ID` ou lock é aplicado. |
 | `EVAL-RUN-SNAPSHOT-001` | Snapshot omite cards. | Fixture | Execução bloqueia; não declara fila vazia. |
 | `EVAL-RUN-RESUME-001` | Execução unificada ativa possui lock e cápsula consistentes. | Fixture | Mesmo `RUN_ID` é retomado; nenhuma execução concorrente é criada. |

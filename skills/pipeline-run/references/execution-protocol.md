@@ -33,6 +33,8 @@ Comentários, bloqueios e aprovações anteriores à entrada na lista atual são
 10. Atualização final da cápsula e do lock, ambas relidas.
 11. Novo snapshot e novo plano com `plan --tracker-snapshot <arquivo> --continue-run-id <RUN_ID atual>` após cada transição técnica confirmada.
 12. Lançamento imediato do próximo papel elegível até alcançar uma condição de parada canônica.
+13. Espera e consumo do resultado de todos os agentes lançados; uma resposta do orquestrador nunca encerra enquanto um job estiver `queued` ou `running`.
+14. Gate de encerramento com recibo dos jobs e plano produzido por snapshot posterior ao último evento: `pipeline.ps1 run-close-gate --receipt <arquivo> --format json`.
 
 Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma sucesso e não repita cegamente. Consulte o estado oficial e reconcilie antes de continuar. Leituras idempotentes usam até três tentativas totais; escrita incerta é resolvida por referência, `RUN_ID` e estado oficial, nunca por duplicação.
 
@@ -41,6 +43,8 @@ Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma
 O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. `work_slots` declara até três lanes: PO, UX/UI e técnica. PO e UX/UI podem atuar simultaneamente com a entrega técnica; a lane técnica mantém WIP igual a um desde a entrada em DEV até o merge da release. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o mesmo agente os processa sequencialmente. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente quando seus gates passam.
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
+
+Delegar não conclui trabalho. O orquestrador é proprietário do ciclo de vida de cada agente lançado: deve aguardar seu estado terminal, consumir o handoff, aplicar o gate e despachar o papel seguinte. Não existe execução “em segundo plano” que autorize devolver o controle ao usuário. Review concluído continua para QA; QA aprovado libera a próxima unidade técnica sob WIP, e QA reprovado retorna imediatamente ao DEV.
 
 Retorno técnico de Review ou QA não é gate: `changes_required` e `rejected` materializam correção pendente e devolvem a mesma lane ao DEV. Uma transição aprovada que ficou pendente por relógio, snapshot ou releitura aparece como slot operacional e deve ser reconciliada sem repetir o papel. Role gate ou transition gate reprovado fornece `recovery.actions`; execute-as e valide novamente. Somente depois de esgotar essa autorrecuperação limitada uma falha técnica pode ser reportada; ela continua sem exigir decisão humana.
 
