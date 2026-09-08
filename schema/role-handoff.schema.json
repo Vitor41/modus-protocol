@@ -90,6 +90,17 @@
       "then": { "properties": { "deliverable": { "$ref": "#/$defs/poDeliverable" } } }
     },
     {
+      "if": {
+        "properties": {
+          "role": { "const": "pipeline-po" },
+          "status": { "const": "blocked" },
+          "blocker": { "properties": { "requires_human": { "const": true }, "kind": { "const": "business_rule" } }, "required": ["requires_human", "kind"] }
+        },
+        "required": ["role", "status", "blocker"]
+      },
+      "then": { "properties": { "blocker": { "required": ["decision_options", "material_impact", "evidence_checked"] } } }
+    },
+    {
       "if": { "properties": { "role": { "const": "pipeline-ux-ui" } }, "required": ["role"] },
       "then": { "required": ["deliverable"], "properties": { "deliverable": { "$ref": "#/$defs/uxDeliverable" } } }
     },
@@ -227,6 +238,9 @@
         },
         "scope": { "enum": ["card", "delivery_group", "dependency_group"] },
         "delivery_group_id": { "$ref": "#/$defs/nonEmptyString" },
+        "decision_options": { "$ref": "#/$defs/stringArray", "minItems": 2 },
+        "material_impact": { "$ref": "#/$defs/nonEmptyString" },
+        "evidence_checked": { "$ref": "#/$defs/stringArray", "minItems": 1 },
         "return_to": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] }
       }
     },

@@ -14,7 +14,7 @@ async function validate(overrides = {}) {
     jobs: [{ evidence_ref: "agent:review-1", role: "pipeline-code-review", status: "completed" }],
     last_job_event_at: "2026-09-08T14:00:00Z",
     final_snapshot_observed_at: "2026-09-08T14:00:01Z",
-    final_plan: { status: "EMPTY", work_slots: [], guarantees: { all_actionable_cards_refreshed: true } },
+    final_plan: { status: "EMPTY", work_slots: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } },
     ...overrides
   };
   const path = join(root, "receipt.json");
@@ -37,7 +37,7 @@ test("agente de review em andamento obriga o orquestrador a esperar", async () =
 });
 
 test("plano com QA elegível impede encerramento prematuro", async () => {
-  const result = await validate({ final_plan: { status: "READY", work_slots: [{ role: "pipeline-qa" }], guarantees: { all_actionable_cards_refreshed: true } } });
+  const result = await validate({ final_plan: { status: "READY", work_slots: [{ role: "pipeline-qa" }], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } } });
   assert.equal(result.status, "FAIL");
   assert.ok(result.actions.includes("dispatch-and-continue"));
 });
@@ -46,4 +46,10 @@ test("snapshot anterior ao resultado do agente exige nova leitura", async () => 
   const result = await validate({ final_snapshot_observed_at: "2026-09-08T13:59:59Z" });
   assert.equal(result.status, "FAIL");
   assert.ok(result.actions.includes("refresh-snapshot-and-replan"));
+});
+
+test("contagem sem reconciliação do conteúdo dos comentários impede encerramento", async () => {
+  const result = await validate({ final_plan: { status: "EMPTY", work_slots: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: false } } });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_FINAL_COMMENT_CONTENT_STALE"));
 });

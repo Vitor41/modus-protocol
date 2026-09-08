@@ -196,6 +196,10 @@ test("snapshot hidrata comentários apenas dos estados ativos", async () => {
     const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
     assert.deepEqual(snapshot.cards.map((card) => card.ref), ["active"]);
     assert.deepEqual(snapshot.integration.comments.observation.card_refs, ["active"]);
+    assert.deepEqual(snapshot.integration.comments.observation.content_read_card_refs, ["active"]);
+    assert.equal(snapshot.cards[0].signals.comment_content_reconciled, true);
+    assert.equal(snapshot.cards[0].signals.latest_comment_ref, "c1");
+    assert.equal(snapshot.cards[0].signals.latest_comment_actor, "human_candidate");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

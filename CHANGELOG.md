@@ -8,6 +8,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.2.4` torna a leitura do conteúdo dos comentários comprovável por card; contagem permanece apenas telemetria e não satisfaz o gate de encerramento.
+- Bloqueio humano de PO por regra de negócio passa a exigir alternativas materiais, impacto comportamental e fontes investigadas; detalhes implementáveis com precedente devem seguir como premissas explícitas.
 - Kernel `0.2.3` adiciona um gate executável de encerramento: a resposta final é negada enquanto houver agente ativo, resultado técnico não consumido, plano com trabalho elegível ou snapshot anterior ao último evento.
 - Kernel `0.2.2` formaliza a política de autonomia: falhas técnicas locais retornam ao especialista, enquanto espera humana exige categoria canônica explícita.
 - Gates de papel e transição passam a emitir ações estruturadas de autorreparo sem enfraquecer a autorização `PASS / GRANTED`.

@@ -49,11 +49,12 @@
     "commentObservation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["scope", "observed_at", "card_refs"],
+      "required": ["scope", "observed_at", "card_refs", "content_read_card_refs"],
       "properties": {
         "scope": { "const": "all-actionable-cards" },
         "observed_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$" },
-        "card_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } }
+        "card_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "content_read_card_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } }
       }
     },
     "list": {
@@ -74,6 +75,11 @@
         "observed_at": { "$ref": "#/$defs/nonEmptyString" },
         "state_entered_at": { "$ref": "#/$defs/nonEmptyString" },
         "awaiting_human": { "type": "boolean" },
+        "comment_content_reconciled": { "type": "boolean" },
+        "latest_comment_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "latest_comment_at": { "$ref": "#/$defs/nonEmptyString" },
+        "latest_comment_actor": { "enum": ["pipeline", "human_candidate"] },
+        "latest_human_signal": { "enum": ["screen_approval", "production_approval", "block_resolved"] },
         "human_wait_at": { "$ref": "#/$defs/nonEmptyString" },
         "human_resolution_at": { "$ref": "#/$defs/nonEmptyString" },
         "screen_evidence_present": { "type": "boolean" },

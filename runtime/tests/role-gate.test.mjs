@@ -157,7 +157,7 @@ test("release DEV exige todas as ações de integração Git", async () => {
 test("papel bloqueado não movimenta estado", async () => {
   const handoff = await fixture("valid-po.json");
   handoff.status = "blocked";
-  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule" };
+  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule", decision_options: ["A", "B"], material_impact: "Altera o comportamento financeiro.", evidence_checked: ["card"] };
   delete handoff.deliverable;
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "BLOCKED_TRANSITION_FORBIDDEN"));
@@ -167,10 +167,36 @@ test("papel bloqueado ainda precisa partir do estado correto", async () => {
   const handoff = await fixture("valid-po.json");
   handoff.status = "blocked";
   handoff.state = { from: "ux_ui", to: "ux_ui" };
-  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule" };
+  handoff.blocker = { reason: "Decisão humana pendente.", requires_human: true, kind: "business_rule", decision_options: ["A", "B"], material_impact: "Altera o comportamento financeiro.", evidence_checked: ["card"] };
   delete handoff.deliverable;
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
+});
+
+test("PO não pode transformar detalhe implementável em bloqueio humano sem prova material", async () => {
+  const handoff = await fixture("valid-po.json");
+  handoff.status = "blocked";
+  handoff.state.to = "refinement";
+  handoff.blocker = { reason: "Definir status inicial.", requires_human: true, kind: "business_rule", scope: "card" };
+  delete handoff.deliverable;
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+});
+
+test("PO pode bloquear decisão de negócio material depois de investigar alternativas", async () => {
+  const handoff = await fixture("valid-po.json");
+  handoff.status = "blocked";
+  handoff.state.to = "refinement";
+  handoff.blocker = {
+    reason: "Regra financeira não definida.", requires_human: true, kind: "business_rule", scope: "card",
+    decision_options: ["Reconhecer por competência", "Reconhecer por caixa"],
+    material_impact: "A escolha altera saldos e período contábil exibido.",
+    evidence_checked: ["Descrição do card", "Regra financeira existente"]
+  };
+  delete handoff.deliverable;
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "PASS");
 });
 
 test("handoff rejeita chave com aparência de segredo", async () => {

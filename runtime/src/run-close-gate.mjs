@@ -49,6 +49,9 @@ export function validateRunClose(input = {}) {
     if (receipt.final_plan.guarantees.all_actionable_cards_refreshed !== true) {
       diagnostic(diagnostics, "RUN_FINAL_REFRESH_MISSING", "final_plan.guarantees", "O plano final não comprova releitura de todos os cards acionáveis.", "refresh-snapshot-and-replan");
     }
+    if (receipt.final_plan.guarantees.comment_content_reconciled !== true) {
+      diagnostic(diagnostics, "RUN_FINAL_COMMENT_CONTENT_STALE", "final_plan.guarantees", "O plano final não comprova leitura e reconciliação do conteúdo dos comentários de todos os cards acionáveis.", "refresh-snapshot-and-replan");
+    }
     const finalSnapshotAt = Date.parse(receipt.final_snapshot_observed_at);
     const lastJobEventAt = Date.parse(receipt.last_job_event_at);
     if (!Number.isFinite(finalSnapshotAt) || !Number.isFinite(lastJobEventAt) || finalSnapshotAt < lastJobEventAt) {

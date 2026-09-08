@@ -130,6 +130,23 @@ function latestExactDate(comments, exact) {
   return latestDate(comments, (comment) => String(comment.text ?? "").trim() === exact);
 }
 
+function latestCommentObservation(comments, gate) {
+  const latest = chronological(comments).at(-1);
+  if (!latest) return {};
+  const text = String(latest.text ?? "").trim();
+  const role = structuredField(text, "ROLE")?.toLowerCase();
+  let humanSignal;
+  if (text === (gate.screen_approval ?? "Tela aprovada")) humanSignal = "screen_approval";
+  else if (text === (gate.production_approval ?? "APROVADO PARA PRD")) humanSignal = "production_approval";
+  else if (gate.unblock_prefix && text.startsWith(gate.unblock_prefix)) humanSignal = "block_resolved";
+  return {
+    latest_comment_ref: latest.ref,
+    latest_comment_at: latest.date,
+    latest_comment_actor: role?.startsWith("pipeline-") ? "pipeline" : "human_candidate",
+    ...(humanSignal ? { latest_human_signal: humanSignal } : {})
+  };
+}
+
 function stateEntryDate(actions, listRef) {
   return latestDate(actions, (action) => action.type === "updateCard" && action.data?.listAfter?.id === listRef);
 }
@@ -395,6 +412,8 @@ export async function executeTrelloComment(input = {}) {
         screen_approval_required: card.idList === adapter.tracker.states.ux_ui && Boolean(screenEvidenceAt) && !screenApprovalValid,
         screen_approval_valid: screenApprovalValid,
         production_approval_valid: Boolean(productionApprovalAt),
+        comment_content_reconciled: true,
+        ...latestCommentObservation(comments, gate),
         ...progress,
         ...transition,
         ...(screenEvidenceAt ? { screen_evidence_at: screenEvidenceAt } : {}),
@@ -418,12 +437,12 @@ export async function executeTrelloComment(input = {}) {
       integration: { comments: {
         read: verified ? "verified" : "not_tested", write: verified ? "verified" : "not_tested",
         read_provider: "environment", write_provider: "environment",
-        observation: { scope: "all-actionable-cards", observed_at: observedAt, card_refs: activeCards.map((card) => card.id) },
+        observation: { scope: "all-actionable-cards", observed_at: observedAt, card_refs: activeCards.map((card) => card.id), content_read_card_refs: activeCards.map((card) => card.id) },
         ...(verified ? { evidence_ref: verification.comment_ref, verified_at: verification.verified_at } : {})
       }}
     };
     writeFileSync(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, board_ref: adapter.tracker.board_ref, output: relative(projectRoot, outputPath), counts: { lists: lists.length, cards: cards.length, hydrated_cards: activeCards.length, comments: eventEntries.reduce((sum, [, value]) => sum + value.actions.filter((action) => action.type === "commentCard" || action.data?.text).length, 0), attachments: eventEntries.reduce((sum, [, value]) => sum + value.attachments.length, 0) }, guarantees: { tracker_writes_performed: false, secrets_exposed: false, full_board_comment_scan: false, all_actionable_cards_refreshed: true, state_scoped_signals: true, observed_at: observedAt } };
+    return { contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action, board_ref: adapter.tracker.board_ref, output: relative(projectRoot, outputPath), counts: { lists: lists.length, cards: cards.length, hydrated_cards: activeCards.length, comments: eventEntries.reduce((sum, [, value]) => sum + value.actions.filter((action) => action.type === "commentCard" || action.data?.text).length, 0), attachments: eventEntries.reduce((sum, [, value]) => sum + value.attachments.length, 0) }, guarantees: { tracker_writes_performed: false, secrets_exposed: false, full_board_comment_scan: false, all_actionable_cards_refreshed: true, comment_content_reconciled: true, state_scoped_signals: true, observed_at: observedAt } };
   }
 
   if (!input.cardRef) throw new Error("cardRef é obrigatório.");

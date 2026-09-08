@@ -45,7 +45,7 @@ function trackerSnapshot(adapter, cards, extra = {}) {
   const actionableRefs = new Set(order.slice(1, 7).map((state) => adapter.tracker.states[state]));
   const observedAt = "2026-08-28T12:00:00Z";
   const observedCards = cards.map((card) => actionableRefs.has(card.list_ref)
-    ? { ...card, signals: { ...card.signals, observed_list_ref: card.list_ref, observed_at: observedAt } }
+    ? { ...card, signals: { ...card.signals, observed_list_ref: card.list_ref, observed_at: observedAt, comment_content_reconciled: true } }
     : card);
   return {
     board_ref: adapter.tracker.board_ref,
@@ -60,7 +60,8 @@ function trackerSnapshot(adapter, cards, extra = {}) {
         observation: {
           scope: "all-actionable-cards",
           observed_at: observedAt,
-          card_refs: observedCards.filter((card) => actionableRefs.has(card.list_ref)).map((card) => card.ref)
+          card_refs: observedCards.filter((card) => actionableRefs.has(card.list_ref)).map((card) => card.ref),
+          content_read_card_refs: observedCards.filter((card) => actionableRefs.has(card.list_ref)).map((card) => card.ref)
         },
         evidence_ref: "trello-comment-test-fixture",
         verified_at: "2026-08-28T12:00:00Z"

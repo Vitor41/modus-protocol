@@ -32,8 +32,11 @@
         "work_slots": { "type": "array" },
         "guarantees": {
           "type": "object",
-          "required": ["all_actionable_cards_refreshed"],
-          "properties": { "all_actionable_cards_refreshed": { "type": "boolean" } }
+          "required": ["all_actionable_cards_refreshed", "comment_content_reconciled"],
+          "properties": {
+            "all_actionable_cards_refreshed": { "type": "boolean" },
+            "comment_content_reconciled": { "type": "boolean" }
+          }
         }
       }
     }

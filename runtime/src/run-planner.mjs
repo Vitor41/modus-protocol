@@ -243,13 +243,17 @@ export function planRun(input = {}) {
   const expectedObservedRefs = (snapshot.cards ?? []).filter((card) => actionableListRefs.has(card.list_ref)).map((card) => card.ref).sort();
   const observation = snapshot.integration.comments.observation;
   const actualObservedRefs = [...(observation?.card_refs ?? [])].sort();
+  const contentReadRefs = [...(observation?.content_read_card_refs ?? [])].sort();
   const observationComplete =
     observation?.scope === "all-actionable-cards" &&
     expectedObservedRefs.length === actualObservedRefs.length &&
     expectedObservedRefs.every((ref, index) => ref === actualObservedRefs[index]) &&
+    expectedObservedRefs.length === contentReadRefs.length &&
+    expectedObservedRefs.every((ref, index) => ref === contentReadRefs[index]) &&
     (snapshot.cards ?? []).filter((card) => actionableListRefs.has(card.list_ref))
-      .every((card) => card.signals?.observed_list_ref === card.list_ref && card.signals?.observed_at === observation.observed_at);
+      .every((card) => card.signals?.observed_list_ref === card.list_ref && card.signals?.observed_at === observation.observed_at && card.signals?.comment_content_reconciled === true);
   guarantees.all_actionable_cards_refreshed = observationComplete;
+  guarantees.comment_content_reconciled = observationComplete;
   if (observation?.observed_at) guarantees.snapshot_observed_at = observation.observed_at;
   if (mode === "live" && !observationComplete) {
     return {
