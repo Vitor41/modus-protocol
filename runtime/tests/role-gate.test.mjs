@@ -14,12 +14,12 @@ async function fixture(name) {
   return JSON.parse(await readFile(join(FIXTURE_DIR, name), "utf8"));
 }
 
-async function validateObject(value) {
+async function validateObject(value, expected = {}) {
   const root = await mkdtemp(join(tmpdir(), "role-gate-"));
   const handoffPath = join(root, "handoff.json");
   await writeFile(handoffPath, JSON.stringify(value), "utf8");
   try {
-    return validateRoleHandoff({ handoffPath, schemaPath: SCHEMA_PATH });
+    return validateRoleHandoff({ handoffPath, schemaPath: SCHEMA_PATH, ...expected });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -82,6 +82,22 @@ test("UX frontend exige mock anexado e relido no RUN_ID atual", async () => {
   assert.ok(wrongRun.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
 });
 
+test("UX preserva proveniência ao reutilizar mock aprovado de outro RUN_ID", async () => {
+  const handoff = await fixture("valid-ux.json");
+  handoff.iteration_kind = "return";
+  handoff.deliverable.attachments = [{
+    ref: "attachment-existing", name: "mock-existing.png", kind: "file",
+    run_id: "RUN-20260827-SOURCE01", specification_version: "ux-v1", readback_status: "confirmed",
+    reused: true, validated_in_run_id: handoff.run_id,
+    approval_evidence_ref: handoff.deliverable.human_approval.evidence_ref
+  }];
+  assert.equal((await validateObject(handoff)).status, "PASS");
+
+  handoff.deliverable.attachments[0].run_id = handoff.run_id;
+  const falsifiedOrigin = await validateObject(handoff);
+  assert.ok(falsifiedOrigin.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
+});
+
 test("DEV não conclui com teste falhando", async () => {
   const handoff = await fixture("valid-dev.json");
   handoff.deliverable.tests[0].result = "failed";
@@ -103,6 +119,21 @@ test("DEV concluído exige checkpoint", async () => {
   delete handoff.deliverable.checkpoint;
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+});
+
+test("DEV inicial parte da fila real e correção permanece em desenvolvimento", async () => {
+  const initial = await fixture("valid-dev.json");
+  assert.equal((await validateObject(initial)).status, "PASS");
+
+  const correction = structuredClone(initial);
+  correction.iteration_kind = "return";
+  correction.state = { from: "in_development", to: "in_development" };
+  assert.equal((await validateObject(correction)).status, "PASS");
+
+  const stale = structuredClone(initial);
+  stale.state.from = "in_development";
+  const result = await validateObject(stale);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
 });
 
 test("DEV não pode incluir autoaprovação de review", async () => {
@@ -269,4 +300,16 @@ test("handoff rejeita placeholder como evidência do agente", async () => {
   handoff.execution.observation.evidence_ref = "agent:placeholder-agent-id";
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_EVIDENCE_PLACEHOLDER"));
+});
+
+test("handoff precisa pertencer ao card, RUN_ID e papel esperados pelo plano", async () => {
+  const handoff = await fixture("valid-dev.json");
+  const result = await validateObject(handoff, {
+    expectedCardRef: "card-real-do-tracker",
+    expectedRunId: "RUN-20260828-OUTRO001",
+    expectedRole: "pipeline-qa"
+  });
+  assert.ok(result.diagnostics.some((item) => item.code === "HANDOFF_CARD_REF_MISMATCH"));
+  assert.ok(result.diagnostics.some((item) => item.code === "HANDOFF_RUN_ID_MISMATCH"));
+  assert.ok(result.diagnostics.some((item) => item.code === "HANDOFF_ROLE_MISMATCH"));
 });

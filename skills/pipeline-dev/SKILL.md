@@ -9,6 +9,8 @@ Entregue a menor fatia ponta a ponta que comprove os critérios sem transferir l
 
 Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. O DEV possui autonomia para corrigir implementação, testes, ambiente local autorizado, conflitos e refatorações locais necessárias ao card. Escale somente expansão estrutural de escopo, risco sistêmico ou autorização externa ausente.
 
+O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, anexos, lock e estado pela cápsula fresca recebida; não consulte nem escreva no Trello dentro deste papel. Falha de acesso ao tracker pelo especialista não invalida a entrada já confirmada pelo ORCHESTRATOR.
+
 ## Checkpoint antes de editar
 
 1. Confirme `RUN_ID`, card, lock, estado, branch, critérios e aprovação UX/UI quando aplicável.
@@ -33,7 +35,7 @@ Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/
 
 ## Entregar
 
-O card permanece em `in_development` até Code Review independente. Produza `schema/role-handoff.schema.json` com `role: pipeline-dev`, checkpoint, mudanças, testes, validações, especializações, diff revisado e riscos. Valide com `../../runtime/src/role-gate.mjs`.
+Na implementação inicial, o handoff representa a transição `ready_for_development → in_development`; em correções técnicas, permanece `in_development → in_development`. O card permanece em `in_development` até Code Review independente. Produza `schema/role-handoff.schema.json` com `role: pipeline-dev`, checkpoint, mudanças, testes, validações, especializações, diff revisado e riscos. Valide com `../../runtime/src/role-gate.mjs`.
 
 Não inclua `review_approved` ou `qa_approved`, não mova diretamente para validação e não declare sucesso de uma ferramenta cuja saída não foi observada.
 

@@ -340,9 +340,10 @@ test("snapshot preserva handoff DEV na fronteira da transição e ignora falso b
       if (value.includes("card-dev/attachments")) return new Response(JSON.stringify([]));
       if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
         { id: "false-block", type: "commentCard", date: "2026-09-08T02:39:51Z", data: { card: { id: "card-dev" }, text: "PIPELINE BLOCKER\nROLE: pipeline-run\nSTATUS: blocked\nREQUIRES_HUMAN: true\nCAUSE: sinal técnico não materializado" } },
-        { id: "lock-review", type: "commentCard", date: "2026-09-08T02:38:03Z", data: { card: { id: "card-dev" }, text: "CODEX LOCK\nROLE: pipeline-code-review\nSTATUS: active" } },
+        { id: "lock-review", type: "commentCard", date: "2026-09-08T02:39:03Z", data: { card: { id: "card-dev" }, text: "CODEX LOCK\nROLE: pipeline-code-review\nSTATUS: active" } },
+        { id: "dev-correction", type: "commentCard", date: "2026-09-08T02:38:30Z", data: { card: { id: "card-dev" }, text: "PIPELINE DEV HANDOFF\nROLE: pipeline-dev\nEVENT: role_handoff\nSTATUS: completed\nSTATE_FROM: in_development\nSTATE_TO: in_development\nITERATION_KIND: return\nNEXT_STEP: terceiro Code Review independente do diff refixado." } },
         { id: "move-dev", type: "updateCard", date: "2026-09-08T02:37:20Z", data: { listAfter: { id: "dev" } } },
-        { id: "dev-pass", type: "commentCard", date: "2026-09-08T02:37:02Z", data: { card: { id: "card-dev" }, text: "PIPELINE DEV HANDOFF / TRANSITION\nROLE: pipeline-dev\nVERDICT: PASS\nTRANSITION: ready_for_development -> in_development.\nNEXT STEP: Code Review independente." } }
+        { id: "dev-pass", type: "commentCard", date: "2026-09-08T02:37:02Z", data: { card: { id: "card-dev" }, text: "PIPELINE DEV HANDOFF / TRANSITION\nROLE: pipeline-dev\nEVENTS: role_handoff, transition\nSTATUS: completed\nSTATE_FROM: ready_for_development\nSTATE_TO: in_development\nNEXT_STEP: pipeline-code-review independente deve revisar o diff fixado; o card permanece em in_development durante a revisão." } }
       ]));
       return new Response(JSON.stringify([]));
     }});
@@ -350,7 +351,8 @@ test("snapshot preserva handoff DEV na fronteira da transição e ignora falso b
     assert.equal(snapshot.cards[0].signals.awaiting_human, false);
     assert.equal(snapshot.cards[0].signals.implementation_complete, true);
     assert.equal(snapshot.cards[0].signals.review_approved, false);
-    assert.equal(snapshot.cards[0].signals.implementation_evidence_ref, "dev-pass");
+    assert.equal(snapshot.cards[0].signals.implementation_evidence_ref, "dev-correction");
+    assert.equal(snapshot.cards[0].signals.review_evidence_ref, undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -373,6 +375,7 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
       ]));
       if (value.includes("/attachments")) return new Response(JSON.stringify([]));
       if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
+        { id: "review-capsule", type: "commentCard", date: "2026-09-08T11:05:00Z", data: { card: { id: "card-dev" }, text: "CONTEXT CAPSULE\nROLE: pipeline-code-review\nNEXT STEP: retornar ao DEV" } },
         { id: "review-return", type: "commentCard", date: "2026-09-08T11:04:00Z", data: { card: { id: "card-dev" }, text: "ROLE: pipeline-code-review\nSTATUS: return / changes_required\nSTATE_FROM: in_development\nSTATE_TO: in_development\nEVENT: role_handoff, blocker" } },
         { id: "move-dev", type: "updateCard", date: "2026-09-08T10:01:00Z", data: { listAfter: { id: "dev" } } },
         { id: "dev-pass", type: "commentCard", date: "2026-09-08T10:00:59Z", data: { card: { id: "card-dev" }, text: "ROLE: pipeline-dev\nVERDICT: PASS\nTRANSITION: ready_for_development -> in_development\nNEXT_ROLE: pipeline-code-review" } }
@@ -423,6 +426,47 @@ test("snapshot preserva Delivery Group da descrição e membro terminal para pre
     assert.deepEqual(snapshot.cards.map((card) => card.key), ["FP-201", "FP-202"]);
     assert.equal(snapshot.cards[0].delivery_group.mode, "optimization");
     assert.deepEqual(snapshot.delivery_groups.map((item) => item.id), ["fp-201-202"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("snapshot reconstrói somente o lock vigente da lista atual", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const lock = (runId) => `CODEX LOCK\nRUN_ID: ${runId}\nCARD_REF: card\nSTATE: in_development\nROLE: pipeline-dev\nSTATUS: active`;
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev", name: "EM DESENVOLVIMENTO", pos: 1 }]));
+      if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([
+        { id: "card-active", name: "FP-301 Ativo", idList: "dev", pos: 1 },
+        { id: "card-terminal", name: "FP-302 Concluído", idList: "dev", pos: 2 },
+        { id: "card-transitioned", name: "FP-303 Transicionado", idList: "dev", pos: 3 }
+      ]));
+      if (value.includes("/attachments")) return new Response(JSON.stringify([]));
+      if (value.includes("card-active/actions")) return new Response(JSON.stringify([
+        { id: "active-lock", type: "commentCard", date: "2026-09-08T10:00:00Z", data: { card: { id: "card-active" }, text: lock("RUN-20260908-AAAAAA01") } }
+      ]));
+      if (value.includes("card-terminal/actions")) return new Response(JSON.stringify([
+        { id: "terminal-handoff", type: "commentCard", date: "2026-09-08T10:01:00Z", data: { card: { id: "card-terminal" }, text: "RUN_ID: RUN-20260908-AAAAAA02\nROLE: pipeline-dev\nSTATUS: completed\nSTATE_FROM: in_development\nSTATE_TO: in_development\nEVENTS: role_handoff" } },
+        { id: "terminal-lock", type: "commentCard", date: "2026-09-08T10:00:00Z", data: { card: { id: "card-terminal" }, text: lock("RUN-20260908-AAAAAA02") } }
+      ]));
+      if (value.includes("card-transitioned/actions")) return new Response(JSON.stringify([
+        { id: "entered", type: "updateCard", date: "2026-09-08T10:02:00Z", data: { card: { id: "card-transitioned" }, listAfter: { id: "dev" } } },
+        { id: "old-lock", type: "commentCard", date: "2026-09-08T10:00:00Z", data: { card: { id: "card-transitioned" }, text: lock("RUN-20260908-AAAAAA03") } }
+      ]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    const cards = new Map(snapshot.cards.map((card) => [card.ref, card]));
+    assert.equal(cards.get("card-active").lock.status, "active");
+    assert.equal(cards.get("card-active").lock.run_id, "RUN-20260908-AAAAAA01");
+    assert.equal(cards.get("card-terminal").lock.status, "released");
+    assert.equal(cards.get("card-terminal").lock.updated_at, "2026-09-08T10:01:00Z");
+    assert.equal(cards.get("card-transitioned").lock, undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

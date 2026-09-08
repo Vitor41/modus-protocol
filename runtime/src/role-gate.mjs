@@ -65,7 +65,7 @@ function validateTransition(handoff, diagnostics) {
   const expectedSource = {
     "pipeline-po": "refinement",
     "pipeline-ux-ui": "ux_ui",
-    "pipeline-dev": iteration === "release" ? "ready_for_release" : "in_development",
+    "pipeline-dev": iteration === "release" ? "ready_for_release" : iteration === "initial" ? "ready_for_development" : "in_development",
     "pipeline-code-review": "in_development",
     "pipeline-qa": "ready_for_validation"
   }[role];
@@ -105,8 +105,14 @@ function validateTransition(handoff, diagnostics) {
     }
     const frontend = deliverable?.classification === "frontend";
     const approval = deliverable?.human_approval;
-    if (frontend && (!deliverable?.attachments?.length || deliverable.attachments.some((item) => item.readback_status !== "confirmed" || item.run_id !== handoff.run_id))) {
-      diagnostic(diagnostics, "UX_VISUAL_ATTACHMENT_MISSING", "deliverable.attachments", "Frontend exige mock ou protótipo anexado, relido e vinculado ao RUN_ID atual.");
+    const validVisualAttachment = (item) => {
+      if (item.readback_status !== "confirmed") return false;
+      if (item.run_id === handoff.run_id) return item.reused !== true;
+      return handoff.iteration_kind === "return" && handoff.context?.capsule_reused === true && item.reused === true &&
+        item.validated_in_run_id === handoff.run_id && item.approval_evidence_ref === approval?.evidence_ref;
+    };
+    if (frontend && (!deliverable?.attachments?.length || deliverable.attachments.some((item) => !validVisualAttachment(item)))) {
+      diagnostic(diagnostics, "UX_VISUAL_ATTACHMENT_MISSING", "deliverable.attachments", "Frontend exige mock anexado e relido no run de origem, ou reúso explícito com aprovação vigente e revalidação no RUN_ID atual.");
     }
     if (status === "completed" && frontend && (!approval?.required || !approval?.evidence_ref)) {
       diagnostic(diagnostics, "UX_APPROVAL_MISSING", "deliverable.human_approval", "Frontend não pode avançar sem aprovação humana vigente.");
@@ -133,7 +139,8 @@ function validateTransition(handoff, diagnostics) {
       }
     } else {
       const expected = status === "return" ? "refinement" : "in_development";
-      if (state.from !== "in_development" || state.to !== expected) {
+      const expectedDevSource = iteration === "initial" ? "ready_for_development" : "in_development";
+      if (state.from !== expectedDevSource || state.to !== expected) {
         diagnostic(diagnostics, "DEV_TRANSITION_INVALID", "state", `O handoff de DEV deveria terminar em ${expected}.`);
       }
       if (status === "completed") {
@@ -288,6 +295,15 @@ export function validateRoleHandoff(input = {}) {
       );
     }
   } else {
+    if (input.expectedCardRef && handoff.card.ref !== input.expectedCardRef) {
+      diagnostic(diagnostics, "HANDOFF_CARD_REF_MISMATCH", "card.ref", `O handoff deveria pertencer ao card ${input.expectedCardRef}.`);
+    }
+    if (input.expectedRunId && handoff.run_id !== input.expectedRunId) {
+      diagnostic(diagnostics, "HANDOFF_RUN_ID_MISMATCH", "run_id", `O handoff deveria pertencer ao RUN_ID ${input.expectedRunId}.`);
+    }
+    if (input.expectedRole && handoff.role !== input.expectedRole) {
+      diagnostic(diagnostics, "HANDOFF_ROLE_MISMATCH", "role", `O handoff deveria pertencer ao papel ${input.expectedRole}.`);
+    }
     validateExecutionReceipt(handoff, diagnostics);
     validateTransition(handoff, diagnostics);
   }
@@ -314,6 +330,9 @@ function parseArguments(argv) {
       index += 1;
       if (argument === "--handoff") options.handoffPath = value;
       else if (argument === "--schema") options.schemaPath = value;
+      else if (argument === "--expected-card-ref") options.expectedCardRef = value;
+      else if (argument === "--expected-run-id") options.expectedRunId = value;
+      else if (argument === "--expected-role") options.expectedRole = value;
       else if (argument === "--format") options.format = value;
       else throw new Error(`Argumento desconhecido: ${argument}`);
     }
@@ -325,7 +344,7 @@ const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLT
 if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
-    if (options.help) process.stdout.write("Uso: node runtime/src/role-gate.mjs --handoff <arquivo> [--format text|json]\n");
+    if (options.help) process.stdout.write("Uso: node runtime/src/role-gate.mjs --handoff <arquivo> [--expected-card-ref <ref> --expected-run-id <RUN_ID> --expected-role <papel>] [--format text|json]\n");
     else {
       const result = validateRoleHandoff(options);
       if ((options.format ?? "text") === "json") process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

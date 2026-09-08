@@ -350,20 +350,21 @@ test("review devolvido vai ao DEV enquanto handoff pendente é reconciliado sem 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("gate humano na faixa técnica preserva WIP um sem paralisar PO e UX", async () => {
+test("gate humano de release libera o próximo DEV sem paralisar PO e UX", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
       { ref: "release", key: "FX-224", title: "Aguardar produção", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { awaiting_human: true, human_gate_kind: "production_approval", production_approval_valid: false } },
-      { ref: "next-dev", key: "FX-225", title: "Não abrir segunda branch", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
+      { ref: "next-dev", key: "FX-225", title: "Próxima entrega sequencial", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
       { ref: "ux", key: "FX-226", title: "Desenhar", list_ref: adapter.tracker.states.ux_ui, position: 3 },
       { ref: "po", title: "Refinar", list_ref: adapter.tracker.states.refinement, position: 4 }
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "READY");
-    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["ux_ui", "po"]);
+    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["technical", "ux_ui", "po"]);
+    assert.equal(result.work_slots[0].key, "FX-225");
     assert.ok(result.blocked.some((item) => item.key === "FX-224" && item.reason === "HUMAN_GATE_PRODUCTION_APPROVAL"));
-    assert.ok(result.deferred.some((item) => item.key === "FX-225" && item.reason === "TECHNICAL_WIP_LIMIT"));
+    assert.ok(!result.deferred.some((item) => item.key === "FX-225"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -376,8 +377,40 @@ test("card técnico inválido ainda ocupa WIP e impede uma segunda branch", asyn
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "EMPTY");
+    assert.match(result.run_id, /^RUN-/u);
+    assert.deepEqual(result.work_slots, []);
     assert.ok(result.blocked.some((item) => item.card_ref === "qa-without-key" && item.reason === "CARD_KEY_MISSING"));
     assert.ok(result.deferred.some((item) => item.key === "FX-227" && item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("release aprovada recupera prioridade técnica antes de novo desenvolvimento", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "release", key: "FX-230", title: "Integrar release", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { production_approval_valid: true } },
+      { ref: "next-dev", key: "FX-231", title: "Próximo desenvolvimento", list_ref: adapter.tracker.states.ready_for_development, position: 2 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.work_slots[0].key, "FX-230");
+    assert.equal(result.work_slots[0].action, "prepare-release");
+    assert.ok(result.deferred.some((item) => item.key === "FX-231" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("plano vazio por gate humano mantém contrato de encerramento completo", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "release", key: "FX-232", title: "Aguardar aprovação", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { awaiting_human: true, human_gate_kind: "production_approval", production_approval_valid: false } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: "RUN-20260908-ABCDEF12" });
+    assert.equal(result.status, "EMPTY");
+    assert.equal(result.run_id, "RUN-20260908-ABCDEF12");
+    assert.deepEqual(result.work_slots, []);
+    assert.deepEqual(result.deferred, []);
+    assert.ok(result.blocked.some((item) => item.key === "FX-232"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -700,6 +733,27 @@ test("planner bloqueia card com lock ativo sem expirá-lo", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("planner retoma lock do mesmo RUN_ID explicitamente informado", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20260908-ABCDEF12";
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "card-own-lock",
+        key: "FX-006",
+        title: "Retomar trabalho próprio",
+        list_ref: adapter.tracker.states.ready_for_development,
+        position: 1,
+        lock: { run_id: runId, status: "active", role: "pipeline-dev", state: "ready_for_development" }
+      }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH, continueRunId: runId });
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, runId);
+    assert.equal(result.selected.card_ref, "card-own-lock");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("modo live exige doctor de cutover e apenas propõe aplicação", async () => {

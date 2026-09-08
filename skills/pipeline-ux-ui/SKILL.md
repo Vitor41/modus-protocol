@@ -9,6 +9,8 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 
 Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. Produzir, corrigir, converter, anexar e reconciliar a evidência visual pertence ao especialista; somente a aprovação humana da tela ou uma regra material realmente ausente interrompe este card.
 
+O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, anexos, lock e estado pela cápsula fresca recebida; não consulte nem escreva no Trello dentro deste papel. Entregue os artefatos ao ORCHESTRATOR para publicação e releitura canônicas.
+
 ## Classificar e especificar
 
 1. Confirme `RUN_ID`, card, lock, estado `ux_ui`, critérios vigentes e capsule.
@@ -20,7 +22,7 @@ Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. Produzir, c
 6. Se faltar regra de negócio material, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente e não solicite diretamente ao humano antes da investigação do PO.
 7. Não implemente código de produção durante este papel.
 8. Em toda classificação `frontend`, gere ao menos um mock ou protótipo visual consultável que represente a solução proposta; descrição textual isolada não atende ao gate.
-9. Anexe cada mock ao card pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. Confirme a releitura e registre no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID`, versão da especificação e `readback_status: confirmed`. Falha de formato, caminho, upload ou releitura exige correção/reconciliação pelo próprio papel; não registre `requires_human` por esse motivo.
+9. Entregue cada mock ao ORCHESTRATOR para anexação pelo launcher oficial com `trello --action attach-file` ou `attach-url`. São aceitos PNG, JPG, JPEG, WEBP, PDF e HTML dentro da raiz do projeto. O ORCHESTRATOR confirma a releitura e carimba no handoff a referência real do anexo, nome, hash (para arquivo), `RUN_ID` de origem, versão da especificação e `readback_status: confirmed`. Ao reutilizar design aprovado de run anterior, preserve o `run_id` original e declare `reused: true`, `validated_in_run_id: <RUN atual>` e `approval_evidence_ref`; é proibido atribuir ao anexo antigo o RUN atual como se ele tivesse sido criado novamente. Falha de formato, caminho, upload ou releitura exige correção/reconciliação operacional; não registre `requires_human` por esse motivo.
 10. Somente depois de gerar, anexar e reler a evidência visual registre a espera por `Tela aprovada`. Se não houver frontend, conclua o handoff sem criar mock ou espera artificial.
 11. Preserve no handoff o `delivery_group` definido pelo PO quando existir; UX/UI não cria, remove nem altera membros, modo ou dependências. Dúvida visual ou de negócio é bloqueio de `card`, salvo dependência determinante já declarada pelo PO.
 

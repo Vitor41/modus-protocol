@@ -6,8 +6,22 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.2.6] - 2026-09-08
+
 ### Adicionado
 
+- Kernel `0.2.6` libera a lane técnica quando uma entrega alcança `PRONTO PARA RELEASE` e aguarda validação humana; a próxima implementação segue sequencialmente, enquanto uma release aprovada recupera prioridade para integração Git.
+- Todo plano `EMPTY` passa a incluir `run_id` e `work_slots: []`, alinhando a saída do planner ao contrato obrigatório do gate de encerramento.
+- O recibo observável do launcher passa a fixar também o perfil superior do handoff, impedindo que um perfil autodeclarado incorreto rejeite uma execução lançada com modelo e esforço válidos.
+- O gate de DEV passa a aceitar a origem real `ready_for_development` na implementação inicial e mantém `in_development` para correções, alinhando planner, papel e movimento do tracker sem reescrever estado no handoff.
+- O launcher paralelo passa a manter um ledger de andamento, aguardar todas as lanes e devolver resultado `PARTIAL` com sucessos preservados, evitando repetir uma entrega quando outra lane falha.
+- O snapshot passa a reconhecer a conclusão inicial e as correções do DEV pelos campos estruturados do handoff, sem depender de uma frase literal em `NEXT_STEP`, evitando relançar trabalho já concluído.
+- O role gate passa a conferir card, `RUN_ID` e papel contra o slot planejado, impedindo que uma chave visual seja aceita no lugar do ID real do tracker.
+- Locks e cápsulas operacionais deixam de sobrescrever o último veredito do Code Review; somente comentários de Review com resultado terminal alteram o roteamento técnico.
+- O snapshot passa a reconstruir o lock vigente de cada card a partir dos comentários da lista atual; handoff terminal libera o lock, transição descarta lock da fase anterior e `--continue-run-id` retoma somente locks do próprio run.
+- O tracker fica sob responsabilidade exclusiva do ORCHESTRATOR durante uma execução: especialistas recebem contexto fresco pela cápsula e não repetem chamadas à API do Trello.
+- Reúso de mocks passa a preservar o `RUN_ID` de origem e exigir revalidação explícita no run atual vinculada à aprovação humana, evitando reatribuir evidência histórica ao novo run.
+- Resoluções humanas consumidas pelo PO passam obrigatoriamente a atualizar a descrição, regras e critérios do card antes do handoff.
 - Kernel `0.2.5` reconhece `BLOCKER_KIND`, `BLOCK_KIND` e `HUMAN_GATE` como aliases do mesmo gate, impedindo que um novo run atravesse bloqueio humano ainda não resolvido.
 - O PO deixa explícito que permissão, isolamento, visibilidade e retenção de dados não podem ser presumidos como detalhes implementáveis sem precedente inequívoco.
 - O launcher de papéis passa a ser a rota canônica mesmo quando há colaboração exposta e só devolve controle com todos os jobs terminais; o plano publica essa barreira para impedir encerramento em “agente em andamento”.

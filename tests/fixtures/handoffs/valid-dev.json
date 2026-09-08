@@ -11,7 +11,7 @@
   },
   "status": "completed",
   "iteration_kind": "initial",
-  "state": { "from": "in_development", "to": "in_development" },
+  "state": { "from": "ready_for_development", "to": "in_development" },
   "summary": "Fatia vertical implementada e pronta para revisão independente.",
   "context": { "capsule_reused": true, "read_paths": ["src/feature", "tests/feature"] },
   "evidence": [

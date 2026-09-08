@@ -284,7 +284,7 @@ export function planRun(input = {}) {
 
   const stateByList = new Map(Object.entries(adapter.tracker.states).map(([state, ref]) => [ref, state]));
   const activeExecution = snapshot.active_execution?.status === "active" ? snapshot.active_execution : undefined;
-  let ignoredLockRunId;
+  let ignoredLockRunId = input.continueRunId;
   let continuationRunId = input.continueRunId;
   let resumableCardRef;
   if (activeExecution?.architecture === "unified") {
@@ -391,13 +391,19 @@ export function planRun(input = {}) {
       (left.key ?? left.card_ref).localeCompare(right.key ?? right.card_ref)
   );
 
+  const id = continuationRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
   if (eligible.length === 0) {
     return {
-      contract_version: "0.1",
+      contract_version: "0.2",
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
       status: "EMPTY",
-      batch_policy: "single-card-v0.2",
+      batch_policy: "upstream-concurrency-technical-wip1-v0.2",
+      run_id: id,
+      continuing: Boolean(continuationRunId),
+      resuming: Boolean(resumableCardRef),
+      work_slots: [],
+      deferred: [],
       doctor,
       blocked,
       recovery_policy: RECOVERY_POLICY,
@@ -405,7 +411,6 @@ export function planRun(input = {}) {
     };
   }
 
-  const id = continuationRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
   const allByKey = new Map([...cardsByKey.values()].map((card) => [card.key, card]));
   const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
   const continuationPolicy = {
@@ -465,11 +470,12 @@ export function planRun(input = {}) {
     return { job, memberRefs: batchMembers.map((card) => card.card_ref) };
   }
 
-  const technicalInFlightStates = new Set(["in_development", "ready_for_validation", "ready_for_release"]);
+  const technicalInFlightStates = new Set(["in_development", "ready_for_validation"]);
   const technicalOccupied = snapshot.cards.some((card) => technicalInFlightStates.has(stateByList.get(card.list_ref)));
+  const approvedReleaseSeed = eligible.find((card) => card.state === "ready_for_release");
   const technicalSeed = technicalOccupied
     ? eligible.find((card) => technicalInFlightStates.has(card.state))
-    : eligible.find((card) => card.state === "ready_for_development");
+    : approvedReleaseSeed ?? eligible.find((card) => card.state === "ready_for_development");
   const uxSeed = eligible.find((card) => card.state === "ux_ui");
   const poSeed = technicalSeed?.skill === "pipeline-po" ? undefined : eligible.find((card) => card.state === "refinement");
   const seeds = [["technical", technicalSeed], ["ux_ui", uxSeed], ["po", poSeed]].filter(([, seed]) => seed);
@@ -485,7 +491,9 @@ export function planRun(input = {}) {
     const deferred = eligible.map(({ snapshot_index, ...card }) => ({ ...card, reason: card.state === "ready_for_development" && technicalOccupied ? "TECHNICAL_WIP_LIMIT" : "LANE_CAPACITY" }));
     return {
       contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode,
-      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", doctor, blocked, deferred, recovery_policy: RECOVERY_POLICY, guarantees
+      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", run_id: id,
+      continuing: Boolean(continuationRunId), resuming: Boolean(resumableCardRef), work_slots: [],
+      doctor, blocked, deferred, recovery_policy: RECOVERY_POLICY, guarantees
     };
   }
   const selected = workSlots[0];
@@ -503,7 +511,7 @@ export function planRun(input = {}) {
       policy: "upstream-concurrency-technical-wip1-v0.2",
       launch_strategy: "parallel-when-independent",
       capacities: { po: 1, ux_ui: 1, technical: 1 },
-      technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation", "ready_for_release"] },
+      technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation"], release_wait_frees_slot: true },
       completion: "drain-all-eligible-work-before-stop",
       agent_completion_barrier: "terminal-handoff-before-replan"
     },

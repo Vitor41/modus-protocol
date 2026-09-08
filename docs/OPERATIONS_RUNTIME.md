@@ -83,7 +83,7 @@ Quando colaboração não estiver exposta, o launcher recebe um manifest de até
 pipeline.ps1 role-launch --project-root <projeto> --manifest <arquivo-json> --format json
 ```
 
-Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher inicia todos em paralelo e devolve um recibo individual com o ID real de cada tarefa.
+Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher inicia todos em paralelo, mantém o andamento observável em `<manifest>.status.json` e devolve um recibo individual com o ID real de cada tarefa. Se apenas parte das lanes falhar, o resultado `PARTIAL` preserva os handoffs concluídos e permite recuperar somente as lanes com `job_status: failed`.
 
 `DELIVERY GROUP` é declarado somente pelo PO e pode ser:
 
@@ -96,13 +96,14 @@ Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O
 
 O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário. Para cada card acionável, o runtime lê o conteúdo atual dos comentários, registra a referência/data e a autoria indicativa do último comentário e materializa sinais humanos reconhecidos; a contagem é somente telemetria. `content_read_card_refs` e `comment_content_reconciled` comprovam essa reconciliação antes do plano e do gate de encerramento. Quando necessário para resolver precedência, inclui `delivery_groups` e membros terminais do grupo, sem executar leitura completa de comentários de cards não acionáveis.
 
-O integrador deriva sinais da lista atual e dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. Um comentário só cria espera humana se declarar uma categoria canônica; o nome do papel ou `REQUIRES_HUMAN` isolado não basta. O handoff que provoca uma transição pertence à fronteira da nova fase por uma janela máxima de quinze minutos; assim, `pipeline-dev PASS` seguido da entrada em desenvolvimento materializa `implementation_complete` e conduz ao Review. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
+O integrador deriva sinais da lista atual e dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. Um comentário só cria espera humana se declarar uma categoria canônica; o nome do papel ou `REQUIRES_HUMAN` isolado não basta. O handoff que provoca uma transição pertence à fronteira da nova fase por uma janela máxima de quinze minutos; assim, `pipeline-dev PASS` seguido da entrada em desenvolvimento materializa `implementation_complete` e conduz ao Review. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. O lock mais recente da lista atual também é reconstruído: resultado terminal o libera e a transição supera locks da fase anterior. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
 
 Um handoff concluído que declara transição mas permanece na lista de origem materializa `pending_transition`. O planner emite um slot operacional que relê o comentário e retoma somente gate e movimento, sem consumir outro agente de papel. O gate aceita até cinco segundos de diferença de relógio entre o timestamp do Trello e o do host; a confirmação causal e o hash continuam obrigatórios. Review `changes_required` e QA `rejected` são retornos automáticos ao DEV, não bloqueios.
 
 ## Limites atuais
 
 - O runtime possui cliente Trello determinístico, mas lê credenciais somente do provider externo declarado no adapter e nunca as incorpora ao núcleo.
+- Durante um run, somente o ORCHESTRATOR usa esse cliente. Especialistas recebem o snapshot e a cápsula frescos e devolvem artefatos para persistência centralizada, sem repetir acesso ao Trello.
 - Movimentações reais foram comprovadas no Piloto A; métricas de PO e UX/UI continuam sendo consolidadas nas execuções iniciadas em `REFINAMENTO`.
 - O protocolo físico de comentários e o gate executável exigem escrita + releitura antes da transição e foram comprovados nos dois projetos.
 - Piloto A e Projeto Piloto B possuem adapters repo-scoped, com roteamento exclusivo para `pipeline-run`; uma atualização do plugin passa a ser a fonte única do runtime em ambos.

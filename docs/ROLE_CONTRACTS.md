@@ -29,8 +29,8 @@ node runtime/src/role-gate.mjs --handoff <arquivo> --format json
 | Papel | Evidência mínima | Transição de sucesso |
 |---|---|---|
 | PO | Escopo, regras, critérios, impactos e ausência de pergunta material aberta | `refinement → ux_ui` |
-| UX/UI | Classificação; em frontend, fluxo, estados, acessibilidade, responsividade e aprovação vigente | `ux_ui → ready_for_development` |
-| DEV | Checkpoint, baseline, mudanças, testes, validações e diff revisado | Permanece em `in_development` para review |
+| UX/UI | Classificação; em frontend, fluxo, estados, acessibilidade, responsividade, aprovação vigente e proveniência dos mocks | `ux_ui → ready_for_development` |
+| DEV | Checkpoint, baseline, mudanças, testes, validações e diff revisado | Inicial: `ready_for_development → in_development`; correção: permanece em `in_development` para review |
 | Code Review | Diff fixado, eixos SPEC/STANDARDS, testes observados e veredito | `in_development → ready_for_validation` |
 | QA | Commit fixado e matriz critério × cenário × evidência × resultado | `ready_for_validation → ready_for_release` |
 
@@ -40,6 +40,7 @@ Retornos seguem a máquina canônica. Papel bloqueado permanece no estado atual.
 
 - PO inicial não pula UX/UI, mesmo quando suspeita que não há frontend.
 - UX/UI não aprova a própria especificação.
+- Mock novo pertence ao `RUN_ID` que o anexou; mock aprovado reutilizado preserva esse run de origem e registra separadamente a revalidação e a aprovação do run atual.
 - DEV não edita antes de `APTO PARA IMPLEMENTAR`, não conclui com falha e não registra autoaprovação de Review/QA.
 - Review não reprova sem achado acionável e não aprova com achado crítico/alto.
 - QA não aprova cenário falho nem reprova sem falha reproduzível.

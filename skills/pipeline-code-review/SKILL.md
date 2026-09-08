@@ -9,6 +9,8 @@ Avalie a entrega fixada sem assumir autoria ou corrigir durante a revisão.
 
 Use `../../docs/AUTONOMY_POLICY.md` para classificar o destino dos achados. Defeito técnico dentro do escopo sempre retorna ao DEV; severidade alta não significa, por si só, intervenção humana.
 
+O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock e estado pela cápsula fresca recebida; não consulte nem escreva no Trello dentro deste papel. Falha de acesso ao tracker pelo especialista não invalida a entrada já confirmada pelo ORCHESTRATOR.
+
 ## Revisar
 
 1. Confirme `RUN_ID`, card, lock, estado `in_development`, baseline, commit/diff fixado, critérios e evidências do DEV.

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.5` |
+| Versão | `0.2.6` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -81,6 +81,9 @@ Uma execução é reprovada independentemente da pontuação quando:
 - executa quarto ciclo automático no mesmo loop.
 
 Gates rígidos são avaliados por regra determinística sempre que possível e por revisão humana quando dependem de semântica de negócio ou UX/UI.
+
+Casos de regressão do tracker devem comprovar também que um lock ativo da lista atual bloqueia outro run, que um handoff terminal posterior libera o lock, que a transição descarta locks da fase anterior e que a retomada explícita aceita apenas o mesmo `RUN_ID`.
+O gate UX/UI deve reprovar tanto anexo novo atribuído a outro run quanto anexo histórico rebatizado com o run atual; reúso válido preserva a origem, comprova releitura atual e referencia a aprovação vigente.
 
 ## 6. Rubrica de qualidade
 
@@ -171,6 +174,13 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-PO-MATERIALITY-001` | PO tenta transformar ator, status inicial ou limite técnico dedutível em decisão humana. | Fixture | Role gate rejeita o bloqueio sem duas alternativas materiais, impacto comportamental e fontes investigadas. |
 | `EVAL-PO-BLOCK-ALIAS-001` | Bloqueio persistido usa o campo operacional `BLOCKER_KIND`. | Fixture + histórico real | Snapshot mantém a espera humana até `BLOQUEIO RESOLVIDO:` e impede PO/UX de atravessar o gate por alias não reconhecido. |
 | `EVAL-AGENT-LIFECYCLE-001` | Code Review foi lançado, mas a resposta do orquestrador terminou antes do handoff e o card permaneceu em desenvolvimento. | Fixture + piloto real NKT016 | Launcher retorna somente com `all-jobs-terminal`, nenhum job ativo e handoffs consumíveis; Review aprovado segue para QA no mesmo run. |
+| `EVAL-WIP-RELEASE-001` | Um card aguarda validação humana em `ready_for_release` enquanto outro está pronto para desenvolver. | Fixture + replay NKTree | A espera humana não ocupa a lane; o próximo DEV é selecionado sequencialmente. Após `APROVADO PARA PRD`, a integração Git recupera prioridade. |
+| `EVAL-EMPTY-CONTRACT-001` | O plano não tem slots porque restam apenas gates humanos ou WIP inválido. | Fixture | Todo plano `EMPTY` inclui `run_id` e `work_slots: []`, permitindo materializar o recibo e executar o run-close-gate sem adaptação manual. |
+| `EVAL-DEV-ENTRY-001` | Um DEV inicial é lançado a partir de `ready_for_development`, enquanto uma correção começa em `in_development`. | Fixture + replay FP | O gate aceita a origem real de cada iteração e rejeita estado reescrito pelo orquestrador. |
+| `EVAL-LAUNCHER-PARTIAL-001` | Duas lanes são lançadas; uma conclui e a outra falha antes do handoff. | Fixture + replay FP | O ledger termina com `active_jobs: 0`, retorna `PARTIAL`, preserva o job concluído e marca somente a lane falha para recuperação. |
+| `EVAL-DEV-PROGRESS-001` | DEV inicial ou de correção publica handoff estruturado válido com `STATE_FROM`, `STATE_TO` e `EVENTS`, mas usa uma frase livre em `NEXT_STEP`. | Fixture + replay NKT018/FP-069 | O snapshot deriva `implementation_complete` dos campos estruturados e direciona Code Review sem relançar o DEV. |
+| `EVAL-HANDOFF-IDENTITY-001` | Especialista troca o ID real do tracker pela chave visível do card no handoff. | Fixture + replay FP-069 | O role gate compara card, RUN_ID e papel com o slot planejado e exige apenas reparo mecânico da identidade. |
+| `EVAL-REVIEW-VERDICT-001` | Lock ou cápsula operacional do Review é publicado depois de `changes_required`. | Fixture + replay NKT018 | O snapshot considera somente comentários de Review com veredito terminal e preserva o retorno ao DEV. |
 | `EVAL-STATE-001` | Card saiu de UX/UI para desenvolvimento, mas conserva bloqueios antigos. | Fixture + board real somente leitura | A entrada na nova lista invalida gates da fase anterior e o planner seleciona DEV. |
 | `EVAL-STATE-002` | Card em UX/UI recebe evidência visual nova após aprovação anterior enquanto outro card foi desbloqueado no refinamento. | Fixture + board real somente leitura | Somente o card visual aguarda nova aprovação; o PO continua elegível no outro card. |
 

@@ -330,7 +330,10 @@
         "run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
         "specification_version": { "$ref": "#/$defs/nonEmptyString" },
         "content_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "readback_status": { "const": "confirmed" }
+        "readback_status": { "const": "confirmed" },
+        "reused": { "type": "boolean" },
+        "validated_in_run_id": { "type": "string", "pattern": "^RUN-[0-9]{8}-[A-Z0-9]{8}$" },
+        "approval_evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
       }
     },
     "checkpoint": {

@@ -70,6 +70,7 @@ export function finalizeHandoff({ handoff, request, role, threadId }) {
   if (handoff?.role !== role) throw new Error("O papel retornado diverge do papel solicitado.");
   return {
     ...handoff,
+    profile: request.profile,
     execution: {
       ...(handoff.execution ?? {}),
       request,
@@ -196,19 +197,53 @@ export async function launchRoles(input = {}, dependencies = {}) {
     if (!compatible) throw new Error(`Papel ${job.role} incompatível com a lane ${job.lane}.`);
   }
   const launch = dependencies.launchAsync ?? launchRoleAsync;
-  const jobs = manifest.jobs.map((job) => launch({ projectRoot, ...job }, dependencies));
-  const results = await Promise.all(jobs);
-  if (results.some((result) => result.status !== "PASS" || result.job_status !== "completed")) {
-    throw new Error("O launcher recebeu resultado não terminal de uma lane.");
-  }
-  return {
+  const statusPath = `${manifestPath}.status.json`;
+  const status = {
     contract_version: "0.2",
     tool: { name: "pipeline-role-launcher", version: PACKAGE.version },
-    status: "PASS",
+    status: "RUNNING",
     launch_strategy: "parallel",
-    completion_barrier: "all-jobs-terminal",
-    active_jobs: 0,
-    jobs: results
+    completion_barrier: "pending",
+    active_jobs: manifest.jobs.length,
+    jobs: manifest.jobs.map((job) => ({ lane: job.lane, role: job.role, handoff: job.handoff, job_status: "queued" }))
+  };
+  const persistStatus = () => writeFileSync(statusPath, `${JSON.stringify(status, null, 2)}\n`, "utf8");
+  persistStatus();
+  const executions = manifest.jobs.map(async (job, index) => {
+    status.jobs[index].job_status = "running";
+    persistStatus();
+    try {
+      const result = await launch({ projectRoot, ...job }, dependencies);
+      status.jobs[index] = { ...status.jobs[index], ...result };
+      return result;
+    } catch (error) {
+      const failure = {
+        contract_version: "0.2",
+        status: "FAIL",
+        job_status: "failed",
+        completion_barrier: "terminal-failure",
+        lane: job.lane,
+        role: job.role,
+        handoff: job.handoff,
+        error: diagnosticExcerpt(error?.message ?? error)
+      };
+      status.jobs[index] = failure;
+      return failure;
+    } finally {
+      status.active_jobs -= 1;
+      persistStatus();
+    }
+  });
+  const results = await Promise.all(executions);
+  const completed = results.filter((result) => result.status === "PASS" && result.job_status === "completed").length;
+  status.status = completed === results.length ? "PASS" : completed > 0 ? "PARTIAL" : "FAIL";
+  status.completion_barrier = "all-jobs-terminal";
+  status.active_jobs = 0;
+  status.jobs = results;
+  persistStatus();
+  return {
+    ...status,
+    status_ref: relative(projectRoot, statusPath).replaceAll("\\", "/")
   };
 }
 

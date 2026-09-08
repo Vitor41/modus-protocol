@@ -17,7 +17,8 @@ O snapshot normalizado contém:
 - por card acionável, `signals.observed_list_ref` e `signals.observed_at`, comprovando que os sinais pertencem à lista atual.
 
 Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência de sinal nunca equivale a aprovação.
-Comentários, bloqueios e aprovações anteriores à entrada na lista atual são históricos e não participam do gate presente. A exceção é a evidência de handoff que provoca a própria transição: um handoff técnico `PASS` até quinze minutos antes da entrada na lista de destino pertence à fronteira dessa fase e materializa o próximo papel. Em UX/UI, uma nova evidência visual posterior invalida a aprovação anterior e exige nova `Tela aprovada`; uma aprovação posterior à evidência vigente libera o handoff. Um `BLOQUEIO RESOLVIDO:` posterior encerra o bloqueio de negócio correspondente. Bloqueio genérico do `pipeline-run` não vira gate humano; somente os quatro gates humanos canônicos podem fazê-lo.
+Comentários, bloqueios e aprovações anteriores à entrada na lista atual são históricos e não participam do gate presente. A exceção é a evidência de handoff que provoca a própria transição: um handoff técnico `PASS` até quinze minutos antes da entrada na lista de destino pertence à fronteira dessa fase e materializa o próximo papel. Em UX/UI, uma nova evidência visual posterior invalida a aprovação anterior e exige nova `Tela aprovada`; uma aprovação posterior à evidência vigente libera o handoff. Um `BLOQUEIO RESOLVIDO:` posterior encerra o bloqueio de negócio correspondente. Bloqueio genérico do `pipeline-run` não vira gate humano; somente as categorias canônicas da política de autonomia podem fazê-lo.
+O snapshot reconstrói o lock mais recente da lista atual. Um resultado terminal posterior do mesmo papel libera o lock; uma transição confirmada supera locks da fase anterior. Um novo gatilho respeita locks ativos externos, enquanto `--continue-run-id` pode retomar somente locks pertencentes ao próprio run.
 
 ## Sequência de escrita
 
@@ -25,7 +26,8 @@ Comentários, bloqueios e aprovações anteriores à entrada na lista atual são
 2. Validação da capacidade de comentário conforme `tracker-comment-protocol.md`.
 3. Registro de lock ativo com `RUN_ID`, card, estado, papel e timestamp, seguido de releitura.
 4. Registro ou atualização da cápsula, seguido de releitura.
-5. Lançamento explícito e simultâneo de todos os slots independentes com modelo e esforço do planner pelo `pipeline.ps1 role-launch --manifest`. O launcher é a rota canônica e só retorna depois de todos os jobs alcançarem estado terminal; colaboração direta é recuperação após falha concreta do launcher e exige espera equivalente.
+5. Lançamento explícito e simultâneo de todos os slots independentes com modelo e esforço do planner pelo `pipeline.ps1 role-launch --manifest`. O launcher é a rota canônica, publica `<manifest>.status.json` durante a execução e só retorna depois de todos os jobs alcançarem estado terminal. Resultado `PARTIAL` preserva jobs concluídos e recupera apenas os que falharam; colaboração direta é recuperação após falha concreta do launcher e exige espera equivalente.
+   O ORCHESTRATOR é o único proprietário das leituras e escritas do tracker. Cada especialista recebe no prompt/cápsula o card, comentários, anexos e sinais frescos necessários e não consulta o Trello novamente; indisponibilidade do tracker dentro do agente de papel não invalida uma cápsula confirmada pelo ORCHESTRATOR.
 6. Registro do recibo de lançamento e execução do papel selecionado.
 7. Publicação e releitura da evidência do gate.
 8. Nova releitura do lock e do estado.
@@ -40,7 +42,7 @@ Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma
 
 ## Continuação automática
 
-O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. `work_slots` declara até três lanes: PO, UX/UI e técnica. PO e UX/UI podem atuar simultaneamente com a entrega técnica; a lane técnica mantém WIP igual a um desde a entrada em DEV até o merge da release. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o mesmo agente os processa sequencialmente. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente quando seus gates passam.
+O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. `work_slots` declara até três lanes: PO, UX/UI e técnica. PO e UX/UI podem atuar simultaneamente com a entrega técnica; a lane técnica mantém um único papel ativo entre DEV, Code Review e QA. A chegada a `ready_for_release` libera a próxima implementação sequencial enquanto o card aguarda validação humana; uma aprovação para PRD devolve prioridade à integração Git antes de outro DEV. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o mesmo agente os processa sequencialmente. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente quando seus gates passam.
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 

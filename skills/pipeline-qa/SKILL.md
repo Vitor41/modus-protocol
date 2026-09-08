@@ -9,6 +9,8 @@ Comprove o comportamento do candidato fixado sem corrigir a entrega durante a va
 
 Antes de declarar bloqueio, aplique `../../docs/AUTONOMY_POLICY.md`. QA recupera ambiente e massa de teste dentro das capacidades autorizadas; defeito do candidato retorna ao DEV e nunca vira pedido de decisão humana.
 
+O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock e estado pela cápsula fresca recebida; não consulte nem escreva no Trello dentro deste papel. Falha de acesso ao tracker pelo especialista não invalida a entrada já confirmada pelo ORCHESTRATOR.
+
 ## Preparar
 
 1. Confirme `RUN_ID`, card, lock, estado `ready_for_validation`, commit fixado, critérios, handoff de review e ambiente autorizado.

@@ -155,6 +155,43 @@ function structuredField(text, name) {
   return text.match(new RegExp(`^${name}:\\s*(.+)$`, "imu"))?.[1]?.trim();
 }
 
+function lockState(comments, enteredAt) {
+  const phaseComments = chronological(after(comments, enteredAt));
+  const locks = phaseComments.filter((comment) => /^CODEX LOCK(?:\s|\u2014|-|$)/iu.test(String(comment.text ?? "").trim()));
+  const latest = locks.at(-1);
+  if (!latest) return undefined;
+
+  const text = String(latest.text ?? "");
+  const runId = structuredField(text, "RUN_ID");
+  const rawStatus = structuredField(text, "STATUS")?.toLowerCase();
+  if (!runId || !["active", "released", "blocked", "completed"].includes(rawStatus)) return undefined;
+
+  let status = rawStatus === "completed" ? "released" : rawStatus;
+  let updatedAt = latest.date;
+  if (status === "active") {
+    const role = structuredField(text, "ROLE")?.toLowerCase();
+    const terminal = phaseComments.find((comment) => {
+      if (String(comment.date) <= String(latest.date)) return false;
+      const terminalText = String(comment.text ?? "");
+      if (structuredField(terminalText, "RUN_ID") !== runId) return false;
+      if (role && structuredField(terminalText, "ROLE")?.toLowerCase() !== role) return false;
+      return /^(?:VERDICT|STATUS):\s*(?:PASS|APPROVED|COMPLETED|RETURN|REJECTED|CHANGES_REQUIRED|BLOCKED)\b/imu.test(terminalText);
+    });
+    if (terminal) {
+      status = /^(?:VERDICT|STATUS):\s*BLOCKED\b/imu.test(String(terminal.text ?? "")) ? "blocked" : "released";
+      updatedAt = terminal.date;
+    }
+  }
+
+  return {
+    run_id: runId,
+    status,
+    ...(structuredField(text, "ROLE") ? { role: structuredField(text, "ROLE").toLowerCase() } : {}),
+    ...(structuredField(text, "STATE") ? { state: structuredField(text, "STATE").toLowerCase() } : {}),
+    ...(updatedAt ? { updated_at: updatedAt } : {})
+  };
+}
+
 function structuredHumanBlock(text, state) {
   if (!/^STATUS:\s*blocked\s*$/imu.test(text) || !/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text)) return undefined;
   const role = structuredField(text, "ROLE")?.toLowerCase();
@@ -214,8 +251,14 @@ function technicalProgress(comments, enteredAt, state) {
   const boundaryComments = chronological(transitionBoundaryComments(comments, enteredAt));
   const devPasses = boundaryComments.filter((comment) => {
     const text = String(comment.text ?? "");
+    const from = structuredField(text, "STATE_FROM")?.toLowerCase();
+    const to = structuredField(text, "STATE_TO")?.toLowerCase();
+    const events = structuredField(text, "(?:EVENT|EVENTS)")?.toLowerCase() ?? "";
+    const structuredTransition = ["ready_for_development", "in_development"].includes(from) && to === "in_development" &&
+      events.includes("role_handoff") && (from === "in_development" || events.includes("transition"));
     return roleIs(text, "pipeline-dev") && positiveVerdict(text) &&
-      (/^TRANSITION:\s*ready_for_development\s*->\s*in_development\.?\s*$/imu.test(text) ||
+      (structuredTransition ||
+       /^TRANSITION:\s*ready_for_development\s*->\s*in_development\.?\s*$/imu.test(text) ||
        /^NEXT STEP:\s*Code Review independente\.?\s*$/imu.test(text) ||
        /^NEXT_ROLE:\s*pipeline-code-review\s*$/imu.test(text));
   });
@@ -223,7 +266,8 @@ function technicalProgress(comments, enteredAt, state) {
   if (!devPass) return { implementation_complete: false, review_approved: false };
   const reviews = boundaryComments.filter((comment) => {
     const text = String(comment.text ?? "");
-    return String(comment.date) >= String(devPass.date) && roleIs(text, "pipeline-code-review");
+    const hasVerdict = positiveVerdict(text) || /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text);
+    return String(comment.date) >= String(devPass.date) && roleIs(text, "pipeline-code-review") && hasVerdict;
   });
   const review = reviews.at(-1);
   const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
@@ -396,6 +440,7 @@ export async function executeTrelloComment(input = {}) {
       const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions, exactResolutionKind });
       const progress = technicalProgress(allComments, enteredAt, state);
       const transition = pendingTransition(comments, state);
+      const lock = lockState(allComments, enteredAt);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);
       const screenApprovalAt = latestExactDate(comments, gate.screen_approval ?? "Tela aprovada");
       const productionApprovalAt = latestExactDate(comments, gate.production_approval ?? "APROVADO PARA PRD");
@@ -420,6 +465,7 @@ export async function executeTrelloComment(input = {}) {
         ...(screenApprovalAt ? { screen_approval_at: screenApprovalAt } : {}),
         ...(productionApprovalAt ? { production_approval_at: productionApprovalAt } : {})
       };
+      if (lock) item.lock = lock;
       return item;
     });
     for (const card of cards.filter((card) => !activeRefs.has(card.idList) && groupByCard.has(card.id))) {
