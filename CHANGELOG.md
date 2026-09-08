@@ -8,6 +8,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.2.0` introduz agenda com até três lanes independentes (`po`, `ux_ui` e `technical`), execução paralela por colaboração ou manifest e WIP técnico igual a um até o merge.
+- O snapshot materializa a conclusão do DEV a partir do handoff que causa a transição, preservando sua evidência mesmo quando o comentário antecede a movimentação por poucos segundos.
 - Kernel `0.1.19` deriva gates por fase a partir da lista atual, histórico de movimentações, comentários e anexos frescos de cada card acionável.
 - Kernel `0.1.18` comprova no snapshot a releitura de todos os cards acionáveis e bloqueia planejamento live quando essa cobertura estiver incompleta.
 - Kernel `0.1.17` torna `pipeline-run` descobrível pelo gatilho em linguagem natural e adiciona `role-launch`, uma rota oficial pelo Codex CLI para lançar papéis com modelo/esforço explícitos quando a conversa não expõe colaboração.
@@ -32,6 +34,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- Bloqueios técnicos genéricos publicados pelo orquestrador deixam de ser interpretados como decisão humana; somente regra de negócio, tela, aprovação para PRD e limite de loop formam gates humanos.
+- O término de um papel ou o bloqueio isolado de um card deixa de encerrar a execução quando PO, UX/UI ou outra etapa da entrega técnica ainda possuem trabalho elegível.
 - Locks, cápsulas e bloqueios de fases anteriores deixam de sobrepor uma transição confirmada; o planner preserva o `RUN_ID`, reconstrói a continuidade pelo tracker e não cria gate humano por estado operacional obsoleto.
 - Nova evidência visual posterior invalida `Tela aprovada` anterior, e handoffs estruturados com `STATUS: blocked` e `REQUIRES_HUMAN: true` passam a ser reconhecidos independentemente do título do comentário.
 - Replay real de três cards confirma: DEV elegível após UX/UI, nova aprovação visual isolada e PO elegível após `BLOQUEIO RESOLVIDO:`.

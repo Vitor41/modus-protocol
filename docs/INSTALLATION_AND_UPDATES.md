@@ -39,13 +39,13 @@ O plugin instalado é um artefato. O repositório central é a origem. Alteraç�
 
 ## 3. Identidade e versões
 
-Identificador técnico compatível da série v0.1:
+Identificador técnico estável:
 
 ```text
 unified-development-pipeline
 ```
 
-O produto público se chama **Modus Protocol**. O identificador permanece estável na série v0.1 para não quebrar adapters já instalados. A versão do plugin segue SemVer e corresponde à release do Kernel incluída no pacote.
+O produto público se chama **Modus Protocol**. O identificador permanece estável entre versões para não quebrar adapters já instalados. A versão do plugin segue SemVer e corresponde à release do Kernel incluída no pacote.
 
 Adapter e plugin têm responsabilidades separadas:
 

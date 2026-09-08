@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.1.15` |
-| Versão do Kernel | `0.1.15` |
-| Estado | Candidata a release pública |
-| Data | 2026-08-31 |
+| Versão pública | `0.2.0` |
+| Versão do Kernel | `0.2.0` |
+| Estado | Publicada |
+| Data | 2026-09-08 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -15,7 +15,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Ela deve permitir que um projeto seja conectado a um núcleo comum sem copiar e evoluir isoladamente workflows, Skills, templates e políticas. O núcleo evolui uma vez; cada projeto preserva somente contexto, configurações e regras próprias.
 
-A v0.1 define a arquitetura e os contratos, implementa as oito Skills mínimas e empacota o núcleo como plugin reproduzível. Um piloto funcional ponta a ponta e um segundo cutover de integração comprovaram roteamento, Review e QA independentes, loops, Trello direto e compatibilidade entre adapters. Os casos foram anonimizados para publicação.
+A v0.2 consolida a arquitetura e os contratos, implementa as Skills mínimas e empacota o núcleo como plugin reproduzível. Um piloto funcional ponta a ponta e um segundo cutover de integração comprovaram roteamento, Review e QA independentes, loops, Trello direto e compatibilidade entre adapters. A agenda atual permite PO, UX/UI e uma unidade técnica simultâneos sem abrir branches funcionais concorrentes.
 
 Este documento é complementado por:
 
@@ -278,7 +278,7 @@ A v0.1 reutiliza os gates do Projeto Piloto B, sem criar colunas adicionais.
 - `Tela aprovada`: aprova a especificação UX/UI vigente.
 - `APROVADO PARA PRD`: autoriza a finalização da branch validada, push, PR e merge conforme o adaptador.
 - `BLOQUEIO RESOLVIDO:`: retoma um card bloqueado para decisão humana.
-- `Aguardando resposta humana`: impede novos handoffs automáticos do card afetado.
+- `Aguardando resposta humana`: impede novos handoffs somente quando acompanhado de papel, tipo de gate e escopo estruturados.
 
 O contrato exato de comparação, autoria e validade temporal dos comentários será definido no adaptador Trello. Como baseline, a aprovação deve ser posterior à evidência que pretende aprovar e perde validade quando essa evidência é substituída.
 
@@ -306,10 +306,10 @@ Responsável por:
 - verificar lock, dependências, gates e elegibilidade;
 - formar o lote;
 - entregar ao PO todos os cards elegíveis em refinamento antes de qualquer agrupamento;
-- escolher o papel ativo;
+- montar `work_slots` para PO, UX/UI e lane técnica;
 - classificar complexidade e perfil de execução;
 - acionar especializações quando justificadas;
-- preservar a ordem dos handoffs;
+- lançar simultaneamente as lanes independentes e preservar a ordem interna de cada uma;
 - impedir escrita paralela insegura;
 - atualizar locks e resumos;
 - encerrar quando não houver trabalho automático elegível.
@@ -479,14 +479,17 @@ O Kernel resolve esse mapeamento de forma determinística e o planner o inclui e
 
 Cada lote recebe um identificador de execução. O tracker guarda um lock operacional com papel, estado, responsável e atualização.
 
-Regras iniciais:
+Regras:
 
 - reler o lock antes de cada transição;
 - não processar o mesmo lote com identificadores concorrentes;
 - não expirar lock automaticamente sem uma política confiável;
 - permitir retomada somente com card, capsule e estado consistentes;
 - não permitir escrita paralela na mesma branch;
-- permitir paralelismo somente em investigação ou revisão independente sem conflito;
+- permitir uma lane de PO, uma de UX/UI e uma técnica simultâneas;
+- manter WIP técnico igual a um entre a entrada em DEV e o merge, incluindo Review, QA e espera para PRD;
+- processar sequencialmente os itens do mesmo papel; o PO esgota a fila de refinamento em um agente;
+- nunca abrir uma segunda branch funcional enquanto a lane técnica estiver ocupada;
 - devolver o controle ao ORCHESTRATOR em cada handoff.
 
 O mecanismo concreto será responsabilidade do adaptador do tracker.

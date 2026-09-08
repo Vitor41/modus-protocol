@@ -1,4 +1,4 @@
-# Runtime de Operações v0.1
+# Runtime de Operações v0.2
 
 Esta versão implementa as operações centrais e os gates executáveis da esteira:
 
@@ -48,26 +48,39 @@ Somente `PASS / GRANTED` autoriza a chamada de movimento. O recibo vincula comen
 
 Status:
 
-- `READY`: um card foi selecionado;
+- `READY`: existe uma agenda em `work_slots`; `selected` é apenas o primeiro slot para compatibilidade;
 - `EMPTY`: não existe trabalho automático elegível;
 - `BLOCKED`: uma falha global comprovada de contrato, doctor ou snapshot impede iniciar com segurança.
 
 Quando existe execução unificada ativa, o planner retoma diretamente se `RUN_ID`, card, estado, papel, lock e cápsula permanecerem consistentes. Se o tracker comprovar que o card já mudou de lista ou papel, a execução antiga é reconciliada: o `RUN_ID` é preservado, lock/cápsula obsoletos não prevalecem e o contexto operacional é reconstruído. Cápsula ausente não transforma uma fila atual e legível em gate humano. Execução legada ativa continua bloqueante.
 
-## Política de fila e Delivery Groups v0.2
+## Política de lanes, fila e Delivery Groups v0.2
 
-O planner prioriza:
+O planner mantém até três capacidades independentes:
+
+- uma execução de PO que esgota sequencialmente todos os cards elegíveis em refinamento;
+- uma execução de UX/UI;
+- uma unidade técnica com WIP igual a um, cobrindo entrada em DEV, implementação, Code Review, QA e release.
+
+Quando as três capacidades possuem trabalho elegível, `work_slots` contém as três e o orquestrador deve lançá-las antes de aguardar resultados. A lane técnica prioriza:
 
 1. release já aprovada;
 2. QA pendente;
 3. implementação/review em andamento;
 4. entrada de DEV;
-5. UX/UI;
-6. refinamento.
+5. nenhuma nova entrega técnica enquanto existir uma unidade em andamento ou aguardando aprovação para PRD.
 
 Dentro do mesmo estado, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 
-Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra a fila enquanto houver outro card ou grupo elegível.
+Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra as outras lanes. Uma nova entrega em `PRONTO PARA DESENVOLVER` só começa quando a unidade técnica anterior sai do fluxo automatizado, evitando branches funcionais simultâneas.
+
+Quando colaboração não estiver exposta, o launcher recebe um manifest de até três jobs:
+
+```text
+pipeline.ps1 role-launch --project-root <projeto> --manifest <arquivo-json> --format json
+```
+
+Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher inicia todos em paralelo e devolve um recibo individual com o ID real de cada tarefa.
 
 `DELIVERY GROUP` é declarado somente pelo PO e pode ser:
 
@@ -80,7 +93,7 @@ Depois disso, o orquestrador drena o trabalho independente na mesma execução. 
 
 O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário. Quando necessário para resolver precedência, inclui `delivery_groups` e membros terminais do grupo, sem executar leitura completa de comentários do board.
 
-O integrador deriva sinais da lista atual e somente dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
+O integrador deriva sinais da lista atual e dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. O handoff que provoca uma transição pertence à fronteira da nova fase por uma janela máxima de quinze minutos; assim, `pipeline-dev PASS` seguido da entrada em desenvolvimento materializa `implementation_complete` e conduz ao Review. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
 
 ## Limites atuais
 

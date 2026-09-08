@@ -85,7 +85,9 @@
         "production_approval_at": { "$ref": "#/$defs/nonEmptyString" },
         "business_question": { "type": "boolean" },
         "implementation_complete": { "type": "boolean" },
+        "implementation_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "review_approved": { "type": "boolean" },
+        "review_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "qa_approved": { "type": "boolean" }
       }
     },

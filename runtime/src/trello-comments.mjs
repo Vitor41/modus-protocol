@@ -114,18 +114,29 @@ function stateEntryDate(actions, listRef) {
   return latestDate(actions, (action) => action.type === "updateCard" && action.data?.listAfter?.id === listRef);
 }
 
-function structuredHumanBlock(text) {
-  return /^STATUS:\s*blocked\s*$/imu.test(text) &&
-    (/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text) || /^EVENT(?:S)?:.*\bblocker\b.*$/imu.test(text));
+function structuredField(text, name) {
+  return text.match(new RegExp(`^${name}:\\s*(.+)$`, "imu"))?.[1]?.trim();
 }
 
-function humanWaitState(comments, { unblockPrefix, exactResolutions = [] } = {}) {
+function structuredHumanBlock(text, state) {
+  if (!/^STATUS:\s*blocked\s*$/imu.test(text) || !/^REQUIRES_HUMAN:\s*true\s*$/imu.test(text)) return false;
+  const role = structuredField(text, "ROLE")?.toLowerCase();
+  const kind = structuredField(text, "(?:BLOCK_KIND|HUMAN_GATE)")?.toLowerCase().replaceAll("-", "_");
+  if (["business_rule", "screen_approval", "production_approval", "loop_limit"].includes(kind)) return true;
+  if (role === "pipeline-po") return true;
+  if (role === "pipeline-ux-ui") return state === "ux_ui";
+  if (state === "ux_ui" && /\bUX\/UI\b/iu.test(text)) return true;
+  if (state === "refinement" && /\b(?:PO|PRODUTO)\b/iu.test(text)) return true;
+  return false;
+}
+
+function humanWaitState(comments, { state, unblockPrefix, exactResolutions = [] } = {}) {
   let value = false;
   let waitAt;
   let resolutionAt;
   for (const comment of chronological(comments)) {
     const text = String(comment.text ?? "").trim();
-    if (text === "Aguardando resposta humana" || structuredHumanBlock(text)) {
+    if (structuredHumanBlock(text, state)) {
       value = true;
       waitAt = comment.date;
     }
@@ -135,6 +146,47 @@ function humanWaitState(comments, { unblockPrefix, exactResolutions = [] } = {})
     }
   }
   return { value, waitAt, resolutionAt };
+}
+
+function transitionBoundaryComments(comments, enteredAt, windowMinutes = 15) {
+  if (!enteredAt) return comments;
+  const boundary = new Date(enteredAt).getTime() - windowMinutes * 60 * 1000;
+  return comments.filter((comment) => new Date(comment.date).getTime() >= boundary);
+}
+
+function roleIs(text, role) {
+  return structuredField(text, "ROLE")?.toLowerCase() === role;
+}
+
+function positiveVerdict(text) {
+  return /^(?:VERDICT|STATUS):\s*(?:PASS|APPROVED|COMPLETED)\s*$/imu.test(text);
+}
+
+function technicalProgress(comments, enteredAt, state) {
+  if (state !== "in_development") return {};
+  const boundaryComments = chronological(transitionBoundaryComments(comments, enteredAt));
+  const devPasses = boundaryComments.filter((comment) => {
+    const text = String(comment.text ?? "");
+    return roleIs(text, "pipeline-dev") && positiveVerdict(text) &&
+      (/^TRANSITION:\s*ready_for_development\s*->\s*in_development\.?\s*$/imu.test(text) ||
+       /^NEXT STEP:\s*Code Review independente\.?\s*$/imu.test(text) ||
+       /^NEXT_ROLE:\s*pipeline-code-review\s*$/imu.test(text));
+  });
+  const devPass = devPasses.at(-1);
+  if (!devPass) return { implementation_complete: false, review_approved: false };
+  const reviews = boundaryComments.filter((comment) => {
+    const text = String(comment.text ?? "");
+    return String(comment.date) >= String(devPass.date) && roleIs(text, "pipeline-code-review");
+  });
+  const review = reviews.at(-1);
+  const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
+  const reviewRejected = review ? /^(?:VERDICT|STATUS):\s*(?:FAIL|REJECTED|CHANGES_REQUESTED|BLOCKED)\s*$/imu.test(String(review.text ?? "")) : false;
+  return {
+    implementation_complete: !reviewRejected,
+    review_approved: reviewApproved,
+    implementation_evidence_ref: devPass.ref,
+    ...(review ? { review_evidence_ref: review.ref } : {})
+  };
 }
 
 function visualAttachment(attachment) {
@@ -256,7 +308,8 @@ export async function executeTrelloComment(input = {}) {
     const snapshotCards = activeCards.map((card) => {
       const { actions = [], attachments = [] } = eventsByCard.get(card.id) ?? {};
       const enteredAt = stateEntryDate(actions, card.idList);
-      const comments = after(actions.filter((action) => action.type === "commentCard" || action.data?.text).map(publicComment), enteredAt);
+      const allComments = actions.filter((action) => action.type === "commentCard" || action.data?.text).map(publicComment);
+      const comments = after(allComments, enteredAt);
       const phaseAttachments = after(attachments, enteredAt);
       const item = { ref: card.id, title: card.name, list_ref: card.idList, position: card.pos };
       const key = cardKey(card.name, adapter.tracker.card_keys);
@@ -269,7 +322,9 @@ export async function executeTrelloComment(input = {}) {
       const exactResolutions = [];
       if (card.idList === adapter.tracker.states.ux_ui) exactResolutions.push(gate.screen_approval ?? "Tela aprovada");
       if (card.idList === adapter.tracker.states.ready_for_release) exactResolutions.push(gate.production_approval ?? "APROVADO PARA PRD");
-      const wait = humanWaitState(comments, { unblockPrefix: gate.unblock_prefix, exactResolutions });
+      const state = Object.entries(adapter.tracker.states).find(([, ref]) => ref === card.idList)?.[0];
+      const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions });
+      const progress = technicalProgress(allComments, enteredAt, state);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);
       const screenApprovalAt = latestExactDate(comments, gate.screen_approval ?? "Tela aprovada");
       const productionApprovalAt = latestExactDate(comments, gate.production_approval ?? "APROVADO PARA PRD");
@@ -285,6 +340,7 @@ export async function executeTrelloComment(input = {}) {
         screen_approval_required: card.idList === adapter.tracker.states.ux_ui && Boolean(screenEvidenceAt) && !screenApprovalValid,
         screen_approval_valid: screenApprovalValid,
         production_approval_valid: Boolean(productionApprovalAt),
+        ...progress,
         ...(screenEvidenceAt ? { screen_evidence_at: screenEvidenceAt } : {}),
         ...(screenApprovalAt ? { screen_approval_at: screenApprovalAt } : {}),
         ...(productionApprovalAt ? { production_approval_at: productionApprovalAt } : {})

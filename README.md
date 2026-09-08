@@ -4,7 +4,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Repositório oficial: [github.com/Vitor41/modus-protocol](https://github.com/Vitor41/modus-protocol).
 
-> Estado: v0.1 publicada. O Kernel e o plugin estão na versão `0.1.19`.
+> Estado: v0.2 publicada. O Kernel e o plugin estão na versão `0.2.0`.
 
 ## O que ele resolve
 
@@ -29,14 +29,15 @@ pipeline-run do Modus Protocol
 Trello + contexto + comandos + políticas locais
 ```
 
-`unified-development-pipeline` permanece como identificador técnico compatível do plugin e do Kernel na série v0.1. O nome público e a interface são **Modus Protocol**. Essa separação evita quebrar adapters já instalados.
+`unified-development-pipeline` permanece como identificador técnico compatível do plugin e do Kernel. O nome público e a interface são **Modus Protocol**. Essa separação evita quebrar adapters já instalados.
 
-## Capacidades da v0.1
+## Capacidades da v0.2
 
 - oito skills empacotadas;
 - adapter YAML validado por JSON Schema;
 - doctor estrutural, shadow e cutover;
 - planner determinístico e perfis de execução;
+- execução simultânea de PO, UX/UI e uma única lane técnica com WIP controlado;
 - cliente Trello com snapshot, comentários, anexos e movimentação com releitura;
 - gates de papel e transição;
 - lotes coesos definidos exclusivamente pelo PO;
@@ -54,7 +55,7 @@ Trello + contexto + comandos + políticas locais
 ## Começando
 
 1. Siga o [início rápido](docs/QUICKSTART.md) para instalar, configurar o adapter, declarar o gatilho e executar o primeiro teste.
-2. Leia [Modus Protocol v0.1](docs/MODUS_PROTOCOL.md) para entender os contratos.
+2. Leia [Modus Protocol](docs/MODUS_PROTOCOL.md) para entender os contratos.
 3. Copie e adapte somente o [adapter neutro](examples/project.adapter.example.yaml).
 4. Execute o doctor em modo estrutural e depois em shadow.
 5. Faça cutover somente após revisão explícita do adapter e do `AGENTS.md`.

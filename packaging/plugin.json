@@ -1,6 +1,6 @@
 {
   "name": "unified-development-pipeline",
-  "version": "0.1.19",
+  "version": "0.2.0",
   "description": "Protocolo versionado e validável para desenvolvimento de software com agentes de IA.",
   "author": {
     "name": "Modus Protocol contributors",

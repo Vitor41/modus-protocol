@@ -1,4 +1,4 @@
-# Protocolo de execução v0.1
+# Protocolo de execução v0.2
 
 Leia esta referência somente para execução ao vivo, retomada ou transição.
 
@@ -17,7 +17,7 @@ O snapshot normalizado contém:
 - por card acionável, `signals.observed_list_ref` e `signals.observed_at`, comprovando que os sinais pertencem à lista atual.
 
 Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência de sinal nunca equivale a aprovação.
-Comentários, bloqueios e aprovações anteriores à entrada na lista atual são históricos e não participam do gate presente. Em UX/UI, uma nova evidência visual posterior invalida a aprovação anterior e exige nova `Tela aprovada`; uma aprovação posterior à evidência vigente libera o handoff. Um `BLOQUEIO RESOLVIDO:` posterior encerra o bloqueio de negócio correspondente. O planner rejeita execução ao vivo quando a cobertura não coincide exatamente com todos os cards acionáveis ou quando os sinais não comprovam a lista observada.
+Comentários, bloqueios e aprovações anteriores à entrada na lista atual são históricos e não participam do gate presente. A exceção é a evidência de handoff que provoca a própria transição: um handoff técnico `PASS` até quinze minutos antes da entrada na lista de destino pertence à fronteira dessa fase e materializa o próximo papel. Em UX/UI, uma nova evidência visual posterior invalida a aprovação anterior e exige nova `Tela aprovada`; uma aprovação posterior à evidência vigente libera o handoff. Um `BLOQUEIO RESOLVIDO:` posterior encerra o bloqueio de negócio correspondente. Bloqueio genérico do `pipeline-run` não vira gate humano; somente os quatro gates humanos canônicos podem fazê-lo.
 
 ## Sequência de escrita
 
@@ -25,7 +25,7 @@ Comentários, bloqueios e aprovações anteriores à entrada na lista atual são
 2. Validação da capacidade de comentário conforme `tracker-comment-protocol.md`.
 3. Registro de lock ativo com `RUN_ID`, card, estado, papel e timestamp, seguido de releitura.
 4. Registro ou atualização da cápsula, seguido de releitura.
-5. Lançamento explícito do agente de papel com modelo e esforço do planner pela colaboração da conversa ou pelo `pipeline.ps1 role-launch` quando aquela capacidade não estiver exposta.
+5. Lançamento explícito e simultâneo de todos os slots independentes com modelo e esforço do planner, pela colaboração da conversa ou por `pipeline.ps1 role-launch --manifest`.
 6. Registro do recibo de lançamento e execução do papel selecionado.
 7. Publicação e releitura da evidência do gate.
 8. Nova releitura do lock e do estado.
@@ -38,7 +38,7 @@ Se qualquer escrita/releitura falhar ou o estado mudar entre 1 e 9, não presuma
 
 ## Continuação automática
 
-O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o PO os refina antes de devolver o controle. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente no mesmo loop quando seus gates passam. Retornos de Review ou QA ao DEV também continuam, respeitando o limite de ciclos.
+O gatilho drena o trabalho independente elegível, e não apenas um papel ou um card. `work_slots` declara até três lanes: PO, UX/UI e técnica. PO e UX/UI podem atuar simultaneamente com a entrega técnica; a lane técnica mantém WIP igual a um desde a entrada em DEV até o merge da release. Quando roteado para PO, `refinement_queue` contém todos os cards elegíveis em refinamento e o mesmo agente os processa sequencialmente. Handoffs `pipeline-po → pipeline-ux-ui`, `pipeline-ux-ui → pipeline-dev`, `pipeline-dev → pipeline-code-review` e `pipeline-code-review → pipeline-qa` continuam automaticamente quando seus gates passam.
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 

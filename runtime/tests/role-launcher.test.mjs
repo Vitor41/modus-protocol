@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { buildCodexArguments, finalizeHandoff } from "../src/role-launcher.mjs";
+import { buildCodexArguments, finalizeHandoff, launchRoles } from "../src/role-launcher.mjs";
 
 const request = {
   mapping_version: "gpt-5.6-2026-08-28",
@@ -42,4 +42,29 @@ test("launcher carimba recibo com thread real e sem fallback", () => {
     evidence_ref: "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86",
     fallback_used: false
   });
+});
+
+test("launcher inicia lanes independentes antes de aguardar suas conclusões", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-many-"));
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(manifestPath, JSON.stringify({ jobs: [
+    { lane: "technical", role: "pipeline-dev", promptFile: "dev.txt", executionRequest: "dev-request.json", handoff: "dev-handoff.json" },
+    { lane: "ux_ui", role: "pipeline-ux-ui", promptFile: "ux.txt", executionRequest: "ux-request.json", handoff: "ux-handoff.json" },
+    { lane: "po", role: "pipeline-po", promptFile: "po.txt", executionRequest: "po-request.json", handoff: "po-handoff.json" }
+  ] }), "utf8");
+  const started = [];
+  const pending = [];
+  try {
+    const execution = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { launchAsync: (job) => {
+      started.push(job.lane);
+      return new Promise((resolve) => pending.push(() => resolve({ lane: job.lane, status: "PASS" })));
+    }});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, ["technical", "ux_ui", "po"]);
+    pending.forEach((complete) => complete());
+    const result = await execution;
+    assert.equal(result.status, "PASS");
+    assert.equal(result.launch_strategy, "parallel");
+    assert.equal(result.jobs.length, 3);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

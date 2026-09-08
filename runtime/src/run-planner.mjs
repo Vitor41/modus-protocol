@@ -246,6 +246,7 @@ export function planRun(input = {}) {
   const activeExecution = snapshot.active_execution?.status === "active" ? snapshot.active_execution : undefined;
   let ignoredLockRunId;
   let continuationRunId = input.continueRunId;
+  let resumableCardRef;
   if (activeExecution?.architecture === "unified") {
     const activeCard = snapshot.cards.find((card) => card.ref === activeExecution.card_ref);
     const activeState = activeCard ? stateByList.get(activeCard.list_ref) : undefined;
@@ -257,37 +258,9 @@ export function planRun(input = {}) {
       activeCard.lock.run_id === activeExecution.run_id &&
       activeState === activeExecution.state &&
       activeRoute?.skill === activeExecution.role;
-    const activeBlockReason = activeCard ? blockedReason(activeCard, activeState, { ignoredLockRunId: activeExecution.run_id }) : undefined;
-    const activeCardDeferred = activeCard && (["AWAITING_HUMAN", "SCREEN_APPROVAL_REQUIRED", "PRODUCTION_APPROVAL_REQUIRED", "LOOP_LIMIT_REACHED"].includes(activeBlockReason) || activeCard.lock?.status === "blocked");
-    if (resumeConsistent && !activeCardDeferred) return {
-      contract_version: "0.1",
-      tool: { name: "pipeline-run-planner", version: PACKAGE.version },
-      mode,
-      status: "READY",
-      batch_policy: activeCard.delivery_group ? "cohesive-delivery-v0.2" : "single-card-v0.2",
-      doctor,
-      run_id: activeExecution.run_id,
-      resuming: true,
-      selected: {
-        card_ref: activeCard.ref,
-        key: activeCard.key,
-        title: activeCard.title ?? basename(activeCard.ref),
-        position: activeCard.position,
-        state: activeState,
-        ...activeRoute,
-        lock_proposal: { ...activeCard.lock },
-        capsule_action: "resume-existing",
-        comment_gate: commentGate
-      },
-      deferred: snapshot.cards
-        .filter((card) => card.ref !== activeCard.ref)
-        .map((card) => ({ card_ref: card.ref, key: card.key, reason: "PROJECT_EXECUTION_ACTIVE" })),
-      blocked: [],
-      apply_required: mode === "live",
-      guarantees
-    };
     continuationRunId ??= activeExecution.run_id;
     ignoredLockRunId = activeExecution.run_id;
+    if (resumeConsistent) resumableCardRef = activeCard.ref;
     guarantees.stale_execution_reconciled = true;
   }
 
@@ -391,91 +364,112 @@ export function planRun(input = {}) {
     };
   }
 
-  const selected = eligible[0];
-  const declaredGroup = adapter.batching?.mode === "cohesive-delivery" ? selected.delivery_group : undefined;
-  let batchMembers = [selected];
-  if (declaredGroup) {
-    if (declaredGroup.defined_by !== "pipeline-po") {
-      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_AUTHORITY_INVALID", delivery_group: declaredGroup.id, doctor, blocked, guarantees };
-    }
-    if (declaredGroup.cards.length > adapter.batching.max_cards) {
-      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_TOO_LARGE", delivery_group: declaredGroup.id, doctor, blocked, guarantees };
-    }
-    const allByKey = new Map([...cardsByKey.values()].map((card) => [card.key, card]));
-    const missing = declaredGroup.cards.filter((key) => !allByKey.has(key));
-    const inconsistent = declaredGroup.cards.map((key) => allByKey.get(key)).filter(Boolean).filter((card) => card.delivery_group?.id !== declaredGroup.id || card.delivery_group?.defined_by !== "pipeline-po" || JSON.stringify(card.delivery_group.cards) !== JSON.stringify(declaredGroup.cards));
-    if (missing.length || inconsistent.length) {
-      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_INCOMPLETE", delivery_group: declaredGroup.id, missing_cards: missing, inconsistent_cards: inconsistent.map((card) => card.key), doctor, blocked, guarantees };
-    }
-    const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
-    const sameWork = declaredGroup.cards.map((key) => eligibleByKey.get(key)).filter((card) => card && card.state === selected.state && card.skill === selected.skill && card.action === selected.action);
-    if (declaredGroup.mode === "dependency" && sameWork.length !== declaredGroup.cards.length) {
-      return { contract_version: "0.1", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", reason: "DELIVERY_GROUP_STATE_DIVERGED", delivery_group: declaredGroup.id, doctor, blocked, guarantees };
-    }
-    if (sameWork.length >= 2) batchMembers = sameWork;
-  }
   const id = continuationRunId ?? runId(input.now ?? new Date(), input.uuid ?? randomUUID());
-  const refinementQueue = selected.state === "refinement"
-    ? eligible.filter((card) => card.state === "refinement").map(({ snapshot_index, ...card }) => card)
-    : [];
-  const batchPolicy = refinementQueue.length
-    ? "refinement-queue-v0.2"
-    : declaredGroup && batchMembers.length >= 2
-      ? "cohesive-delivery-v0.2"
-      : "single-card-v0.2";
-  const memberRefs = new Set(batchMembers.map((card) => card.card_ref));
-  return {
-    contract_version: "0.1",
-    tool: { name: "pipeline-run-planner", version: PACKAGE.version },
-    mode,
-    status: "READY",
-    batch_policy: batchPolicy,
-    doctor,
-    run_id: id,
-    continuing: Boolean(continuationRunId),
-    selected: {
-      ...selected,
-      continuation_policy: {
-        mode: "drain-independent-work-v0.2",
-        preserve_run_id: true,
-        continue_after_role_handoff: true,
-        defer_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure"],
-        stop_on: ["queue_complete"]
-      },
-      ...(refinementQueue.length ? {
-        refinement_queue: {
-          scope: "all-eligible-refinement-cards",
-          cards: refinementQueue,
-          blocked_cards: blocked.filter((card) => card.state === "refinement")
-        }
+  const allByKey = new Map([...cardsByKey.values()].map((card) => [card.key, card]));
+  const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
+  const continuationPolicy = {
+    mode: "drain-independent-work-v0.2",
+    preserve_run_id: true,
+    continue_after_role_handoff: true,
+    defer_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure"],
+    stop_on: ["queue_complete"]
+  };
+  function materializeJob(seed, lane) {
+    const declaredGroup = adapter.batching?.mode === "cohesive-delivery" ? seed.delivery_group : undefined;
+    let batchMembers = [seed];
+    if (lane === "po") batchMembers = eligible.filter((card) => card.state === "refinement");
+    else if (declaredGroup) {
+      if (declaredGroup.defined_by !== "pipeline-po") return { error: { reason: "DELIVERY_GROUP_AUTHORITY_INVALID", delivery_group: declaredGroup.id } };
+      if (declaredGroup.cards.length > adapter.batching.max_cards) return { error: { reason: "DELIVERY_GROUP_TOO_LARGE", delivery_group: declaredGroup.id } };
+      const missing = declaredGroup.cards.filter((key) => !allByKey.has(key));
+      const inconsistent = declaredGroup.cards.map((key) => allByKey.get(key)).filter(Boolean).filter((card) => card.delivery_group?.id !== declaredGroup.id || card.delivery_group?.defined_by !== "pipeline-po" || JSON.stringify(card.delivery_group.cards) !== JSON.stringify(declaredGroup.cards));
+      if (missing.length || inconsistent.length) return { error: { reason: "DELIVERY_GROUP_INCOMPLETE", delivery_group: declaredGroup.id, missing_cards: missing, inconsistent_cards: inconsistent.map((card) => card.key) } };
+      const sameWork = declaredGroup.cards.map((key) => eligibleByKey.get(key)).filter((card) => card && card.state === seed.state && card.skill === seed.skill && card.action === seed.action);
+      if (declaredGroup.mode === "dependency" && sameWork.length !== declaredGroup.cards.length) return { error: { reason: "DELIVERY_GROUP_STATE_DIVERGED", delivery_group: declaredGroup.id } };
+      if (sameWork.length >= 2) batchMembers = sameWork;
+    }
+    const cleanMembers = batchMembers.map(({ snapshot_index, ...card }) => card);
+    const resumable = batchMembers.some((card) => card.card_ref === resumableCardRef);
+    const unitPolicy = lane === "po" ? "refinement-queue-v0.2" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.2" : "single-card-v0.2";
+    const job = {
+      lane,
+      unit_policy: unitPolicy,
+      ...seed,
+      continuation_policy: continuationPolicy,
+      ...(lane === "po" ? {
+        refinement_queue: { scope: "all-eligible-refinement-cards", cards: cleanMembers, blocked_cards: blocked.filter((card) => card.state === "refinement") }
       } : {}),
       ...(declaredGroup ? {
-        delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, mode: declaredGroup.mode, ...(declaredGroup.depends_on?.length ? { depends_on: declaredGroup.depends_on } : {}), cards: batchMembers.map(({ snapshot_index, ...card }) => card) },
+        delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, mode: declaredGroup.mode, ...(declaredGroup.depends_on?.length ? { depends_on: declaredGroup.depends_on } : {}), cards: cleanMembers },
         card_refs: batchMembers.map((card) => card.card_ref)
-      } : {}),
+      } : lane === "po" ? { card_refs: batchMembers.map((card) => card.card_ref) } : {}),
       comment_gate: commentGate,
-      lock_proposal: {
-        run_id: id,
-        card_ref: selected.card_ref,
-        state: selected.state,
-        role: selected.skill,
-        status: "active"
-      },
+      lock_proposal: resumable && seed.card_ref === resumableCardRef
+        ? { ...snapshot.cards.find((card) => card.ref === seed.card_ref)?.lock }
+        : { run_id: id, card_ref: seed.card_ref, state: seed.state, role: seed.skill, status: "active" },
       lock_proposals: batchMembers.map((card) => ({ run_id: id, card_ref: card.card_ref, state: card.state, role: card.skill, status: "active" })),
+      capsule_action: resumable ? "resume-existing" : "create",
       capsule_seed: {
         run_id: id,
         cards: batchMembers.map((card) => card.key ?? card.card_ref),
-        state: selected.state,
-        role: selected.skill,
-        objective: selected.title,
-        decisions: [],
-        evidence: [],
-        risks: [],
-        next_step: selected.action,
+        state: seed.state,
+        role: seed.skill,
+        objective: seed.title,
+        decisions: [], evidence: [], risks: [], next_step: seed.action,
         sources: ["project.adapter.yaml", "tracker-snapshot"]
       }
+    };
+    return { job, memberRefs: batchMembers.map((card) => card.card_ref) };
+  }
+
+  const technicalInFlightStates = new Set(["in_development", "ready_for_validation", "ready_for_release"]);
+  const technicalOccupied = snapshot.cards.some((card) => technicalInFlightStates.has(stateByList.get(card.list_ref)));
+  const technicalSeed = technicalOccupied
+    ? eligible.find((card) => technicalInFlightStates.has(card.state))
+    : eligible.find((card) => card.state === "ready_for_development");
+  const uxSeed = eligible.find((card) => card.state === "ux_ui");
+  const poSeed = technicalSeed?.skill === "pipeline-po" ? undefined : eligible.find((card) => card.state === "refinement");
+  const seeds = [["technical", technicalSeed], ["ux_ui", uxSeed], ["po", poSeed]].filter(([, seed]) => seed);
+  const workSlots = [];
+  const scheduledRefs = new Set();
+  for (const [lane, seed] of seeds) {
+    const materialized = materializeJob(seed, lane === "ux_ui" ? "ux_ui" : lane);
+    if (materialized.error) return { contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode, status: "BLOCKED", ...materialized.error, doctor, blocked, guarantees };
+    workSlots.push(materialized.job);
+    for (const ref of materialized.memberRefs) scheduledRefs.add(ref);
+  }
+  if (workSlots.length === 0) {
+    const deferred = eligible.map(({ snapshot_index, ...card }) => ({ ...card, reason: card.state === "ready_for_development" && technicalOccupied ? "TECHNICAL_WIP_LIMIT" : "LANE_CAPACITY" }));
+    return {
+      contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode,
+      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", doctor, blocked, deferred, guarantees
+    };
+  }
+  const selected = workSlots[0];
+  const deferred = eligible.filter((card) => !scheduledRefs.has(card.card_ref)).map(({ snapshot_index, ...card }) => ({
+    ...card,
+    reason: card.state === "ready_for_development" && technicalOccupied ? "TECHNICAL_WIP_LIMIT" : "LANE_CAPACITY"
+  }));
+  return {
+    contract_version: "0.2",
+    tool: { name: "pipeline-run-planner", version: PACKAGE.version },
+    mode,
+    status: "READY",
+    batch_policy: "upstream-concurrency-technical-wip1-v0.2",
+    schedule: {
+      policy: "upstream-concurrency-technical-wip1-v0.2",
+      launch_strategy: "parallel-when-independent",
+      capacities: { po: 1, ux_ui: 1, technical: 1 },
+      technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation", "ready_for_release"] },
+      completion: "drain-all-eligible-work-before-stop"
     },
-    deferred: eligible.filter((card) => !memberRefs.has(card.card_ref)).map(({ snapshot_index, ...card }) => card),
+    doctor,
+    run_id: id,
+    continuing: Boolean(continuationRunId),
+    resuming: Boolean(resumableCardRef),
+    selected,
+    work_slots: workSlots,
+    deferred,
     blocked,
     apply_required: mode === "live",
     guarantees

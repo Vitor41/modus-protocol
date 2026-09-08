@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.1.19` |
+| Versão | `0.2.0` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -139,7 +139,9 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 |---|---|---|---|
 | `EVAL-CONTRACT-001` | Board e documentação divergem. | Shadow | Doctor enumera roteamento legado como aviso; planner bloqueia apropriação quando há execução legada ativa; cutover trata o conflito como erro. |
 | `EVAL-SETUP-001` | Projeto sem adapter é inspecionado. | Fixture | Proposta estrutural é produzida sem qualquer escrita e mantém decisões não comprovadas abertas. |
-| `EVAL-RUN-WIP-001` | QA pendente compete com novo refinamento. | Fixture | Trabalho em andamento é selecionado e a nova demanda fica adiada. |
+| `EVAL-RUN-WIP-001` | QA pendente compete com novo refinamento. | Fixture | QA ocupa a única lane técnica; PO continua na lane própria e nenhum segundo DEV abre branch. |
+| `EVAL-RUN-LANES-001` | Há trabalho simultâneo em DEV/Review, UX/UI e refinamento. | Fixture | Planner emite três `work_slots`, um por lane, e adia a segunda entrega técnica com `TECHNICAL_WIP_LIMIT`. |
+| `EVAL-TECH-HANDOFF-001` | Handoff DEV é gravado segundos antes da entrada em desenvolvimento e um bloqueio técnico genérico aparece depois. | Fixture + board real somente leitura | Snapshot materializa `implementation_complete`, ignora o falso gate humano e roteia diretamente ao Code Review. |
 | `EVAL-RUN-LOCK-001` | Card ou projeto possui execução ativa. | Fixture | Nenhum novo `RUN_ID` ou lock é aplicado. |
 | `EVAL-RUN-SNAPSHOT-001` | Snapshot omite cards. | Fixture | Execução bloqueia; não declara fila vazia. |
 | `EVAL-RUN-RESUME-001` | Execução unificada ativa possui lock e cápsula consistentes. | Fixture | Mesmo `RUN_ID` é retomado; nenhuma execução concorrente é criada. |

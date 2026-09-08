@@ -151,7 +151,9 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
       fallback_policy: "block"
     });
     assert.equal(result.run_id, "RUN-20260828-12345678");
-    assert.equal(result.deferred[0].key, "FX-001");
+    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["technical", "po"]);
+    assert.equal(result.work_slots[1].key, "FX-001");
+    assert.equal(result.deferred.length, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -169,7 +171,8 @@ test("planner preserva lote coeso definido pelo PO", async () => {
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH, mode: "shadow", now: new Date("2026-08-29T00:00:00Z"), uuid: "11111111-2222-3333-4444-555555555555" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "cohesive-delivery-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
+    assert.equal(result.selected.unit_policy, "cohesive-delivery-v0.2");
     assert.deepEqual(result.selected.capsule_seed.cards, ["FX-101", "FX-102"]);
     assert.equal(result.selected.lock_proposals.length, 2);
     assert.equal(result.deferred.length, 0);
@@ -219,7 +222,8 @@ test("PO recebe toda a fila elegível de refinamento na mesma execução", async
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "refinement-queue-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
+    assert.equal(result.selected.unit_policy, "refinement-queue-v0.2");
     assert.equal(result.selected.refinement_queue.scope, "all-eligible-refinement-cards");
     assert.deepEqual(result.selected.refinement_queue.cards.map((card) => card.card_ref), ["r1", "r2", "r3"]);
     assert.deepEqual(result.selected.continuation_policy.defer_on.slice(0, 3), ["human_decision", "screen_approval", "production_approval"]);
@@ -272,7 +276,9 @@ test("planner avança desenvolvimento, bloqueia somente UX pendente e mantém PO
     assert.equal(first.selected.key, "FX-216");
     assert.equal(first.selected.skill, "pipeline-dev");
     assert.ok(first.blocked.some((item) => item.key === "FX-217" && item.reason === "SCREEN_APPROVAL_REQUIRED"));
-    assert.ok(first.deferred.some((item) => item.key === "FX-218"));
+    assert.deepEqual(first.work_slots.map((slot) => slot.lane), ["technical", "po"]);
+    assert.equal(first.work_slots[1].key, "FX-218");
+    assert.equal(first.deferred.length, 0);
 
     const secondSnapshot = trackerSnapshot(adapter, cards.filter((card) => card.ref !== "card-dev"));
     const secondPath = await writeSnapshot(root, secondSnapshot);
@@ -281,6 +287,58 @@ test("planner avança desenvolvimento, bloqueia somente UX pendente e mantém PO
     assert.equal(second.selected.key, "FX-218");
     assert.equal(second.selected.skill, "pipeline-po");
     assert.equal(second.run_id, first.run_id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("planner agenda PO, UX e uma única faixa técnica na mesma execução", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "review", key: "FX-221", title: "Revisar", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: true } },
+      { ref: "next-dev", key: "FX-222", title: "Próxima implementação", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
+      { ref: "ux", key: "FX-223", title: "Desenhar", list_ref: adapter.tracker.states.ux_ui, position: 3 },
+      { ref: "po-one", title: "Refinar um", list_ref: adapter.tracker.states.refinement, position: 4 },
+      { ref: "po-two", title: "Refinar dois", list_ref: adapter.tracker.states.refinement, position: 5 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["technical", "ux_ui", "po"]);
+    assert.equal(result.work_slots[0].skill, "pipeline-code-review");
+    assert.equal(result.work_slots[1].skill, "pipeline-ux-ui");
+    assert.deepEqual(result.work_slots[2].refinement_queue.cards.map((card) => card.card_ref), ["po-one", "po-two"]);
+    assert.ok(result.deferred.some((item) => item.key === "FX-222" && item.reason === "TECHNICAL_WIP_LIMIT"));
+    assert.deepEqual(result.schedule.capacities, { po: 1, ux_ui: 1, technical: 1 });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("gate humano na faixa técnica preserva WIP um sem paralisar PO e UX", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "release", key: "FX-224", title: "Aguardar produção", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { awaiting_human: true, production_approval_valid: false } },
+      { ref: "next-dev", key: "FX-225", title: "Não abrir segunda branch", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
+      { ref: "ux", key: "FX-226", title: "Desenhar", list_ref: adapter.tracker.states.ux_ui, position: 3 },
+      { ref: "po", title: "Refinar", list_ref: adapter.tracker.states.refinement, position: 4 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["ux_ui", "po"]);
+    assert.ok(result.blocked.some((item) => item.key === "FX-224" && item.reason === "AWAITING_HUMAN"));
+    assert.ok(result.deferred.some((item) => item.key === "FX-225" && item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("card técnico inválido ainda ocupa WIP e impede uma segunda branch", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "qa-without-key", title: "Estado técnico inconsistente", list_ref: adapter.tracker.states.ready_for_validation, position: 1 },
+      { ref: "next-dev", key: "FX-227", title: "Não abrir", list_ref: adapter.tracker.states.ready_for_development, position: 2 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "EMPTY");
+    assert.ok(result.blocked.some((item) => item.card_ref === "qa-without-key" && item.reason === "CARD_KEY_MISSING"));
+    assert.ok(result.deferred.some((item) => item.key === "FX-227" && item.reason === "TECHNICAL_WIP_LIMIT"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
