@@ -45,6 +45,18 @@ function matchesCardKey(adapter, key) {
 }
 
 function routeCard(state, signals = {}) {
+  if (signals.pending_transition === true && signals.pending_transition_from === state) {
+    return {
+      skill: "pipeline-run",
+      action: "reconcile-transition",
+      profile: "RAPIDO",
+      execution_kind: "operational",
+      transition_evidence_ref: signals.pending_transition_evidence_ref,
+      transition_run_id: signals.pending_transition_run_id,
+      transition_role: signals.pending_transition_role,
+      target_state: signals.pending_transition_to
+    };
+  }
   if (state === "refinement") return { skill: "pipeline-po", action: "refine", profile: "PROFUNDO" };
   if (state === "ux_ui") {
     return {
@@ -78,7 +90,7 @@ function routeCard(state, signals = {}) {
 }
 
 function withExecutionRequest(route) {
-  return { ...route, execution_request: resolveExecutionProfile(route.profile, route.skill) };
+  return route.execution_kind === "operational" ? route : { ...route, execution_request: resolveExecutionProfile(route.profile, route.skill) };
 }
 
 function blockedReason(card, state, { ignoredLockRunId } = {}) {
@@ -377,7 +389,7 @@ export function planRun(input = {}) {
   function materializeJob(seed, lane) {
     const declaredGroup = adapter.batching?.mode === "cohesive-delivery" ? seed.delivery_group : undefined;
     let batchMembers = [seed];
-    if (lane === "po") batchMembers = eligible.filter((card) => card.state === "refinement");
+    if (lane === "po" && seed.execution_kind !== "operational") batchMembers = eligible.filter((card) => card.state === "refinement" && card.execution_kind !== "operational");
     else if (declaredGroup) {
       if (declaredGroup.defined_by !== "pipeline-po") return { error: { reason: "DELIVERY_GROUP_AUTHORITY_INVALID", delivery_group: declaredGroup.id } };
       if (declaredGroup.cards.length > adapter.batching.max_cards) return { error: { reason: "DELIVERY_GROUP_TOO_LARGE", delivery_group: declaredGroup.id } };
@@ -390,13 +402,13 @@ export function planRun(input = {}) {
     }
     const cleanMembers = batchMembers.map(({ snapshot_index, ...card }) => card);
     const resumable = batchMembers.some((card) => card.card_ref === resumableCardRef);
-    const unitPolicy = lane === "po" ? "refinement-queue-v0.2" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.2" : "single-card-v0.2";
+    const unitPolicy = seed.execution_kind === "operational" ? "operational-reconciliation-v0.2" : lane === "po" ? "refinement-queue-v0.2" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.2" : "single-card-v0.2";
     const job = {
       lane,
       unit_policy: unitPolicy,
       ...seed,
       continuation_policy: continuationPolicy,
-      ...(lane === "po" ? {
+      ...(lane === "po" && seed.execution_kind !== "operational" ? {
         refinement_queue: { scope: "all-eligible-refinement-cards", cards: cleanMembers, blocked_cards: blocked.filter((card) => card.state === "refinement") }
       } : {}),
       ...(declaredGroup ? {
@@ -404,12 +416,14 @@ export function planRun(input = {}) {
         card_refs: batchMembers.map((card) => card.card_ref)
       } : lane === "po" ? { card_refs: batchMembers.map((card) => card.card_ref) } : {}),
       comment_gate: commentGate,
-      lock_proposal: resumable && seed.card_ref === resumableCardRef
+      ...(seed.execution_kind === "operational" ? {
+        capsule_action: "reuse-existing-evidence"
+      } : { lock_proposal: resumable && seed.card_ref === resumableCardRef
         ? { ...snapshot.cards.find((card) => card.ref === seed.card_ref)?.lock }
         : { run_id: id, card_ref: seed.card_ref, state: seed.state, role: seed.skill, status: "active" },
-      lock_proposals: batchMembers.map((card) => ({ run_id: id, card_ref: card.card_ref, state: card.state, role: card.skill, status: "active" })),
-      capsule_action: resumable ? "resume-existing" : "create",
-      capsule_seed: {
+        lock_proposals: batchMembers.map((card) => ({ run_id: id, card_ref: card.card_ref, state: card.state, role: card.skill, status: "active" })),
+        capsule_action: resumable ? "resume-existing" : "create",
+        capsule_seed: {
         run_id: id,
         cards: batchMembers.map((card) => card.key ?? card.card_ref),
         state: seed.state,
@@ -417,7 +431,7 @@ export function planRun(input = {}) {
         objective: seed.title,
         decisions: [], evidence: [], risks: [], next_step: seed.action,
         sources: ["project.adapter.yaml", "tracker-snapshot"]
-      }
+      } })
     };
     return { job, memberRefs: batchMembers.map((card) => card.card_ref) };
   }
@@ -511,7 +525,9 @@ function printText(result) {
   if (result.selected) {
     process.stdout.write(
       `run_id=${result.run_id} cards=${result.selected.delivery_group?.cards?.map((card) => card.key).join(",") ?? result.selected.key} estado=${result.selected.state} skill=${result.selected.skill} ação=${result.selected.action}\n` +
-        `perfil=${result.selected.profile} modelo=${result.selected.execution_request.model} esforço=${result.selected.execution_request.reasoning_effort} modo_agente=${result.selected.execution_request.agent_mode}\n`
+        (result.selected.execution_request
+          ? `perfil=${result.selected.profile} modelo=${result.selected.execution_request.model} esforço=${result.selected.execution_request.reasoning_effort} modo_agente=${result.selected.execution_request.agent_mode}\n`
+          : `tipo_execução=${result.selected.execution_kind}\n`)
     );
   }
   process.stdout.write(`bloqueados=${result.blocked?.length ?? 0} adiados=${result.deferred?.length ?? 0}\n`);

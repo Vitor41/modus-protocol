@@ -101,10 +101,20 @@ test("handoff sem aprovação do role gate bloqueia a movimentação", async () 
 
 test("timestamps inválidos ou fora de ordem bloqueiam a movimentação", async () => {
   const result = await validateObject((receipt) => {
-    receipt.comment.written_at = "2026-08-28T12:00:10Z";
+    receipt.comment.written_at = "2026-08-28T12:00:11Z";
     receipt.comment.read_at = "2026-08-28T12:00:05Z";
   });
   assert.ok(result.diagnostics.some((item) => item.code === "TRANSITION_COMMENT_TIMESTAMPS_INVALID"));
+});
+
+test("pequena diferença de relógio é reconciliada sem bloquear a transição", async () => {
+  const result = await validateObject((receipt) => {
+    receipt.comment.written_at = "2026-08-28T12:00:05.136Z";
+    receipt.comment.read_at = "2026-08-28T12:00:05.000Z";
+  });
+  assert.equal(result.authorization, "GRANTED", JSON.stringify(result.diagnostics));
+  assert.equal(result.guarantees.clock_skew_reconciled, true);
+  assert.equal(result.guarantees.clock_skew_ms, 136);
 });
 
 test("release sem integração Git confirmada não pode ir para PRD", async () => {

@@ -180,12 +180,34 @@ function technicalProgress(comments, enteredAt, state) {
   });
   const review = reviews.at(-1);
   const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
-  const reviewRejected = review ? /^(?:VERDICT|STATUS):\s*(?:FAIL|REJECTED|CHANGES_REQUESTED|BLOCKED)\s*$/imu.test(String(review.text ?? "")) : false;
+  const reviewRejected = review ? /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(review.text ?? "")) : false;
   return {
     implementation_complete: !reviewRejected,
     review_approved: reviewApproved,
     implementation_evidence_ref: devPass.ref,
     ...(review ? { review_evidence_ref: review.ref } : {})
+  };
+}
+
+function pendingTransition(comments, state) {
+  const handoffs = chronological(comments).filter((comment) => {
+    const text = String(comment.text ?? "");
+    const from = structuredField(text, "STATE_FROM")?.toLowerCase();
+    const to = structuredField(text, "STATE_TO")?.toLowerCase();
+    const role = structuredField(text, "ROLE")?.toLowerCase();
+    return from === state && to && to !== state && ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"].includes(role) &&
+      /^(?:EVENT|EVENTS):.*\btransition\b.*$/imu.test(text) && positiveVerdict(text);
+  });
+  const handoff = handoffs.at(-1);
+  if (!handoff) return {};
+  const text = String(handoff.text ?? "");
+  return {
+    pending_transition: true,
+    pending_transition_from: structuredField(text, "STATE_FROM").toLowerCase(),
+    pending_transition_to: structuredField(text, "STATE_TO").toLowerCase(),
+    pending_transition_role: structuredField(text, "ROLE").toLowerCase(),
+    ...(structuredField(text, "RUN_ID") ? { pending_transition_run_id: structuredField(text, "RUN_ID") } : {}),
+    pending_transition_evidence_ref: handoff.ref
   };
 }
 
@@ -325,6 +347,7 @@ export async function executeTrelloComment(input = {}) {
       const state = Object.entries(adapter.tracker.states).find(([, ref]) => ref === card.idList)?.[0];
       const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions });
       const progress = technicalProgress(allComments, enteredAt, state);
+      const transition = pendingTransition(comments, state);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);
       const screenApprovalAt = latestExactDate(comments, gate.screen_approval ?? "Tela aprovada");
       const productionApprovalAt = latestExactDate(comments, gate.production_approval ?? "APROVADO PARA PRD");
@@ -341,6 +364,7 @@ export async function executeTrelloComment(input = {}) {
         screen_approval_valid: screenApprovalValid,
         production_approval_valid: Boolean(productionApprovalAt),
         ...progress,
+        ...transition,
         ...(screenEvidenceAt ? { screen_evidence_at: screenEvidenceAt } : {}),
         ...(screenApprovalAt ? { screen_approval_at: screenApprovalAt } : {}),
         ...(productionApprovalAt ? { production_approval_at: productionApprovalAt } : {})
@@ -515,6 +539,7 @@ export async function executeTrelloComment(input = {}) {
     const response = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(input.commentRef)}`, credentials), undefined, "a releitura do comentário");
     const persisted = await responseJson(response, "a releitura do comentário");
     if (persisted.data?.card?.id !== input.cardRef) throw new Error("O comentário relido pertence a outro card.");
+    const persistedText = persisted.data?.text ?? "";
     return {
       contract_version: "0.1",
       tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
@@ -523,6 +548,11 @@ export async function executeTrelloComment(input = {}) {
       provider: "environment",
       card_ref: input.cardRef,
       comment: publicComment(persisted),
+      written_at: persisted.date,
+      read_at: new Date(input.now ?? Date.now()).toISOString(),
+      content_sha256: createHash("sha256").update(persistedText, "utf8").digest("hex"),
+      readback_status: "confirmed",
+      encoding: "utf-8",
       guarantees: { tracker_writes_performed: false, secrets_exposed: false }
     };
   }

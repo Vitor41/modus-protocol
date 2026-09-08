@@ -95,6 +95,8 @@ O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.sc
 
 O integrador deriva sinais da lista atual e dos eventos válidos nessa fase. Para cada card acionável, lê histórico de movimentação, comentários e anexos; registra a lista e o horário observados. Bloqueios de fases anteriores são ignorados. O handoff que provoca uma transição pertence à fronteira da nova fase por uma janela máxima de quinze minutos; assim, `pipeline-dev PASS` seguido da entrada em desenvolvimento materializa `implementation_complete` e conduz ao Review. Uma nova evidência visual invalida aprovação visual anterior; `BLOQUEIO RESOLVIDO:` posterior encerra a espera de regra. Ausência de sinal equivale a “não comprovado”, nunca a aprovação.
 
+Um handoff concluído que declara transição mas permanece na lista de origem materializa `pending_transition`. O planner emite um slot operacional que relê o comentário e retoma somente gate e movimento, sem consumir outro agente de papel. O gate aceita até cinco segundos de diferença de relógio entre o timestamp do Trello e o do host; a confirmação causal e o hash continuam obrigatórios. Review `changes_required` e QA `rejected` são retornos automáticos ao DEV, não bloqueios.
+
 ## Limites atuais
 
 - O runtime possui cliente Trello determinístico, mas lê credenciais somente do provider externo declarado no adapter e nunca as incorpora ao núcleo.

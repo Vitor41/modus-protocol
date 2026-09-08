@@ -311,6 +311,27 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("review devolvido vai ao DEV enquanto handoff pendente é reconciliado sem repetir PO", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "dev-return", key: "FX-228", title: "Corrigir review", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: false, review_approved: false, review_evidence_ref: "review-return" } },
+      { ref: "po-transition", key: "FX-229", title: "Mover para UX", list_ref: adapter.tracker.states.refinement, position: 2, signals: { pending_transition: true, pending_transition_from: "refinement", pending_transition_to: "ux_ui", pending_transition_role: "pipeline-po", pending_transition_run_id: "RUN-20260908-ABCDEF12", pending_transition_evidence_ref: "po-handoff" } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.deepEqual(result.work_slots.map((slot) => slot.lane), ["technical", "po"]);
+    assert.equal(result.work_slots[0].skill, "pipeline-dev");
+    assert.equal(result.work_slots[0].action, "implement-or-correct");
+    assert.equal(result.work_slots[1].skill, "pipeline-run");
+    assert.equal(result.work_slots[1].execution_kind, "operational");
+    assert.equal(result.work_slots[1].action, "reconcile-transition");
+    assert.equal(result.work_slots[1].transition_run_id, "RUN-20260908-ABCDEF12");
+    assert.equal(result.work_slots[1].execution_request, undefined);
+    assert.equal(result.work_slots[1].capsule_action, "reuse-existing-evidence");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("gate humano na faixa técnica preserva WIP um sem paralisar PO e UX", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {

@@ -8,6 +8,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Adicionado
 
+- Kernel `0.2.1` classifica reconciliação de transição como trabalho operacional: reutiliza handoff e comentário confirmados, renova a releitura e conclui o movimento sem relançar o papel.
+- Releitura individual de comentário passa a devolver hash, UTF-8 e timestamps suficientes para renovar um recibo de transição sem nova escrita.
 - Kernel `0.2.0` introduz agenda com até três lanes independentes (`po`, `ux_ui` e `technical`), execução paralela por colaboração ou manifest e WIP técnico igual a um até o merge.
 - O snapshot materializa a conclusão do DEV a partir do handoff que causa a transição, preservando sua evidência mesmo quando o comentário antecede a movimentação por poucos segundos.
 - Kernel `0.1.19` deriva gates por fase a partir da lista atual, histórico de movimentações, comentários e anexos frescos de cada card acionável.
@@ -34,6 +36,8 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- Diferenças causais de relógio de até cinco segundos entre tracker e host deixam de invalidar o gate; a reconciliação fica explícita no recibo.
+- Vereditos de Review no formato `return / changes_required` agora retornam automaticamente ao DEV e nunca encerram a fila como bloqueio humano.
 - Bloqueios técnicos genéricos publicados pelo orquestrador deixam de ser interpretados como decisão humana; somente regra de negócio, tela, aprovação para PRD e limite de loop formam gates humanos.
 - O término de um papel ou o bloqueio isolado de um card deixa de encerrar a execução quando PO, UX/UI ou outra etapa da entrega técnica ainda possuem trabalho elegível.
 - Locks, cápsulas e bloqueios de fases anteriores deixam de sobrepor uma transição confirmada; o planner preserva o `RUN_ID`, reconstrói a continuidade pelo tracker e não cria gate humano por estado operacional obsoleto.

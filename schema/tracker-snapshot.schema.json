@@ -89,6 +89,12 @@
         "review_approved": { "type": "boolean" },
         "review_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "qa_approved": { "type": "boolean" }
+        ,"pending_transition": { "type": "boolean" }
+        ,"pending_transition_from": { "$ref": "#/$defs/nonEmptyString" }
+        ,"pending_transition_to": { "$ref": "#/$defs/nonEmptyString" }
+        ,"pending_transition_role": { "$ref": "#/$defs/nonEmptyString" }
+        ,"pending_transition_run_id": { "$ref": "#/$defs/nonEmptyString" }
+        ,"pending_transition_evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
       }
     },
     "lock": {

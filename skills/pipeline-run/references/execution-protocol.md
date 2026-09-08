@@ -42,6 +42,8 @@ O gatilho drena o trabalho independente elegível, e não apenas um papel ou um 
 
 Decisão de negócio, aprovação visual, aprovação para PRD, terceiro retorno e lock externo adiam somente o `blocker.scope` declarado: `card`, `delivery_group` ou `dependency_group`. Um grupo `optimization` continua nos membros independentes; um grupo `dependency` bloqueia todos os membros; `DEPENDS ON` bloqueia apenas o grupo posterior até a conclusão terminal do anterior. A simples existência de um próximo papel nunca encerra o loop.
 
+Retorno técnico de Review ou QA não é gate: `changes_required` e `rejected` materializam correção pendente e devolvem a mesma lane ao DEV. Uma transição aprovada que ficou pendente por relógio, snapshot ou releitura aparece como slot operacional e deve ser reconciliada sem repetir o papel. Somente depois de esgotar essa autorrecuperação limitada uma falha técnica pode ser reportada; ela continua sem exigir decisão humana.
+
 ## Cápsula mínima
 
 - `run_id`;

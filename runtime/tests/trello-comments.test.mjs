@@ -100,6 +100,23 @@ test("escreve e relê exatamente o comentário UTF-8", async () => {
   }
 });
 
+test("releitura individual renova a evidência temporal sem nova escrita", async () => {
+  const root = await projectFixture();
+  try {
+    const text = "RUN_ID: RUN-20260908-ABCDEF12\nEVENT: role_handoff, transition";
+    const result = await executeTrelloComment({
+      action: "read", projectRoot: root, cardRef: "card-1", commentRef: "comment-1", now: new Date("2026-09-08T12:00:05Z"),
+      fetchImpl: async () => new Response(JSON.stringify({ id: "comment-1", date: "2026-09-08T11:00:00Z", data: { card: { id: "card-1" }, text } }), { status: 200 })
+    });
+    assert.equal(result.status, "PASS");
+    assert.equal(result.written_at, "2026-09-08T11:00:00Z");
+    assert.equal(result.read_at, "2026-09-08T12:00:05.000Z");
+    assert.equal(result.readback_status, "confirmed");
+    assert.equal(result.content_sha256, createHash("sha256").update(text, "utf8").digest("hex"));
+    assert.equal(result.guarantees.tracker_writes_performed, false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("nega releitura divergente depois da escrita", async () => {
   const root = await projectFixture();
   const textPath = join(root, ".pipeline", "tmp", "comment.txt");
@@ -266,6 +283,46 @@ test("snapshot preserva handoff DEV na fronteira da transição e ignora falso b
     assert.equal(snapshot.cards[0].signals.implementation_complete, true);
     assert.equal(snapshot.cards[0].signals.review_approved, false);
     assert.equal(snapshot.cards[0].signals.implementation_evidence_ref, "dev-pass");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("snapshot transforma retorno de Review e transição PO pendente em ações recuperáveis", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", now: new Date("2026-09-08T12:00:00Z"), fetchImpl: async (url) => {
+      const value = String(url);
+      if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev", pos: 1 }, { id: "refinement", pos: 2 }]));
+      if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([
+        { id: "card-dev", name: "FP-228 Corrigir", idList: "dev", pos: 1 },
+        { id: "card-po", name: "FP-229 Refinado", idList: "refinement", pos: 2 }
+      ]));
+      if (value.includes("/attachments")) return new Response(JSON.stringify([]));
+      if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
+        { id: "review-return", type: "commentCard", date: "2026-09-08T11:04:00Z", data: { card: { id: "card-dev" }, text: "ROLE: pipeline-code-review\nSTATUS: return / changes_required\nSTATE_FROM: in_development\nSTATE_TO: in_development\nEVENT: role_handoff, blocker" } },
+        { id: "move-dev", type: "updateCard", date: "2026-09-08T10:01:00Z", data: { listAfter: { id: "dev" } } },
+        { id: "dev-pass", type: "commentCard", date: "2026-09-08T10:00:59Z", data: { card: { id: "card-dev" }, text: "ROLE: pipeline-dev\nVERDICT: PASS\nTRANSITION: ready_for_development -> in_development\nNEXT_ROLE: pipeline-code-review" } }
+      ]));
+      if (value.includes("card-po/actions")) return new Response(JSON.stringify([
+        { id: "technical-note", type: "commentCard", date: "2026-09-08T11:02:00Z", data: { card: { id: "card-po" }, text: "CODEX BLOCKER\nCAUSE: diferença de relógio\nHUMAN ACTION: Não requerida." } },
+        { id: "po-handoff", type: "commentCard", date: "2026-09-08T11:01:00Z", data: { card: { id: "card-po" }, text: "RUN_ID: RUN-20260908-ABCDEF12\nROLE: pipeline-po\nSTATUS: completed\nSTATE_FROM: refinement\nSTATE_TO: ux_ui\nEVENT: role_handoff, transition" } }
+      ]));
+      return new Response(JSON.stringify([]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    const byRef = new Map(snapshot.cards.map((card) => [card.ref, card]));
+    assert.equal(byRef.get("card-dev").signals.implementation_complete, false);
+    assert.equal(byRef.get("card-dev").signals.review_evidence_ref, "review-return");
+    assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
+    assert.equal(byRef.get("card-po").signals.pending_transition, true);
+    assert.equal(byRef.get("card-po").signals.pending_transition_to, "ux_ui");
+    assert.equal(byRef.get("card-po").signals.pending_transition_run_id, "RUN-20260908-ABCDEF12");
+    assert.equal(byRef.get("card-po").signals.pending_transition_evidence_ref, "po-handoff");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

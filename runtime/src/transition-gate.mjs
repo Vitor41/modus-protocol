@@ -12,6 +12,7 @@ const RUNTIME_DIR = resolve(SOURCE_DIR, "..");
 const REPOSITORY_DIR = resolve(RUNTIME_DIR, "..");
 const PACKAGE = JSON.parse(readFileSync(join(RUNTIME_DIR, "package.json"), "utf8"));
 const DEFAULT_MAX_AGE_MS = 15 * 60 * 1000;
+const DEFAULT_CLOCK_SKEW_MS = 5 * 1000;
 
 function parseData(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
@@ -97,14 +98,16 @@ export function validateTransitionReceipt(input = {}) {
     const readAt = Date.parse(receipt.comment.read_at);
     const now = input.now instanceof Date ? input.now.getTime() : Date.now();
     const maxAgeMs = input.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
-    if (!Number.isFinite(writtenAt) || !Number.isFinite(readAt) || readAt < writtenAt) {
+    const maxClockSkewMs = input.maxClockSkewMs ?? DEFAULT_CLOCK_SKEW_MS;
+    const clockSkewMs = Number.isFinite(writtenAt) && Number.isFinite(readAt) ? Math.max(0, writtenAt - readAt) : undefined;
+    if (!Number.isFinite(writtenAt) || !Number.isFinite(readAt) || clockSkewMs > maxClockSkewMs) {
       diagnostic(
         diagnostics,
         "TRANSITION_COMMENT_TIMESTAMPS_INVALID",
         "comment",
         "Os timestamps de escrita e releitura são inválidos ou estão fora de ordem."
       );
-    } else if (readAt > now || now - readAt > maxAgeMs) {
+    } else if (Math.max(writtenAt, readAt) > now + maxClockSkewMs || now - Math.max(writtenAt, readAt) > maxAgeMs) {
       diagnostic(
         diagnostics,
         "TRANSITION_COMMENT_RECEIPT_STALE",
@@ -125,7 +128,12 @@ export function validateTransitionReceipt(input = {}) {
     comment_ref: receipt.comment?.ref,
     transition: receipt.transition,
     diagnostics,
-    guarantees: { tracker_writes_performed: false }
+    guarantees: {
+      tracker_writes_performed: false,
+      ...(receipt.comment && Number.isFinite(Date.parse(receipt.comment.written_at)) && Number.isFinite(Date.parse(receipt.comment.read_at)) && Date.parse(receipt.comment.read_at) < Date.parse(receipt.comment.written_at)
+        ? { clock_skew_reconciled: true, clock_skew_ms: Date.parse(receipt.comment.written_at) - Date.parse(receipt.comment.read_at) }
+        : { clock_skew_reconciled: false })
+    }
   };
 }
 

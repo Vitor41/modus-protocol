@@ -20,7 +20,7 @@ Avalie a entrega fixada sem assumir autoria ou corrigir durante a revisão.
 ## Veredito
 
 - `approved`: permanece tecnicamente íntegro e pode ir a `ready_for_validation`.
-- `changes_required`: retorna ao DEV e permanece em `in_development`; exige ao menos um achado acionável.
+- `changes_required`: retorno técnico normal ao DEV, permanece em `in_development` e exige ao menos um achado acionável. Não é bloqueio humano nem condição para encerrar o loop; o ORCHESTRATOR deve disparar a correção automaticamente.
 - Code Review não movimenta para uma coluna própria e não substitui QA.
 
 Produza `schema/role-handoff.schema.json` com `role: pipeline-code-review` e valide com `../../runtime/src/role-gate.mjs`. Somente `PASS` pode ser aplicado pelo ORCHESTRATOR.

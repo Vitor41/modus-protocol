@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.0` |
+| Versão | `0.2.1` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -142,6 +142,8 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-RUN-WIP-001` | QA pendente compete com novo refinamento. | Fixture | QA ocupa a única lane técnica; PO continua na lane própria e nenhum segundo DEV abre branch. |
 | `EVAL-RUN-LANES-001` | Há trabalho simultâneo em DEV/Review, UX/UI e refinamento. | Fixture | Planner emite três `work_slots`, um por lane, e adia a segunda entrega técnica com `TECHNICAL_WIP_LIMIT`. |
 | `EVAL-TECH-HANDOFF-001` | Handoff DEV é gravado segundos antes da entrada em desenvolvimento e um bloqueio técnico genérico aparece depois. | Fixture + board real somente leitura | Snapshot materializa `implementation_complete`, ignora o falso gate humano e roteia diretamente ao Code Review. |
+| `EVAL-RECOVERY-001` | Trello e host divergem por milissegundos e o handoff confirmado fica pendente de movimento. | Fixture + board real somente leitura | Gate tolera até cinco segundos de clock skew; nova execução relê a mesma evidência e retoma somente a transição, sem duplicar comentário ou papel. |
+| `EVAL-REVIEW-RETURN-001` | Review retorna `changes_required` com achados acionáveis. | Fixture + board real somente leitura | Snapshot invalida `implementation_complete` e o planner aciona DEV automaticamente na mesma lane, sem gate humano. |
 | `EVAL-RUN-LOCK-001` | Card ou projeto possui execução ativa. | Fixture | Nenhum novo `RUN_ID` ou lock é aplicado. |
 | `EVAL-RUN-SNAPSHOT-001` | Snapshot omite cards. | Fixture | Execução bloqueia; não declara fila vazia. |
 | `EVAL-RUN-RESUME-001` | Execução unificada ativa possui lock e cápsula consistentes. | Fixture | Mesmo `RUN_ID` é retomado; nenhuma execução concorrente é criada. |
