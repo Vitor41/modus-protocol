@@ -39,10 +39,21 @@
             "write": { "enum": ["verified", "unavailable", "not_tested"] },
             "read_provider": { "enum": ["codex-connector", "environment", "mcp"] },
             "write_provider": { "enum": ["codex-connector", "environment", "mcp"] },
+            "observation": { "$ref": "#/$defs/commentObservation" },
             "evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
             "verified_at": { "$ref": "#/$defs/nonEmptyString" }
           }
         }
+      }
+    },
+    "commentObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "observed_at", "card_refs"],
+      "properties": {
+        "scope": { "const": "all-actionable-cards" },
+        "observed_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$" },
+        "card_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } }
       }
     },
     "list": {

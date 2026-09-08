@@ -46,7 +46,13 @@ function matchesCardKey(adapter, key) {
 
 function routeCard(state, signals = {}) {
   if (state === "refinement") return { skill: "pipeline-po", action: "refine", profile: "PROFUNDO" };
-  if (state === "ux_ui") return { skill: "pipeline-ux-ui", action: "classify-or-design", profile: "PROFUNDO" };
+  if (state === "ux_ui") {
+    return {
+      skill: "pipeline-ux-ui",
+      action: signals.screen_approval_valid === true ? "handoff-approved-design" : "classify-or-design",
+      profile: "PROFUNDO"
+    };
+  }
   if (state === "ready_for_development") {
     return { skill: "pipeline-dev", action: "implement", profile: "EQUILIBRADO" };
   }
@@ -76,7 +82,10 @@ function withExecutionRequest(route) {
 }
 
 function blockedReason(card, state) {
-  if (card.signals?.awaiting_human === true) return "AWAITING_HUMAN";
+  const gateResolved =
+    (state === "ux_ui" && card.signals?.screen_approval_valid === true) ||
+    (state === "ready_for_release" && card.signals?.production_approval_valid === true);
+  if (card.signals?.awaiting_human === true && !gateResolved) return "AWAITING_HUMAN";
   if (card.lock?.status === "active") return "ACTIVE_LOCK";
   if (Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
@@ -195,6 +204,29 @@ export function planRun(input = {}) {
     capability_evidence_ref: snapshot.integration.comments.evidence_ref,
     capability_verified_at: snapshot.integration.comments.verified_at
   };
+  const actionableListRefs = new Set(["refinement", "ux_ui", "ready_for_development", "in_development", "ready_for_validation", "ready_for_release"].map((state) => adapter.tracker.states[state]));
+  const expectedObservedRefs = (snapshot.cards ?? []).filter((card) => actionableListRefs.has(card.list_ref)).map((card) => card.ref).sort();
+  const observation = snapshot.integration.comments.observation;
+  const actualObservedRefs = [...(observation?.card_refs ?? [])].sort();
+  const observationComplete =
+    observation?.scope === "all-actionable-cards" &&
+    expectedObservedRefs.length === actualObservedRefs.length &&
+    expectedObservedRefs.every((ref, index) => ref === actualObservedRefs[index]);
+  guarantees.all_actionable_cards_refreshed = observationComplete;
+  if (observation?.observed_at) guarantees.snapshot_observed_at = observation.observed_at;
+  if (mode === "live" && !observationComplete) {
+    return {
+      contract_version: "0.1",
+      tool: { name: "pipeline-run-planner", version: PACKAGE.version },
+      mode,
+      status: "BLOCKED",
+      reason: "TRACKER_SNAPSHOT_COVERAGE_INCOMPLETE",
+      expected_card_refs: expectedObservedRefs,
+      observed_card_refs: actualObservedRefs,
+      doctor,
+      guarantees
+    };
+  }
   if (snapshot.active_execution?.status === "active" && snapshot.active_execution.architecture === "legacy") {
     return {
       contract_version: "0.1",
@@ -220,7 +252,7 @@ export function planRun(input = {}) {
       activeCard.lock.run_id === activeExecution.run_id &&
       activeState === activeExecution.state &&
       activeRoute?.skill === activeExecution.role;
-    const activeCardDeferred = activeCard && (activeCard.signals?.awaiting_human === true || activeCard.lock?.status === "blocked");
+    const activeCardDeferred = activeCard && (blockedReason(activeCard, activeState) === "AWAITING_HUMAN" || activeCard.lock?.status === "blocked");
     if (!resumeConsistent && !activeCardDeferred) {
       return {
         contract_version: "0.1",

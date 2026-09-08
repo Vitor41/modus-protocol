@@ -52,6 +52,11 @@ function trackerSnapshot(adapter, cards, extra = {}) {
         write: "verified",
         read_provider: adapter.tracker.comments.read_provider,
         write_provider: adapter.tracker.comments.write_provider,
+        observation: {
+          scope: "all-actionable-cards",
+          observed_at: "2026-08-28T12:00:00Z",
+          card_refs: cards.filter((card) => ![adapter.tracker.states.ideas, adapter.tracker.states.ready_for_production, adapter.tracker.states.done].includes(card.list_ref)).map((card) => card.ref)
+        },
         evidence_ref: "trello-comment-test-fixture",
         verified_at: "2026-08-28T12:00:00Z"
       }
@@ -230,6 +235,36 @@ test("bloqueio individual não paralisa card independente do grupo de otimizaç�
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-202");
     assert.ok(result.blocked.some((item) => item.key === "FX-201" && item.reason === "AWAITING_HUMAN" && item.block_scope === "card"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("aprovação visual atual torna card de UX elegível mesmo com sinal antigo de espera", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "card-ux-approved", key: "FX-211", title: "Tela aprovada", list_ref: adapter.tracker.states.ux_ui, position: 1, signals: { awaiting_human: true, screen_approval_valid: true } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.key, "FX-211");
+    assert.equal(result.selected.skill, "pipeline-ux-ui");
+    assert.equal(result.selected.action, "handoff-approved-design");
+    assert.equal(result.guarantees.all_actionable_cards_refreshed, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("live bloqueia snapshot que não comprova releitura de todos os cards acionáveis", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshot = trackerSnapshot(adapter, [
+      { ref: "card-one", key: "FX-212", title: "Um", list_ref: adapter.tracker.states.refinement, position: 1 },
+      { ref: "card-two", key: "FX-213", title: "Dois", list_ref: adapter.tracker.states.ux_ui, position: 2 }
+    ]);
+    snapshot.integration.comments.observation.card_refs = ["card-one"];
+    const snapshotPath = await writeSnapshot(root, snapshot);
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "BLOCKED");
+    assert.equal(result.reason, "TRACKER_SNAPSHOT_COVERAGE_INCOMPLETE");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -13,8 +13,10 @@ O snapshot normalizado contém:
 - `delivery_groups[]` quando houver grupos ou dependências, inclusive membros em estados terminais necessários para resolver precedência;
 - `active_execution` quando existir lote em andamento no projeto.
 - `integration.comments` com leitura, escrita e referência do teste observadas.
+- `integration.comments.observation` com horário e referências de todos os cards acionáveis relidos naquela captura.
 
 Sinais são derivados de evidências reais pelo adaptador/integrador. Ausência de sinal nunca equivale a aprovação.
+Uma aprovação humana posterior resolve a espera correspondente no mesmo card; um bloqueio posterior volta a prevalecer pela ordem cronológica. O planner rejeita execução ao vivo quando a cobertura não coincide exatamente com todos os cards acionáveis presentes no snapshot.
 
 ## Sequência de escrita
 

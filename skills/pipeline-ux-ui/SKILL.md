@@ -10,6 +10,7 @@ Converta critérios aprovados em comportamento de interface implementável e ver
 ## Classificar e especificar
 
 1. Confirme `RUN_ID`, card, lock, estado `ux_ui`, critérios vigentes e capsule.
+   Se a rota for `handoff-approved-design`, releia no card o comentário `Tela aprovada`, a especificação e os anexos vigentes. Quando a aprovação for posterior à evidência visual atual, reutilize esses artefatos e conclua o handoff; não regenere mock, especificação nem solicite nova aprovação sem evidência de que foram substituídos depois do comentário humano.
 2. Classifique explicitamente `no_frontend` ou `frontend`; toda demanda passa por essa decisão.
 3. Em `no_frontend`, registre a justificativa e o aval sem criar trabalho visual artificial.
 4. Em `frontend`, leia `references/design-gate.md` e descreva fluxo, hierarquia, estados, feedback, teclado, foco, acessibilidade e responsividade proporcionais ao card.

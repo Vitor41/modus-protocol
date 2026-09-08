@@ -159,8 +159,36 @@ test("snapshot hidrata comentários apenas dos estados ativos", async () => {
     assert.equal(urls.filter((url) => url.includes("/actions")).length, 1);
     assert.equal(urls.some((url) => url.includes("ignored/actions")), false);
     assert.equal(result.guarantees.full_board_comment_scan, false);
+    assert.equal(result.guarantees.all_actionable_cards_refreshed, true);
     const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
     assert.deepEqual(snapshot.cards.map((card) => card.ref), ["active"]);
+    assert.deepEqual(snapshot.integration.comments.observation.card_refs, ["active"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("aprovação visual posterior resolve a espera humana no card de UX", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
+  adapter.tracker.card_keys = [{ kind: "feature", pattern: "^FP-[0-9]{3}$" }];
+  adapter.tracker.human_gates = { production_approval: "APROVADO PARA PRD", screen_approval: "Tela aprovada", unblock_prefix: "BLOQUEIO RESOLVIDO:" };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  try {
+    await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", now: new Date("2026-09-07T23:00:00Z"), fetchImpl: async (url) => {
+      if (String(url).includes("/lists")) return new Response(JSON.stringify([{ id: "ux", name: "UX/UI", pos: 1 }]));
+      if (String(url).includes("/cards?")) return new Response(JSON.stringify([{ id: "card-ux", name: "FP-214 Tela", idList: "ux", pos: 1 }]));
+      if (String(url).includes("/actions/")) return new Response(JSON.stringify({ data: { card: { id: "verify-card" } } }));
+      return new Response(JSON.stringify([
+        { id: "blocked", date: "2026-09-07T20:00:00Z", data: { card: { id: "card-ux" }, text: "Aguardando resposta humana" } },
+        { id: "approved", date: "2026-09-07T21:00:00Z", data: { card: { id: "card-ux" }, text: "Tela aprovada" } }
+      ]));
+    }});
+    const snapshot = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, ".pipeline", "tmp", "snapshot.json"), "utf8"));
+    assert.equal(snapshot.cards[0].signals.awaiting_human, false);
+    assert.equal(snapshot.cards[0].signals.screen_approval_valid, true);
+    assert.equal(snapshot.integration.comments.observation.observed_at, "2026-09-07T23:00:00.000Z");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
