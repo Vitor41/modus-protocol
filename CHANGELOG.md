@@ -11,7 +11,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 ### Corrigido
 
 - O planner preserva a continuidade da lane técnica antes da posição visual: retoma primeiro uma execução unificada consistente ou um lock ativo compatível com o `continueRunId`, mesmo sem `active_execution`; dentro de `EM DESENVOLVIMENTO`, encaminha handoff concluído para Code Review antes de reabrir implementação pendente recém-desbloqueada, mantendo WIP igual a um, locks e gates.
-- A Skill de Code Review fixa o contrato executável de `changes_required`: `status: return` e blocker técnico completo são obrigatórios, evitando reparo parcial que troca o status mas continua inválido no schema.
+- O schema, o role gate executável e a Skill de Code Review fixam o contrato de `changes_required`: `status: return` e blocker técnico completo são obrigatórios, evitando reparo parcial que troca o status mas continua inválido; retornos legítimos dos demais papéis preservam seu contrato genérico.
 
 ## [0.2.7] - 2026-09-08
 

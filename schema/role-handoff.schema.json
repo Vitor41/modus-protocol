@@ -113,6 +113,33 @@
       "then": { "properties": { "deliverable": { "$ref": "#/$defs/reviewDeliverable" } } }
     },
     {
+      "if": {
+        "properties": {
+          "role": { "const": "pipeline-code-review" },
+          "status": { "const": "return" },
+          "deliverable": {
+            "properties": { "verdict": { "const": "changes_required" } },
+            "required": ["verdict"]
+          }
+        },
+        "required": ["role", "status", "deliverable"]
+      },
+      "then": {
+        "required": ["blocker"],
+        "properties": {
+          "blocker": {
+            "required": ["reason", "requires_human", "kind", "scope", "return_to"],
+            "properties": {
+              "requires_human": { "const": false },
+              "kind": { "const": "technical" },
+              "scope": { "const": "card" },
+              "return_to": { "const": "pipeline-dev" }
+            }
+          }
+        }
+      }
+    },
+    {
       "if": { "properties": { "role": { "const": "pipeline-qa" } }, "required": ["role"] },
       "then": { "properties": { "deliverable": { "$ref": "#/$defs/qaDeliverable" } } }
     }
