@@ -368,6 +368,46 @@ test("gate humano de release libera o próximo DEV sem paralisar PO e UX", async
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("gate humano técnico com escopo de card libera o próximo DEV", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "loop-limit", key: "FX-227", title: "Aguardar decisão após três ciclos", list_ref: adapter.tracker.states.in_development, position: 1, signals: { awaiting_human: true, human_gate_kind: "loop_limit" } },
+      { ref: "next-dev", key: "FX-228", title: "Próxima entrega independente", list_ref: adapter.tracker.states.ready_for_development, position: 2 },
+      { ref: "later-dev", key: "FX-229", title: "Entrega seguinte", list_ref: adapter.tracker.states.ready_for_development, position: 3 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: "RUN-20260908-ABCDEF12" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, "RUN-20260908-ABCDEF12");
+    assert.equal(result.work_slots[0].key, "FX-228");
+    assert.ok(result.blocked.some((item) => item.key === "FX-227" && item.reason === "HUMAN_GATE_LOOP_LIMIT" && item.block_scope === "card"));
+    assert.ok(result.deferred.some((item) => item.key === "FX-229" && item.reason === "LANE_CAPACITY"));
+    assert.ok(!result.deferred.some((item) => item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("lock ativo externo prevalece sobre gate humano técnico e preserva WIP", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "locked-loop-limit",
+        key: "FX-227",
+        title: "Execução externa ainda ativa",
+        list_ref: adapter.tracker.states.in_development,
+        position: 1,
+        signals: { awaiting_human: true, human_gate_kind: "loop_limit" },
+        lock: { run_id: "RUN-20260908-87654321", status: "active", role: "pipeline-dev", state: "in_development", updated_at: "2026-08-28T11:59:00Z" }
+      },
+      { ref: "next-dev", key: "FX-228", title: "Não abrir enquanto houver lock", list_ref: adapter.tracker.states.ready_for_development, position: 2 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: "RUN-20260908-ABCDEF12" });
+    assert.equal(result.status, "EMPTY");
+    assert.ok(result.blocked.some((item) => item.key === "FX-227" && item.reason === "ACTIVE_LOCK"));
+    assert.ok(result.deferred.some((item) => item.key === "FX-228" && item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("card técnico inválido ainda ocupa WIP e impede uma segunda branch", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {

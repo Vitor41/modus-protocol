@@ -116,10 +116,10 @@ function blockedReason(card, state, { ignoredLockRunId } = {}) {
     (state === "ux_ui" && card.signals?.screen_approval_valid === true) ||
     (state === "ready_for_release" && card.signals?.production_approval_valid === true);
   if (state === "ux_ui" && card.signals?.screen_approval_required === true) return "SCREEN_APPROVAL_REQUIRED";
+  if (card.lock?.status === "active" && card.lock.run_id !== ignoredLockRunId && (!card.lock.state || card.lock.state === state)) return "ACTIVE_LOCK";
   if (card.signals?.awaiting_human === true && !gateResolved && HUMAN_GATE_KINDS.has(card.signals?.human_gate_kind)) {
     return `HUMAN_GATE_${card.signals.human_gate_kind.toUpperCase()}`;
   }
-  if (card.lock?.status === "active" && card.lock.run_id !== ignoredLockRunId && (!card.lock.state || card.lock.state === state)) return "ACTIVE_LOCK";
   if (card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
   if (state === "ready_for_release" && card.signals?.production_approval_valid !== true) {
@@ -471,7 +471,18 @@ export function planRun(input = {}) {
   }
 
   const technicalInFlightStates = new Set(["in_development", "ready_for_validation"]);
-  const technicalOccupied = snapshot.cards.some((card) => technicalInFlightStates.has(stateByList.get(card.list_ref)));
+  const technicalHumanWaits = new Set(
+    blocked
+      .filter((card) =>
+        technicalInFlightStates.has(card.state) &&
+        card.block_scope === "card" &&
+        (card.reason?.startsWith("HUMAN_GATE_") || card.reason === "LOOP_LIMIT_REACHED")
+      )
+      .map((card) => card.card_ref)
+  );
+  const technicalOccupied = snapshot.cards.some((card) =>
+    technicalInFlightStates.has(stateByList.get(card.list_ref)) && !technicalHumanWaits.has(card.ref)
+  );
   const approvedReleaseSeed = eligible.find((card) => card.state === "ready_for_release");
   const technicalSeed = technicalOccupied
     ? eligible.find((card) => technicalInFlightStates.has(card.state))

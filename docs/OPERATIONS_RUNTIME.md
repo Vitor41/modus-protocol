@@ -68,8 +68,9 @@ Quando as três capacidades possuem trabalho elegível, `work_slots` contém as 
 1. release já aprovada;
 2. QA pendente;
 3. implementação/review em andamento;
-4. entrada de DEV;
-5. nenhuma nova entrega técnica enquanto existir uma unidade em andamento ou aguardando aprovação para PRD.
+4. entrada de DEV.
+
+Um gate humano canônico ou `loop_limit` com escopo de card retira somente esse card do WIP técnico. Cards independentes em `ready_for_development` continuam elegíveis; locks ativos e estados técnicos estruturalmente inválidos permanecem ocupando a lane por segurança. A espera por aprovação para PRD também libera a lane, mas uma aprovação posterior recupera prioridade para a integração Git.
 
 Dentro do mesmo estado, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 

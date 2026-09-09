@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.2.7] - 2026-09-08
+
+### Corrigido
+
+- Gates humanos canônicos e `loop_limit` com escopo de card deixam de consumir o WIP técnico global quando o card permanece em `EM DESENVOLVIMENTO` ou `PRONTO PARA VALIDAÇÃO`; o planner continua automaticamente cards independentes sem enfraquecer locks ativos nem estados técnicos inválidos.
+
 ## [0.2.6] - 2026-09-08
 
 ### Adicionado

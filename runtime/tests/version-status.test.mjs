@@ -18,7 +18,7 @@ test("status comprova runtime ativo e origem antes do tracker", async () => {
   try {
     const result = getVersionStatus({ projectRoot: root });
     assert.equal(result.status, "PASS");
-    assert.equal(result.active.runtime_version, "0.2.6");
+    assert.equal(result.active.runtime_version, "0.2.7");
     assert.match(result.active.runtime_root, /runtime$/u);
     assert.equal(result.project.required_kernel, undefined);
   } finally { await rm(root, { recursive: true, force: true }); }

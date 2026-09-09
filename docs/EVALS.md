@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.6` |
+| Versão | `0.2.7` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -175,6 +175,7 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-PO-BLOCK-ALIAS-001` | Bloqueio persistido usa o campo operacional `BLOCKER_KIND`. | Fixture + histórico real | Snapshot mantém a espera humana até `BLOQUEIO RESOLVIDO:` e impede PO/UX de atravessar o gate por alias não reconhecido. |
 | `EVAL-AGENT-LIFECYCLE-001` | Code Review foi lançado, mas a resposta do orquestrador terminou antes do handoff e o card permaneceu em desenvolvimento. | Fixture + piloto real NKT016 | Launcher retorna somente com `all-jobs-terminal`, nenhum job ativo e handoffs consumíveis; Review aprovado segue para QA no mesmo run. |
 | `EVAL-WIP-RELEASE-001` | Um card aguarda validação humana em `ready_for_release` enquanto outro está pronto para desenvolver. | Fixture + replay NKTree | A espera humana não ocupa a lane; o próximo DEV é selecionado sequencialmente. Após `APROVADO PARA PRD`, a integração Git recupera prioridade. |
+| `EVAL-WIP-LOOP-LIMIT-001` | Um card em `in_development` atinge `loop_limit` com escopo de card enquanto outros cards independentes estão prontos. | Fixture + replay Financial Product | O card bloqueado não ocupa a lane técnica global; o próximo DEV é selecionado e apenas a segunda entrega pronta fica adiada por capacidade. |
 | `EVAL-EMPTY-CONTRACT-001` | O plano não tem slots porque restam apenas gates humanos ou WIP inválido. | Fixture | Todo plano `EMPTY` inclui `run_id` e `work_slots: []`, permitindo materializar o recibo e executar o run-close-gate sem adaptação manual. |
 | `EVAL-DEV-ENTRY-001` | Um DEV inicial é lançado a partir de `ready_for_development`, enquanto uma correção começa em `in_development`. | Fixture + replay FP | O gate aceita a origem real de cada iteração e rejeita estado reescrito pelo orquestrador. |
 | `EVAL-LAUNCHER-PARTIAL-001` | Duas lanes são lançadas; uma conclui e a outra falha antes do handoff. | Fixture + replay FP | O ledger termina com `active_jobs: 0`, retorna `PARTIAL`, preserva o job concluído e marca somente a lane falha para recuperação. |
