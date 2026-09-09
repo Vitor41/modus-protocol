@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.7` |
+| Versão | `0.2.8` |
 | Estado | Cutover técnico concluído nos dois projetos e rollback isolado aprovado |
 | Projetos obrigatórios | Projeto Piloto A e Projeto Piloto B |
 

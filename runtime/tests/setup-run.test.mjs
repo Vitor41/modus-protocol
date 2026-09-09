@@ -329,6 +329,177 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("planner preserva continuidade do handoff técnico antes de retomar card recém-desbloqueado", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "reopened-dev",
+        key: "FX-224",
+        title: "Retomar implementação após decisão humana",
+        list_ref: adapter.tracker.states.in_development,
+        position: 1,
+        signals: {
+          awaiting_human: false,
+          human_wait_at: "2026-09-09T01:00:00Z",
+          human_resolution_at: "2026-09-09T04:12:00Z",
+          implementation_complete: false,
+          review_approved: false
+        }
+      },
+      {
+        ref: "completed-dev",
+        key: "FX-225",
+        title: "Continuar para Code Review",
+        list_ref: adapter.tracker.states.in_development,
+        position: 2,
+        signals: {
+          implementation_complete: true,
+          review_approved: false,
+          implementation_evidence_ref: "dev-handoff"
+        }
+      }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: "RUN-20260909-ABCDEF12" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.key, "FX-225");
+    assert.equal(result.selected.skill, "pipeline-code-review");
+    assert.equal(result.selected.action, "review");
+    assert.deepEqual(result.work_slots.map((slot) => slot.key), ["FX-225"]);
+    assert.ok(result.deferred.some((item) => item.key === "FX-224" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("planner retoma execução técnica consistente antes de outro card em andamento", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "other-review",
+        key: "FX-226",
+        title: "Outro review",
+        list_ref: adapter.tracker.states.in_development,
+        position: 1,
+        signals: { implementation_complete: true, review_approved: false }
+      },
+      {
+        ref: "active-dev",
+        key: "FX-227",
+        title: "Execução ativa",
+        list_ref: adapter.tracker.states.in_development,
+        position: 2,
+        lock: { run_id: "RUN-20260909-12345678", status: "active", role: "pipeline-dev", state: "in_development" }
+      }
+    ], {
+      active_execution: {
+        architecture: "unified",
+        status: "active",
+        run_id: "RUN-20260909-12345678",
+        card_ref: "active-dev",
+        role: "pipeline-dev",
+        state: "in_development",
+        capsule_present: true
+      }
+    }));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.resuming, true);
+    assert.equal(result.selected.key, "FX-227");
+    assert.equal(result.selected.capsule_action, "resume-existing");
+    assert.ok(result.deferred.some((item) => item.key === "FX-226" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("active_execution canônica prevalece sobre segundo lock próprio com ação mais avançada", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20260909-12345678";
+    const canonicalLock = { run_id: runId, status: "active", role: "pipeline-dev", state: "in_development" };
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "canonical-dev",
+        key: "FX-228",
+        title: "Execução canônica",
+        list_ref: adapter.tracker.states.in_development,
+        position: 1,
+        lock: canonicalLock
+      },
+      {
+        ref: "second-own-review",
+        key: "FX-229",
+        title: "Segundo lock do mesmo run",
+        list_ref: adapter.tracker.states.in_development,
+        position: 2,
+        signals: { implementation_complete: true, review_approved: false },
+        lock: { run_id: runId, status: "active", role: "pipeline-code-review", state: "in_development" }
+      }
+    ], {
+      active_execution: {
+        architecture: "unified",
+        status: "active",
+        run_id: runId,
+        card_ref: "canonical-dev",
+        role: "pipeline-dev",
+        state: "in_development",
+        capsule_present: true
+      }
+    }));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: runId });
+    assert.equal(result.status, "READY");
+    assert.equal(result.resuming, true);
+    assert.equal(result.selected.key, "FX-228");
+    assert.equal(result.selected.skill, "pipeline-dev");
+    assert.equal(result.selected.capsule_action, "resume-existing");
+    assert.deepEqual(result.selected.lock_proposal, canonicalLock);
+    assert.ok(result.deferred.some((item) => item.key === "FX-229" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("planner preserva lock técnico do RUN_ID sem active_execution antes da prioridade por ação", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const ownLock = {
+      run_id: "RUN-20260909-12345678",
+      status: "active",
+      role: "pipeline-dev",
+      state: "in_development",
+      updated_at: "2026-09-09T04:12:00Z"
+    };
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "locked-dev",
+        key: "FX-228",
+        title: "Implementação já bloqueada pelo próprio run",
+        list_ref: adapter.tracker.states.in_development,
+        position: 1,
+        lock: ownLock
+      },
+      {
+        ref: "other-review",
+        key: "FX-229",
+        title: "Review concorrente",
+        list_ref: adapter.tracker.states.in_development,
+        position: 2,
+        signals: { implementation_complete: true, review_approved: false }
+      }
+    ]));
+    const result = planRun({
+      projectRoot: root,
+      adapterPath,
+      trackerSnapshotPath: snapshotPath,
+      mode: "live",
+      continueRunId: "RUN-20260909-12345678"
+    });
+    assert.equal(result.status, "READY");
+    assert.equal(result.resuming, true);
+    assert.equal(result.selected.key, "FX-228");
+    assert.equal(result.selected.skill, "pipeline-dev");
+    assert.equal(result.selected.capsule_action, "resume-existing");
+    assert.deepEqual(result.selected.lock_proposal, ownLock);
+    assert.ok(result.deferred.some((item) => item.key === "FX-229" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("review devolvido vai ao DEV enquanto handoff pendente é reconciliado sem repetir PO", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {

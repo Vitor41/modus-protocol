@@ -24,7 +24,7 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock 
 ## Veredito
 
 - `approved`: permanece tecnicamente íntegro e pode ir a `ready_for_validation`.
-- `changes_required`: retorno técnico normal ao DEV, permanece em `in_development` e exige ao menos um achado acionável. Não é bloqueio humano nem condição para encerrar o loop; o ORCHESTRATOR deve disparar a correção automaticamente.
+- `changes_required`: retorno técnico normal ao DEV, permanece em `in_development` e exige ao menos um achado acionável. O handoff deve usar `status: return` e incluir `blocker.reason`, `requires_human: false`, `kind: technical`, `scope: card` e `return_to: pipeline-dev`; não use `status: completed`. Não é bloqueio humano nem condição para encerrar o loop; o ORCHESTRATOR deve disparar a correção automaticamente.
 - `blocked`: use somente quando o achado comprovar `structural_scope`, `systemic_risk` ou `external_authorization`; declare o `blocker.kind`. Não use para quantidade, severidade ou dificuldade de correções pertencentes ao card.
 - Code Review não movimenta para uma coluna própria e não substitui QA.
 

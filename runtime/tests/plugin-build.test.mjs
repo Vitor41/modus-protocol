@@ -44,6 +44,21 @@ test("Skills empacotadas são byte a byte iguais à fonte", async () => {
   }
 });
 
+test("Skill de Code Review fixa o contrato técnico de changes_required", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-code-review", "SKILL.md"), "utf8");
+  const verdictSection = skill.split("## Veredito", 2)[1]?.split("##", 1)[0] ?? "";
+  for (const requiredInstruction of [
+    "`changes_required`",
+    "`status: return`",
+    "`requires_human: false`",
+    "`kind: technical`",
+    "`scope: card`",
+    "`return_to: pipeline-dev`"
+  ]) {
+    assert.ok(verdictSection.includes(requiredInstruction), requiredInstruction);
+  }
+});
+
 test("artefato inclui a política canônica de autonomia referenciada pelas Skills", async () => {
   const source = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"));
   const artifact = await readFile(join(built.targetRoot, "docs", "AUTONOMY_POLICY.md"));
@@ -82,7 +97,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.2.7");
+  assert.equal(status.active.runtime_version, "0.2.8");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

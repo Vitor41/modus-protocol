@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.7` |
+| Versão | `0.2.8` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -176,12 +176,14 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-AGENT-LIFECYCLE-001` | Code Review foi lançado, mas a resposta do orquestrador terminou antes do handoff e o card permaneceu em desenvolvimento. | Fixture + piloto real NKT016 | Launcher retorna somente com `all-jobs-terminal`, nenhum job ativo e handoffs consumíveis; Review aprovado segue para QA no mesmo run. |
 | `EVAL-WIP-RELEASE-001` | Um card aguarda validação humana em `ready_for_release` enquanto outro está pronto para desenvolver. | Fixture + replay NKTree | A espera humana não ocupa a lane; o próximo DEV é selecionado sequencialmente. Após `APROVADO PARA PRD`, a integração Git recupera prioridade. |
 | `EVAL-WIP-LOOP-LIMIT-001` | Um card em `in_development` atinge `loop_limit` com escopo de card enquanto outros cards independentes estão prontos. | Fixture + replay Financial Product | O card bloqueado não ocupa a lane técnica global; o próximo DEV é selecionado e apenas a segunda entrega pronta fica adiada por capacidade. |
+| `EVAL-WIP-CONTINUITY-001` | Um card recém-desbloqueado volta a competir por posição com outro que acabou de concluir DEV na mesma lane. | Fixture + replay Financial Product | O handoff técnico já produzido continua para Code Review antes da retomada; uma execução ativa ou lock compatível do `continueRunId`, mesmo sem `active_execution`, também não é preemptado nem recriado. |
 | `EVAL-EMPTY-CONTRACT-001` | O plano não tem slots porque restam apenas gates humanos ou WIP inválido. | Fixture | Todo plano `EMPTY` inclui `run_id` e `work_slots: []`, permitindo materializar o recibo e executar o run-close-gate sem adaptação manual. |
 | `EVAL-DEV-ENTRY-001` | Um DEV inicial é lançado a partir de `ready_for_development`, enquanto uma correção começa em `in_development`. | Fixture + replay FP | O gate aceita a origem real de cada iteração e rejeita estado reescrito pelo orquestrador. |
 | `EVAL-LAUNCHER-PARTIAL-001` | Duas lanes são lançadas; uma conclui e a outra falha antes do handoff. | Fixture + replay FP | O ledger termina com `active_jobs: 0`, retorna `PARTIAL`, preserva o job concluído e marca somente a lane falha para recuperação. |
 | `EVAL-DEV-PROGRESS-001` | DEV inicial ou de correção publica handoff estruturado válido com `STATE_FROM`, `STATE_TO` e `EVENTS`, mas usa uma frase livre em `NEXT_STEP`. | Fixture + replay NKT018/FP-069 | O snapshot deriva `implementation_complete` dos campos estruturados e direciona Code Review sem relançar o DEV. |
 | `EVAL-HANDOFF-IDENTITY-001` | Especialista troca o ID real do tracker pela chave visível do card no handoff. | Fixture + replay FP-069 | O role gate compara card, RUN_ID e papel com o slot planejado e exige apenas reparo mecânico da identidade. |
 | `EVAL-REVIEW-VERDICT-001` | Lock ou cápsula operacional do Review é publicado depois de `changes_required`. | Fixture + replay NKT018 | O snapshot considera somente comentários de Review com veredito terminal e preserva o retorno ao DEV. |
+| `EVAL-REVIEW-HANDOFF-001` | Code Review produz `changes_required` com status de conclusão ou corrige o status sem materializar blocker. | Fixture + replay Financial Product | A Skill exige `status: return` e blocker técnico completo antes do role gate; o retorno segue automaticamente ao DEV sem gate humano. |
 | `EVAL-STATE-001` | Card saiu de UX/UI para desenvolvimento, mas conserva bloqueios antigos. | Fixture + board real somente leitura | A entrada na nova lista invalida gates da fase anterior e o planner seleciona DEV. |
 | `EVAL-STATE-002` | Card em UX/UI recebe evidência visual nova após aprovação anterior enquanto outro card foi desbloqueado no refinamento. | Fixture + board real somente leitura | Somente o card visual aguarda nova aprovação; o PO continua elegível no outro card. |
 

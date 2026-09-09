@@ -23,6 +23,13 @@ const STATE_PRIORITY = {
   ux_ui: 4,
   refinement: 5
 };
+const IN_DEVELOPMENT_ACTION_PRIORITY = {
+  "reconcile-transition": 0,
+  "handoff-to-validation": 1,
+  review: 2,
+  "resolve-business-question": 3,
+  "implement-or-correct": 4
+};
 const HUMAN_GATE_KINDS = new Set([
   "business_rule",
   "screen_approval",
@@ -41,6 +48,12 @@ const RECOVERY_POLICY = {
   continue_independent_lanes: true,
   human_gate_kinds: [...HUMAN_GATE_KINDS]
 };
+
+function inDevelopmentActionPriority(card) {
+  return card.state === "in_development"
+    ? IN_DEVELOPMENT_ACTION_PRIORITY[card.action] ?? Number.MAX_SAFE_INTEGER
+    : 0;
+}
 
 function parseDataFile(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado: ${path}`);
@@ -286,7 +299,8 @@ export function planRun(input = {}) {
   const activeExecution = snapshot.active_execution?.status === "active" ? snapshot.active_execution : undefined;
   let ignoredLockRunId = input.continueRunId;
   let continuationRunId = input.continueRunId;
-  let resumableCardRef;
+  const resumableCardRefs = new Set();
+  let canonicalResumeFound = false;
   if (activeExecution?.architecture === "unified") {
     const activeCard = snapshot.cards.find((card) => card.ref === activeExecution.card_ref);
     const activeState = activeCard ? stateByList.get(activeCard.list_ref) : undefined;
@@ -300,7 +314,10 @@ export function planRun(input = {}) {
       activeRoute?.skill === activeExecution.role;
     continuationRunId ??= activeExecution.run_id;
     ignoredLockRunId = activeExecution.run_id;
-    if (resumeConsistent) resumableCardRef = activeCard.ref;
+    if (resumeConsistent) {
+      resumableCardRefs.add(activeCard.ref);
+      canonicalResumeFound = true;
+    }
     guarantees.stale_execution_reconciled = true;
   }
 
@@ -347,6 +364,13 @@ export function planRun(input = {}) {
       baseBlocked.set(candidate.card_ref, "NO_AUTOMATIC_ROUTE");
       continue;
     }
+    const ownLockConsistent =
+      continuationRunId &&
+      card.lock?.status === "active" &&
+      card.lock.run_id === continuationRunId &&
+      (!card.lock.state || card.lock.state === state) &&
+      (!card.lock.role || card.lock.role === route.skill);
+    if (!canonicalResumeFound && ownLockConsistent) resumableCardRefs.add(card.ref);
     candidates.push({ ...candidate, ...route });
   }
 
@@ -386,7 +410,9 @@ export function planRun(input = {}) {
 
   eligible.sort(
     (left, right) =>
+      Number(!resumableCardRefs.has(left.card_ref)) - Number(!resumableCardRefs.has(right.card_ref)) ||
       STATE_PRIORITY[left.state] - STATE_PRIORITY[right.state] ||
+      inDevelopmentActionPriority(left) - inDevelopmentActionPriority(right) ||
       left.position - right.position ||
       (left.key ?? left.card_ref).localeCompare(right.key ?? right.card_ref)
   );
@@ -401,7 +427,7 @@ export function planRun(input = {}) {
       batch_policy: "upstream-concurrency-technical-wip1-v0.2",
       run_id: id,
       continuing: Boolean(continuationRunId),
-      resuming: Boolean(resumableCardRef),
+      resuming: resumableCardRefs.size > 0,
       work_slots: [],
       deferred: [],
       doctor,
@@ -435,7 +461,7 @@ export function planRun(input = {}) {
       if (sameWork.length >= 2) batchMembers = sameWork;
     }
     const cleanMembers = batchMembers.map(({ snapshot_index, ...card }) => card);
-    const resumable = batchMembers.some((card) => card.card_ref === resumableCardRef);
+    const resumable = batchMembers.some((card) => resumableCardRefs.has(card.card_ref));
     const unitPolicy = seed.execution_kind === "operational" ? "operational-reconciliation-v0.2" : lane === "po" ? "refinement-queue-v0.2" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.2" : "single-card-v0.2";
     const job = {
       lane,
@@ -452,7 +478,7 @@ export function planRun(input = {}) {
       comment_gate: commentGate,
       ...(seed.execution_kind === "operational" ? {
         capsule_action: "reuse-existing-evidence"
-      } : { lock_proposal: resumable && seed.card_ref === resumableCardRef
+      } : { lock_proposal: resumableCardRefs.has(seed.card_ref)
         ? { ...snapshot.cards.find((card) => card.ref === seed.card_ref)?.lock }
         : { run_id: id, card_ref: seed.card_ref, state: seed.state, role: seed.skill, status: "active" },
         lock_proposals: batchMembers.map((card) => ({ run_id: id, card_ref: card.card_ref, state: card.state, role: card.skill, status: "active" })),
@@ -503,7 +529,7 @@ export function planRun(input = {}) {
     return {
       contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode,
       status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", run_id: id,
-      continuing: Boolean(continuationRunId), resuming: Boolean(resumableCardRef), work_slots: [],
+      continuing: Boolean(continuationRunId), resuming: resumableCardRefs.size > 0, work_slots: [],
       doctor, blocked, deferred, recovery_policy: RECOVERY_POLICY, guarantees
     };
   }
@@ -530,7 +556,7 @@ export function planRun(input = {}) {
     doctor,
     run_id: id,
     continuing: Boolean(continuationRunId),
-    resuming: Boolean(resumableCardRef),
+    resuming: resumableCardRefs.size > 0,
     selected,
     work_slots: workSlots,
     deferred,
