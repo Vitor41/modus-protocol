@@ -29,3 +29,7 @@
 Um achado deve permitir ação: explique condição, impacto e mudança esperada. Não escreva a solução completa nem modifique o diff durante a revisão.
 
 Severidade mede impacto, não necessidade de intervenção humana. Achados `critical` e `high` dentro do escopo retornam ao DEV; somente mudança estrutural fora do card, risco sistêmico não contido ou autorização externa ausente justificam bloqueio humano.
+
+## Contrato do retorno
+
+Um veredito `changes_required` é handoff de retorno, nunca conclusão: use `status: return`, preserve `in_development` e inclua blocker com motivo, `requires_human: false`, `kind: technical`, `scope: card` e `return_to: pipeline-dev`. Valide o arquivo completo antes de devolvê-lo ao ORCHESTRATOR; reparar apenas o status sem materializar o blocker continua inválido.

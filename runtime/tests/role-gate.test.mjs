@@ -148,9 +148,59 @@ test("review reprovado exige achado acionável", async () => {
   handoff.status = "return";
   handoff.state.to = "in_development";
   handoff.deliverable.verdict = "changes_required";
-  handoff.blocker = { reason: "Correção técnica necessária.", requires_human: false, return_to: "pipeline-dev" };
+  handoff.blocker = {
+    reason: "Correção técnica necessária.",
+    requires_human: false,
+    kind: "technical",
+    scope: "card",
+    return_to: "pipeline-dev"
+  };
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "REVIEW_FINDING_REQUIRED"));
+});
+
+test("review changes_required aceita somente blocker técnico completo de retorno ao DEV", async () => {
+  const handoff = await fixture("valid-review.json");
+  handoff.status = "return";
+  handoff.state.to = "in_development";
+  handoff.deliverable.verdict = "changes_required";
+  handoff.deliverable.spec_findings.push({ severity: "high", path: "src/a.ts", message: "Falha técnica reproduzida." });
+  handoff.blocker = {
+    reason: "Correção técnica necessária.",
+    requires_human: false,
+    kind: "technical",
+    scope: "card",
+    return_to: "pipeline-dev"
+  };
+
+  assert.equal((await validateObject(handoff)).status, "PASS");
+
+  for (const field of ["reason", "requires_human", "kind", "scope", "return_to"]) {
+    const invalid = structuredClone(handoff);
+    delete invalid.blocker[field];
+    const result = await validateObject(invalid);
+    assert.ok(
+      result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"),
+      `blocker sem ${field} deveria falhar no schema`
+    );
+  }
+
+  const invalidBlockers = [
+    { ...handoff.blocker, reason: "" },
+    { ...handoff.blocker, requires_human: true },
+    { ...handoff.blocker, kind: "business_rule" },
+    { ...handoff.blocker, scope: "delivery_group", delivery_group_id: "group-1" },
+    { ...handoff.blocker, return_to: "pipeline-qa" }
+  ];
+  for (const blocker of invalidBlockers) {
+    const invalid = structuredClone(handoff);
+    invalid.blocker = blocker;
+    const result = await validateObject(invalid);
+    assert.ok(
+      result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"),
+      `blocker deveria falhar no schema: ${JSON.stringify(blocker)}`
+    );
+  }
 });
 
 test("review não aprova com achado alto", async () => {
@@ -175,6 +225,16 @@ test("QA não reprova sem evidência de falha", async () => {
   handoff.blocker = { reason: "Cenário supostamente falhou.", requires_human: false, return_to: "pipeline-dev" };
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "QA_REJECTION_WITHOUT_FAILURE"));
+});
+
+test("retorno técnico de QA preserva o contrato genérico de blocker", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.status = "return";
+  handoff.state.to = "in_development";
+  handoff.deliverable.verdict = "rejected";
+  handoff.deliverable.criteria_matrix[0].result = "failed";
+  handoff.blocker = { reason: "Cenário falhou.", requires_human: false, return_to: "pipeline-dev" };
+  assert.equal((await validateObject(handoff)).status, "PASS");
 });
 
 test("release DEV exige todas as ações de integração Git", async () => {

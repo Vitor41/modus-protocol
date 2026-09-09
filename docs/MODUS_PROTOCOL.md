@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.6` |
-| Versão do Kernel | `0.2.6` |
+| Versão pública | `0.2.8` |
+| Versão do Kernel | `0.2.8` |
 | Estado | Publicada |
-| Data | 2026-09-08 |
+| Data | 2026-09-09 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 

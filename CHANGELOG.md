@@ -6,6 +6,19 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.2.8] - 2026-09-09
+
+### Corrigido
+
+- O planner preserva a continuidade da lane técnica antes da posição visual: retoma primeiro uma execução unificada consistente ou um lock ativo compatível com o `continueRunId`, mesmo sem `active_execution`; dentro de `EM DESENVOLVIMENTO`, encaminha handoff concluído para Code Review antes de reabrir implementação pendente recém-desbloqueada, mantendo WIP igual a um, locks e gates.
+- O schema, o role gate executável e a Skill de Code Review fixam o contrato de `changes_required`: `status: return` e blocker técnico completo são obrigatórios, evitando reparo parcial que troca o status mas continua inválido; retornos legítimos dos demais papéis preservam seu contrato genérico.
+
+## [0.2.7] - 2026-09-08
+
+### Corrigido
+
+- Gates humanos canônicos e `loop_limit` com escopo de card deixam de consumir o WIP técnico global quando o card permanece em `EM DESENVOLVIMENTO` ou `PRONTO PARA VALIDAÇÃO`; o planner continua automaticamente cards independentes sem enfraquecer locks ativos nem estados técnicos inválidos.
+
 ## [0.2.6] - 2026-09-08
 
 ### Adicionado

@@ -67,11 +67,12 @@ Quando as três capacidades possuem trabalho elegível, `work_slots` contém as 
 
 1. release já aprovada;
 2. QA pendente;
-3. implementação/review em andamento;
-4. entrada de DEV;
-5. nenhuma nova entrega técnica enquanto existir uma unidade em andamento ou aguardando aprovação para PRD.
+3. implementação/review em andamento, preservando primeiro uma retomada com lock e cápsula consistentes e depois o handoff técnico mais avançado;
+4. entrada de DEV.
 
-Dentro do mesmo estado, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
+Um gate humano canônico ou `loop_limit` com escopo de card retira somente esse card do WIP técnico. Cards independentes em `ready_for_development` continuam elegíveis; locks ativos e estados técnicos estruturalmente inválidos permanecem ocupando a lane por segurança. A espera por aprovação para PRD também libera a lane, mas uma aprovação posterior recupera prioridade para a integração Git.
+
+Dentro de `in_development`, uma execução resumível não pode ser preemptada. Além de `active_execution` consistente, um lock ativo do `continueRunId` cujo estado e papel ainda correspondem à rota atual preserva a retomada mesmo quando o snapshot não materializa `active_execution`; o planner reutiliza o lock e a cápsula em vez de criar trabalho concorrente. Sem retomada explícita, reconciliação de transição, handoff para validação e Code Review já liberado precedem uma implementação ainda pendente; posição e chave permanecem como desempate. Nos demais estados, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 
 Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra as outras lanes. Uma nova entrega em `PRONTO PARA DESENVOLVER` só começa quando a unidade técnica anterior sai do fluxo automatizado, evitando branches funcionais simultâneas.
 

@@ -34,7 +34,7 @@ node runtime/src/role-gate.mjs --handoff <arquivo> --format json
 | Code Review | Diff fixado, eixos SPEC/STANDARDS, testes observados e veredito | `in_development → ready_for_validation` |
 | QA | Commit fixado e matriz critério × cenário × evidência × resultado | `ready_for_validation → ready_for_release` |
 
-Retornos seguem a máquina canônica. Papel bloqueado permanece no estado atual. Code Review reprovado e QA reprovado retornam ao DEV sem criar coluna adicional.
+Retornos seguem a máquina canônica. Papel bloqueado permanece no estado atual. Code Review reprovado e QA reprovado retornam ao DEV sem criar coluna adicional. Em Code Review, `changes_required` usa `status: return` e blocker técnico completo (`reason`, `requires_human: false`, `kind: technical`, `scope: card`, `return_to: pipeline-dev`); trocar somente o status ou omitir o blocker falha o contrato.
 
 ## Proteções de qualidade
 
