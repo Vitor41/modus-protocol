@@ -10,6 +10,7 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ### Corrigido
 
+- O cliente Trello baixa anexos autorizados pelo endpoint autenticado oficial, sem confundir ausência de arquivo local com autorização humana pendente. Valida board, card, upload, extensão, destino contido e limite de bytes; não encaminha credenciais ao redirecionamento, não sobrescreve arquivos nem executa conteúdo baixado.
 - O planner resolve snapshots relativos pela raiz explícita do projeto, em paridade com o produtor de snapshots, evitando bloqueio falso quando a supervisão parte de outra pasta.
 - O launcher paralelo publica identificador real, contagem e horário/tipo dos eventos antes do término do especialista. A leitura incremental limita a memória, preserva o progresso no resultado terminal e mantém a barreira de processo encerrado/handoff consumido; nenhuma transição é liberada apenas por `turn.completed`.
 - A rubrica de Code Review distingue defeito atual, lacuna de evidência e melhoria opcional. Retornos por cobertura exigem risco ou critério material sem prova confiável e indicam a menor evidência suficiente; contramutações não são reportadas como defeitos do produto vigente. Retestes identificam pendências, regressões da correção e descobertas tardias, preservando os gates de integridade e segurança.
