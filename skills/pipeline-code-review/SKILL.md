@@ -18,7 +18,7 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock 
 3. Leia `references/review-rubric.md` e inspecione primeiro o diff, depois apenas o contexto necessário para validar cada risco.
 4. No eixo `SPEC`, procure comportamento ausente, extra, contraditório e critérios sem evidência.
 5. No eixo `STANDARDS`, procure defeitos, segurança, integridade, arquitetura, clareza, tratamento de erro e complexidade relevante.
-6. Relacione cada achado a arquivo/local, severidade, impacto e correção esperada. Evite preferência estilística sem consequência concreta.
+6. Relacione cada achado a arquivo/local, severidade, impacto e correção esperada. Aplique a seção de proporcionalidade da rubrica para distinguir defeito atual, lacuna de evidência e recomendação não bloqueante; no reteste, explique a origem de novos achados. Evite preferência estilística sem consequência concreta.
 7. Não altere arquivos nem aprove com achado crítico/alto aberto.
 
 ## Veredito

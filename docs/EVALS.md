@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.2.8` |
+| Versão | `0.2.9` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
