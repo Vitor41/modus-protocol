@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -564,7 +564,7 @@ test("download preserva arquivo criado durante a resposta e sanitiza falhas", as
       if (!String(url).includes("/download/")) return metadata(url);
       await writeFile(output, "arquivo de outra operação", "utf8");
       return new Response("PDF");
-    }}), /EEXIST/u);
+    }}), /EEXIST|sem sobrescrita/u);
     assert.equal(await readFile(output, "utf8"), "arquivo de outra operação");
     await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async () => {
       throw new Error("secret-key secret-token https://signed.invalid/private");
@@ -600,6 +600,57 @@ test("download rejeita board, anexo, extensão e destino fora da raiz antes do c
           : { id: "card-1", idBoard: scenario.board ?? "board-1" }));
       }}), scenario.error);
     }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("download revalida diretório trocado por junction durante HTTP", async () => {
+  const root = await projectFixture();
+  const outside = await mkdtemp(join(tmpdir(), "trello-download-outside-"));
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const parent = join(root, ".pipeline", "tmp");
+  let linked = false;
+  try {
+    await assert.rejects(executeTrelloComment({ action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: ".pipeline/tmp/report.pdf", fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return new Response(JSON.stringify(String(url).includes("/attachments")
+        ? [{ id: "att-1", isUpload: true, fileName: "report.pdf" }]
+        : { id: "card-1", idBoard: "board-1" }));
+      await rename(parent, join(root, ".pipeline", "original-tmp"));
+      await symlink(outside, parent, "junction");
+      linked = true;
+      return new Response("PDF");
+    }}), /raiz real/u);
+    await assert.rejects(readFile(join(outside, "report.pdf")), /ENOENT/u);
+  } finally {
+    if (linked) await unlink(parent);
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("download não apaga substituto do parcial durante falha de stream", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.attachments = { allowed_extensions: ["pdf"], max_bytes: 3 };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const output = join(root, ".pipeline", "tmp", "report.pdf");
+  try {
+    await assert.rejects(executeTrelloComment({ action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: output, fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return new Response(JSON.stringify(String(url).includes("/attachments")
+        ? [{ id: "att-1", isUpload: true, fileName: "report.pdf" }]
+        : { id: "card-1", idBoard: "board-1" }));
+      return new Response(new ReadableStream({ async pull(controller) {
+        await rename(output, join(root, ".pipeline", "tmp", "renamed-partial.pdf"));
+        await writeFile(output, "OTHER", "utf8");
+        controller.enqueue(new Uint8Array([65, 66, 67, 68]));
+        controller.close();
+      } }, { highWaterMark: 0 }));
+    }}), /excede o limite/u);
+    assert.equal(await readFile(output, "utf8"), "OTHER");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

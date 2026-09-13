@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -444,12 +444,19 @@ async function saveAttachmentDownload(response, outputPath, maxBytes) {
   if (declaredLength !== null && (!/^\d+$/u.test(declaredLength) || Number(declaredLength) > maxBytes)) throw new Error("Anexo excede o limite configurado.");
   if (!response.body) throw new Error("O download do anexo não possui conteúdo.");
   let descriptor;
-  let created = false;
+  let identity;
+  const ownsOutput = () => {
+    if (!identity) return false;
+    try {
+      const current = lstatSync(outputPath, { bigint: true });
+      return current.isFile() && current.dev === identity.dev && current.ino === identity.ino;
+    } catch { return false; }
+  };
   let bytes = 0;
   const hash = createHash("sha256");
   try {
     descriptor = openSync(outputPath, "wx", 0o600);
-    created = true;
+    identity = fstatSync(descriptor, { bigint: true });
     const reader = response.body.getReader();
     try {
       while (true) {
@@ -466,11 +473,12 @@ async function saveAttachmentDownload(response, outputPath, maxBytes) {
       if (error?.message === "Anexo excede o limite configurado.") throw error;
       throw new Error("Falha ao ler o conteúdo do anexo.");
     } finally { reader.releaseLock(); }
+    if (!ownsOutput()) throw new Error("O arquivo de saída foi substituído durante o download.");
     closeSync(descriptor); descriptor = undefined;
     return { bytes, content_sha256: hash.digest("hex") };
   } catch (error) {
     if (descriptor !== undefined) closeSync(descriptor);
-    if (created) try { unlinkSync(outputPath); } catch { /* no partial output remains when possible */ }
+    if (ownsOutput()) try { unlinkSync(outputPath); } catch { /* never delete an unrelated replacement */ }
     throw error;
   }
 }
@@ -633,8 +641,9 @@ export async function executeTrelloComment(input = {}) {
     if (attachment.isUpload !== true) throw new Error("O anexo não é um upload autorizado para download.");
     if (!policy.allowed.has(extname(fileName).toLowerCase())) throw new Error("Tipo de anexo não permitido.");
     if (Number.isFinite(attachment.bytes) && attachment.bytes > policy.maxBytes) throw new Error("Anexo excede o limite configurado.");
-    const outputPath = containedDownloadOutput(projectRoot, input.outputPath, fileName);
+    containedDownloadOutput(projectRoot, input.outputPath, fileName);
     const response = await attachmentDownloadResponse(fetchImpl, credentials, input.cardRef, input.attachmentRef, fileName);
+    const outputPath = containedDownloadOutput(projectRoot, input.outputPath, fileName);
     const saved = await saveAttachmentDownload(response, outputPath, policy.maxBytes);
     return {
       contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
