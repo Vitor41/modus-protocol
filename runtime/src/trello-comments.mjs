@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, relative, resolve } from "node:path";
+import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import YAML from "yaml";
@@ -365,6 +365,124 @@ function publicAttachment(value, cardRef) {
   return { ref: value.id, card_ref: value.idCard ?? cardRef, name: value.name, url: value.url, bytes: value.bytes, mime_type: value.mimeType, date: value.date, previews: value.previews?.length ?? 0 };
 }
 
+function attachmentPolicy(adapter) {
+  return {
+    allowed: new Set((adapter.tracker.attachments?.allowed_extensions ?? ["png", "jpg", "jpeg", "webp", "pdf", "html"]).map((value) => `.${String(value).toLowerCase()}`)),
+    maxBytes: adapter.tracker.attachments?.max_bytes ?? 10485760
+  };
+}
+
+function downloadFileName(attachment) {
+  const fromField = String(attachment.fileName ?? "").trim();
+  let candidate = fromField;
+  if (!candidate) {
+    try { candidate = decodeURIComponent(new URL(String(attachment.url ?? "")).pathname.split("/").at(-1) ?? ""); } catch { /* validated below */ }
+  }
+  if (!candidate || candidate === "." || candidate === ".." || candidate.includes("/") || candidate.includes("\\") || candidate.includes("\0")) {
+    throw new Error("O anexo não possui fileName seguro para download.");
+  }
+  return candidate;
+}
+
+function containedDownloadOutput(root, requestedPath, sourceName) {
+  if (!requestedPath) throw new Error("outputPath é obrigatório para download-attachment.");
+  const candidate = resolve(root, requestedPath);
+  const lexical = relative(root, candidate);
+  if (isAbsolute(lexical) || lexical === "" || lexical === ".." || lexical.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+    throw new Error("outputPath precisa estar contido na raiz do projeto.");
+  }
+  const rootReal = realpathSync(root);
+  const parentReal = realpathSync(dirname(candidate));
+  const physical = relative(rootReal, parentReal);
+  if (isAbsolute(physical) || physical === ".." || physical.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+    throw new Error("outputPath precisa estar contido na raiz real do projeto.");
+  }
+  const outputPath = resolve(parentReal, basename(candidate));
+  if (extname(outputPath).toLowerCase() !== extname(sourceName).toLowerCase()) throw new Error("A extensão do arquivo de saída deve corresponder ao anexo autorizado.");
+  if (existsSync(outputPath)) throw new Error("O arquivo de saída já existe; download sem sobrescrita recusado.");
+  return outputPath;
+}
+
+function oauthAuthorization(credentials) {
+  const quote = (value) => String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return `OAuth oauth_consumer_key="${quote(credentials.key)}", oauth_token="${quote(credentials.token)}"`;
+}
+
+function safeDownloadRedirect(url) {
+  return url.protocol === "https:" && !url.username && !url.password && (url.port === "" || url.port === "443") &&
+    (url.hostname === "amazonaws.com" || url.hostname.endsWith(".amazonaws.com"));
+}
+
+async function attachmentDownloadResponse(fetchImpl, credentials, cardRef, attachmentRef, fileName) {
+  const downloadUrl = new URL(`${API_ROOT}/cards/${encodeURIComponent(cardRef)}/attachments/${encodeURIComponent(attachmentRef)}/download/${encodeURIComponent(fileName)}`);
+  let initial;
+  try {
+    initial = await fetchImpl(downloadUrl, { headers: { Authorization: oauthAuthorization(credentials) }, redirect: "manual" });
+  } catch {
+    throw new Error("Falha ao iniciar o download autenticado do anexo.");
+  }
+  if (initial.ok) return initial;
+  if (![301, 302, 303, 307, 308].includes(initial.status)) throw new Error(`Trello recusou o download do anexo com HTTP ${initial.status}.`);
+  const location = initial.headers.get("location");
+  let redirect;
+  try { redirect = new URL(location); } catch { throw new Error("O download do anexo recebeu redirect inválido."); }
+  if (!safeDownloadRedirect(redirect)) throw new Error("O download do anexo recebeu redirect inseguro.");
+  try {
+    return await fetchImpl(redirect, { redirect: "error" });
+  } catch {
+    throw new Error("Falha ao baixar o conteúdo redirecionado do anexo.");
+  }
+}
+
+async function downloadMetadata(fetchImpl, credentials, path, query, operation) {
+  try { return await getJson(fetchImpl, credentials, path, query, operation); } catch { throw new Error("Falha ao consultar metadados autorizados para download do anexo."); }
+}
+
+async function saveAttachmentDownload(response, outputPath, maxBytes) {
+  if (!response.ok) throw new Error(`O download do anexo falhou com HTTP ${response.status}.`);
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null && (!/^\d+$/u.test(declaredLength) || Number(declaredLength) > maxBytes)) throw new Error("Anexo excede o limite configurado.");
+  if (!response.body) throw new Error("O download do anexo não possui conteúdo.");
+  let descriptor;
+  let identity;
+  const ownsOutput = () => {
+    if (!identity) return false;
+    try {
+      const current = lstatSync(outputPath, { bigint: true });
+      return current.isFile() && current.dev === identity.dev && current.ino === identity.ino;
+    } catch { return false; }
+  };
+  let bytes = 0;
+  const hash = createHash("sha256");
+  try {
+    descriptor = openSync(outputPath, "wx", 0o600);
+    identity = fstatSync(descriptor, { bigint: true });
+    const reader = response.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = Buffer.from(value);
+        bytes += chunk.byteLength;
+        if (bytes > maxBytes) throw new Error("Anexo excede o limite configurado.");
+        for (let offset = 0; offset < chunk.byteLength;) offset += writeSync(descriptor, chunk, offset, chunk.byteLength - offset);
+        hash.update(chunk);
+      }
+    } catch (error) {
+      try { await reader.cancel(); } catch { /* the output is removed below */ }
+      if (error?.message === "Anexo excede o limite configurado.") throw error;
+      throw new Error("Falha ao ler o conteúdo do anexo.");
+    } finally { reader.releaseLock(); }
+    if (!ownsOutput()) throw new Error("O arquivo de saída foi substituído durante o download.");
+    closeSync(descriptor); descriptor = undefined;
+    return { bytes, content_sha256: hash.digest("hex") };
+  } catch (error) {
+    if (descriptor !== undefined) closeSync(descriptor);
+    if (ownsOutput()) try { unlinkSync(outputPath); } catch { /* never delete an unrelated replacement */ }
+    throw error;
+  }
+}
+
 export async function executeTrelloComment(input = {}) {
   const projectRoot = resolve(input.projectRoot ?? process.cwd());
   const adapterPath = resolve(input.adapterPath ?? resolve(projectRoot, ".pipeline", "project.adapter.yaml"));
@@ -511,6 +629,31 @@ export async function executeTrelloComment(input = {}) {
     };
   }
 
+  if (action === "download-attachment") {
+    if (!input.cardRef || !input.attachmentRef) throw new Error("cardRef e attachmentRef são obrigatórios para download-attachment.");
+    const card = await downloadMetadata(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}`, { fields: "idBoard" }, "a validação do card para download");
+    if (card.idBoard !== adapter.tracker.board_ref) throw new Error("O card não pertence ao board declarado pelo adapter.");
+    const attachments = await downloadMetadata(fetchImpl, credentials, `/cards/${encodeURIComponent(input.cardRef)}/attachments`, {}, "a validação do anexo para download");
+    const attachment = attachments.find((item) => item.id === input.attachmentRef && (!item.idCard || item.idCard === input.cardRef));
+    if (!attachment) throw new Error("O anexo não pertence ao card informado.");
+    const fileName = downloadFileName(attachment);
+    const policy = attachmentPolicy(adapter);
+    if (attachment.isUpload !== true) throw new Error("O anexo não é um upload autorizado para download.");
+    if (!policy.allowed.has(extname(fileName).toLowerCase())) throw new Error("Tipo de anexo não permitido.");
+    if (Number.isFinite(attachment.bytes) && attachment.bytes > policy.maxBytes) throw new Error("Anexo excede o limite configurado.");
+    containedDownloadOutput(projectRoot, input.outputPath, fileName);
+    const response = await attachmentDownloadResponse(fetchImpl, credentials, input.cardRef, input.attachmentRef, fileName);
+    const outputPath = containedDownloadOutput(projectRoot, input.outputPath, fileName);
+    const saved = await saveAttachmentDownload(response, outputPath, policy.maxBytes);
+    return {
+      contract_version: "0.1", tool: { name: "pipeline-trello", version: PACKAGE.version }, status: "PASS", action,
+      provider: "environment", card_ref: input.cardRef, board_ref: adapter.tracker.board_ref,
+      attachment: { ref: attachment.id, card_ref: input.cardRef, name: attachment.name, mime_type: attachment.mimeType, bytes: attachment.bytes, date: attachment.date }, file_name: fileName, output: relative(projectRoot, outputPath),
+      bytes: saved.bytes, content_sha256: saved.content_sha256,
+      guarantees: { tracker_writes_performed: false, secrets_exposed: false, output_contained: true, output_overwritten: false, attachment_executed: false }
+    };
+  }
+
   if (action === "update-card-readback") {
     if (!input.namePath || !input.descriptionPath) throw new Error("namePath e descriptionPath são obrigatórios.");
     const namePath = containedPath(projectRoot, resolve(projectRoot, input.namePath), "namePath");
@@ -565,10 +708,9 @@ export async function executeTrelloComment(input = {}) {
     if (action === "attach-file") {
       if (!input.filePath) throw new Error("filePath é obrigatório.");
       const filePath = containedPath(projectRoot, resolve(projectRoot, input.filePath), "filePath");
-      const allowed = new Set((adapter.tracker.attachments?.allowed_extensions ?? ["png", "jpg", "jpeg", "webp", "pdf", "html"]).map((value) => `.${value.toLowerCase()}`));
-      if (!allowed.has(extname(filePath).toLowerCase())) throw new Error("Tipo de anexo não permitido.");
-      const maxBytes = adapter.tracker.attachments?.max_bytes ?? 10485760;
-      if (statSync(filePath).size > maxBytes) throw new Error("Anexo excede o limite configurado.");
+      const policy = attachmentPolicy(adapter);
+      if (!policy.allowed.has(extname(filePath).toLowerCase())) throw new Error("Tipo de anexo não permitido.");
+      if (statSync(filePath).size > policy.maxBytes) throw new Error("Anexo excede o limite configurado.");
       const buffer = readFileSync(filePath);
       contentSha256 = createHash("sha256").update(buffer).digest("hex");
       form.set("file", new Blob([buffer]), input.name ?? basename(filePath));
@@ -759,7 +901,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|list-attachments|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|list-attachments|download-attachment|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

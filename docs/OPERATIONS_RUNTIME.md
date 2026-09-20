@@ -11,7 +11,7 @@ Esta versão implementa as operações centrais e os gates executáveis da estei
 | Gate de papel | `runtime/src/role-gate.mjs` | Validação de handoff; nenhuma transição direta. |
 | Gate de transição | `runtime/src/transition-gate.mjs` | Valida o recibo de comentário persistido e relido; autoriza ou nega, sem movimentar o tracker. |
 | Gate de encerramento | `runtime/src/run-close-gate.mjs` | Nega a resposta final enquanto houver agente ativo, trabalho elegível ou snapshot final obsoleto. |
-| Comentários Trello | `runtime/src/trello-comments.mjs` | Lista, publica e relê comentários pelo provider `environment`, sem imprimir credenciais. |
+| Comentários e anexos Trello | `runtime/src/trello-comments.mjs` | Lista, publica, baixa e relê comentários/anexos pelo provider `environment`, sem imprimir credenciais. |
 
 ## Pipeline Setup
 
@@ -94,6 +94,10 @@ Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O
 `DEPENDS ON` declara precedência entre grupos; o grupo posterior espera a conclusão terminal de todos os membros do anterior. O planner só agrega para a mesma execução os membros que estão na mesma rota e estado, preservando o avanço individual quando a semântica for `optimization`.
 
 ## Snapshot do tracker
+
+## Download de anexos autorizados
+
+O integrador pode materializar um anexo já associado ao card por meio de `pipeline.ps1 trello --action download-attachment --card-ref <card> --attachment-ref <anexo> --output <caminho-relativo> --project-root <raiz>`. A ação confirma card→board e anexo→card antes de solicitar o endpoint oficial de download; o OAuth é enviado somente à API Trello e nunca ao redirect S3. O destino deve existir dentro da raiz física do projeto, não pode existir previamente e mantém a extensão permitida pelo adapter. `Content-Length` e cada bloco do stream respeitam `tracker.attachments.max_bytes`; o runtime somente grava e calcula hash, sem abrir ou executar o conteúdo.
 
 O contrato está em [tracker-snapshot.schema.json](../schema/tracker-snapshot.schema.json). Ele contém somente dados normalizados necessários ao roteamento, sem descrições, anexos, credenciais ou conteúdo arbitrário. Para cada card acionável, o runtime lê o conteúdo atual dos comentários, registra a referência/data e a autoria indicativa do último comentário e materializa sinais humanos reconhecidos; a contagem é somente telemetria. `content_read_card_refs` e `comment_content_reconciled` comprovam essa reconciliação antes do plano e do gate de encerramento. Quando necessário para resolver precedência, inclui `delivery_groups` e membros terminais do grupo, sem executar leitura completa de comentários de cards não acionáveis.
 

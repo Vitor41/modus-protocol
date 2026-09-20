@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -484,6 +484,173 @@ test("anexa mock e confirma por releitura", async () => {
     assert.equal(result.readback_status, "confirmed");
     assert.equal(result.content_sha256.length, 64);
     assert.equal(calls, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("baixa anexo autorizado sem encaminhar OAuth ao redirect", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const output = ".pipeline/tmp/report.pdf";
+  let calls = 0;
+  try {
+    const result = await executeTrelloComment({ action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: output, fetchImpl: async (url, options = {}) => {
+      calls += 1;
+      if (calls === 1) return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1" }));
+      if (calls === 2) return new Response(JSON.stringify([{ id: "att-1", idCard: "card-1", isUpload: true, name: "Nome editável", fileName: "report.pdf", url: "https://trello.invalid/old" }]));
+      if (calls === 3) {
+        assert.match(String(url), /\/download\/report\.pdf/u);
+        assert.match(options.headers.Authorization, /oauth_consumer_key="secret-key"/u);
+        assert.equal(options.redirect, "manual");
+        return new Response(null, { status: 302, headers: { location: "https://bucket.s3.amazonaws.com/signed-report" } });
+      }
+      assert.equal(String(url), "https://bucket.s3.amazonaws.com/signed-report");
+      assert.equal(options.headers, undefined);
+      assert.equal(options.redirect, "error");
+      return new Response("PDF", { status: 200, headers: { "content-length": "3" } });
+    }});
+    assert.equal(result.status, "PASS");
+    assert.equal(result.bytes, 3);
+    assert.equal(result.guarantees.attachment_executed, false);
+    assert.equal(await readFile(join(root, output), "utf8"), "PDF");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recusa redirect inseguro e stream acima do limite sem deixar arquivo", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.attachments = { allowed_extensions: ["pdf"], max_bytes: 3 };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const base = { action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: ".pipeline/tmp/report.pdf" };
+  const cardAndAttachment = (url) => String(url).includes("/attachments")
+    ? new Response(JSON.stringify([{ id: "att-1", idCard: "card-1", isUpload: true, fileName: "report.pdf", url: "https://trello.invalid/file" }]))
+    : new Response(JSON.stringify({ id: "card-1", idBoard: "board-1" }));
+  try {
+    await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async (url, options = {}) => {
+      if (String(url).includes("/download/")) return new Response(null, { status: 302, headers: { location: "http://127.0.0.1/private" } });
+      return cardAndAttachment(url, options);
+    }}), /redirect inseguro/u);
+    await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async (url) => {
+      if (String(url).includes("/download/")) return new Response("ABCD");
+      return cardAndAttachment(url);
+    }}), /excede o limite/u);
+    await assert.rejects(readFile(join(root, base.outputPath)), /ENOENT/u);
+    await writeFile(join(root, base.outputPath), "preserve", "utf8");
+    await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async (url) => {
+      if (String(url).includes("/download/")) throw new Error("não deve baixar");
+      return cardAndAttachment(url);
+    }}), /sem sobrescrita/u);
+    assert.equal(await readFile(join(root, base.outputPath), "utf8"), "preserve");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("download preserva arquivo criado durante a resposta e sanitiza falhas", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const output = join(root, ".pipeline", "tmp", "race.pdf");
+  const base = { action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: output };
+  const metadata = (url) => new Response(JSON.stringify(String(url).includes("/attachments")
+    ? [{ id: "att-1", isUpload: true, fileName: "report.pdf" }]
+    : { id: "card-1", idBoard: "board-1" }));
+  try {
+    await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return metadata(url);
+      await writeFile(output, "arquivo de outra operação", "utf8");
+      return new Response("PDF");
+    }}), /EEXIST|sem sobrescrita/u);
+    assert.equal(await readFile(output, "utf8"), "arquivo de outra operação");
+    await assert.rejects(executeTrelloComment({ ...base, fetchImpl: async () => {
+      throw new Error("secret-key secret-token https://signed.invalid/private");
+    }}), (error) => !/secret-key|secret-token|signed\.invalid/u.test(error.message));
+    await assert.rejects(executeTrelloComment({ ...base, outputPath: ".pipeline/tmp/stream.pdf", fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return metadata(url);
+      return new Response(new ReadableStream({ start(controller) { controller.error(new Error("secret-token signed-url")); } }));
+    }}), (error) => error.message === "Falha ao ler o conteúdo do anexo.");
+    await assert.rejects(readFile(join(root, ".pipeline/tmp/stream.pdf")), /ENOENT/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("download rejeita board, anexo, extensão e destino fora da raiz antes do conteúdo", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const base = { action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: ".pipeline/tmp/report.pdf" };
+  const cases = [
+    { board: "other-board", error: /board declarado/u },
+    { attachment: { id: "other-attachment" }, error: /não pertence ao card/u },
+    { attachment: { isUpload: false }, error: /não é um upload/u },
+    { attachment: { fileName: "report.exe" }, error: /Tipo de anexo/u },
+    { outputPath: "../outside.pdf", error: /contido na raiz/u }
+  ];
+  try {
+    for (const scenario of cases) {
+      await assert.rejects(executeTrelloComment({ ...base, outputPath: scenario.outputPath ?? base.outputPath, fetchImpl: async (url) => {
+        assert.equal(String(url).includes("/download/"), false);
+        return new Response(JSON.stringify(String(url).includes("/attachments")
+          ? [{ id: "att-1", isUpload: true, fileName: "report.pdf", ...scenario.attachment }]
+          : { id: "card-1", idBoard: scenario.board ?? "board-1" }));
+      }}), scenario.error);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("download revalida diretório trocado por junction durante HTTP", async () => {
+  const root = await projectFixture();
+  const outside = await mkdtemp(join(tmpdir(), "trello-download-outside-"));
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const parent = join(root, ".pipeline", "tmp");
+  let linked = false;
+  try {
+    await assert.rejects(executeTrelloComment({ action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: ".pipeline/tmp/report.pdf", fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return new Response(JSON.stringify(String(url).includes("/attachments")
+        ? [{ id: "att-1", isUpload: true, fileName: "report.pdf" }]
+        : { id: "card-1", idBoard: "board-1" }));
+      await rename(parent, join(root, ".pipeline", "original-tmp"));
+      await symlink(outside, parent, "junction");
+      linked = true;
+      return new Response("PDF");
+    }}), /raiz real/u);
+    await assert.rejects(readFile(join(outside, "report.pdf")), /ENOENT/u);
+  } finally {
+    if (linked) await unlink(parent);
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("download não apaga substituto do parcial durante falha de stream", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  adapter.tracker.attachments = { allowed_extensions: ["pdf"], max_bytes: 3 };
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const output = join(root, ".pipeline", "tmp", "report.pdf");
+  try {
+    await assert.rejects(executeTrelloComment({ action: "download-attachment", projectRoot: root, cardRef: "card-1", attachmentRef: "att-1", outputPath: output, fetchImpl: async (url) => {
+      if (!String(url).includes("/download/")) return new Response(JSON.stringify(String(url).includes("/attachments")
+        ? [{ id: "att-1", isUpload: true, fileName: "report.pdf" }]
+        : { id: "card-1", idBoard: "board-1" }));
+      return new Response(new ReadableStream({ async pull(controller) {
+        await rename(output, join(root, ".pipeline", "tmp", "renamed-partial.pdf"));
+        await writeFile(output, "OTHER", "utf8");
+        controller.enqueue(new Uint8Array([65, 66, 67, 68]));
+        controller.close();
+      } }, { highWaterMark: 0 }));
+    }}), /excede o limite/u);
+    assert.equal(await readFile(output, "utf8"), "OTHER");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -67,4 +67,6 @@ Após revisar adapter, `AGENTS.md`, Trello e rollback:
 5. confira versão, origem, `RUN_ID`, card/lote, papel, modelo e esforço;
 6. confirme no Trello comentários, anexos e movimentos por releitura.
 
+Quando uma evidência anexada precisar ser examinada localmente, o ORCHESTRATOR usa somente `trello --action download-attachment` com a referência do card, a referência do anexo e um destino novo dentro da raiz do projeto. O comando valida a associação ao board/card, aplica a política de extensão e tamanho do adapter e não executa o conteúdo baixado.
+
 Para atualizar, leia o changelog, reinstale a release, reinicie o Codex e abra nova tarefa. Não altere o adapter apenas para refletir versão: o plugin ativo é a fonte única. Consulte [Instalação e atualizações](INSTALLATION_AND_UPDATES.md) e [Rollback](ROLLBACK.md).

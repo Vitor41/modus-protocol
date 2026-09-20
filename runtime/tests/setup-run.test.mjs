@@ -77,6 +77,20 @@ async function writeSnapshot(root, snapshot) {
   return path;
 }
 
+test("planner resolve snapshot relativo pela raiz explícita do projeto, inclusive fora do cwd", async () => {
+  const { root, adapter } = await createConsumerProject();
+  try {
+    const path = await writeSnapshot(root, trackerSnapshot(adapter, []));
+    const absolute = planRun({ projectRoot: root, trackerSnapshotPath: path, mode: "shadow" });
+    const relative = planRun({ projectRoot: root, trackerSnapshotPath: "tracker-snapshot.json", mode: "shadow" });
+    assert.equal(relative.status, absolute.status);
+    assert.deepEqual(relative.work_slots, absolute.work_slots);
+    assert.deepEqual(relative.diagnostics, absolute.diagnostics);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("setup inventaria um projeto Node sem escrever nele", async () => {
   const root = await mkdtemp(join(tmpdir(), "pipeline-setup-"));
   try {

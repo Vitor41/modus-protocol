@@ -188,7 +188,7 @@ export function planRun(input = {}) {
   const projectRoot = resolve(input.projectRoot ?? process.cwd());
   const adapterPath = resolve(input.adapterPath ?? join(projectRoot, ".pipeline", "project.adapter.yaml"));
   if (!input.trackerSnapshotPath) throw new Error("trackerSnapshotPath é obrigatório.");
-  const trackerSnapshotPath = resolve(input.trackerSnapshotPath);
+  const trackerSnapshotPath = resolve(projectRoot, input.trackerSnapshotPath);
   const trackerSchemaPath = resolve(
     input.trackerSchemaPath ?? join(REPOSITORY_DIR, "schema", "tracker-snapshot.schema.json")
   );

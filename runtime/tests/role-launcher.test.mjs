@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { EventEmitter } from "node:events";
 
 import { buildCodexArguments, finalizeHandoff, launchRoles } from "../src/role-launcher.mjs";
 
@@ -15,6 +16,46 @@ const request = {
   configuration_source: "kernel-profile-map",
   fallback_policy: "block"
 };
+
+test("launcher publica progresso seguro antes do terminal e aguarda close mesmo após turn.completed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-progress-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const handoffPath = join(root, "handoff.json");
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    const threadId = "01a07e2e-8af0-70f3-b763-3588c5f9df86";
+    const start = JSON.stringify({ type: "thread.started", thread_id: threadId });
+    child.stdout.emit("data", start.slice(0, 17));
+    child.stdout.emit("data", start.slice(17) + "\n");
+    child.stdout.emit("data", JSON.stringify({ type: "item.completed", item: { text: "PRIVATE_SENTINEL" } }) + "\n");
+    child.stdout.emit("data", "x".repeat(1024 * 1024 + 1));
+    child.stdout.emit("data", '\ninvalid-json\n{"type":"turn.completed"}\n');
+    const running = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
+    assert.equal(running.status, "RUNNING");
+    assert.equal(running.active_jobs, 1);
+    assert.equal(running.completion_barrier, "pending");
+    assert.equal(running.jobs[0].evidence_ref, `agent:codex-thread:${threadId}`);
+    assert.equal(running.jobs[0].event_count, 3);
+    assert.equal(running.jobs[0].last_event_type, "turn.completed");
+    assert.ok(Number.isFinite(Date.parse(running.jobs[0].last_event_at)));
+    assert.ok(!JSON.stringify(running).includes("PRIVATE_SENTINEL"));
+    await writeFile(handoffPath, JSON.stringify({ role: "pipeline-po" }));
+    child.emit("close", 0);
+    const completed = await pending;
+    assert.equal(completed.status, "PASS");
+    assert.equal(completed.active_jobs, 0);
+    assert.equal(completed.jobs[0].event_count, 3);
+    assert.equal(completed.jobs[0].completion_barrier, "terminal-handoff-consumed");
+    const handoff = JSON.parse(await readFile(handoffPath, "utf8"));
+    assert.equal(handoff.execution.observation.evidence_ref, `agent:codex-thread:${threadId}`);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-"));

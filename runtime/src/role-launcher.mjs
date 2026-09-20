@@ -149,23 +149,58 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
   const { args } = buildCodexArguments({ projectRoot, role: input.role, promptFile, handoffPath, request });
   mkdirSync(dirname(handoffPath), { recursive: true });
   const spawnImpl = dependencies.spawn ?? spawn;
+  let threadId;
   const processResult = await new Promise((resolveProcess, rejectProcess) => {
     const child = spawnImpl(dependencies.codexCommand ?? "codex", args, { cwd: projectRoot, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
-    child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+    let pendingLine = "";
+    let discardingLine = false;
+    let eventCount = 0;
+    const consumeLine = (line) => {
+      let event;
+      try { event = JSON.parse(line); } catch { return; }
+      if (!event || typeof event !== "object") return;
+      if (event.type === "thread.started" && /^[0-9a-f-]{36}$/iu.test(event.thread_id ?? "")) threadId = event.thread_id;
+      const allowedEvents = new Set(["thread.started", "turn.started", "turn.completed", "turn.failed", "item.started", "item.updated", "item.completed", "error"]);
+      if (!allowedEvents.has(event.type)) return;
+      eventCount += 1;
+      input.onProgress?.({
+        event_count: eventCount,
+        last_event_type: event.type,
+        last_event_at: new Date().toISOString(),
+        ...(threadId ? { evidence_ref: `agent:codex-thread:${threadId}` } : {})
+      });
+    };
+    child.stdout?.setEncoding?.("utf8");
+    child.stderr?.setEncoding?.("utf8");
+    child.stdout?.on("data", (chunk) => {
+      const text = String(chunk);
+      stdout = (stdout + text).slice(-2000);
+      const lines = text.split("\n");
+      for (let index = 0; index < lines.length; index += 1) {
+        if (!discardingLine) {
+          pendingLine += lines[index];
+          if (pendingLine.length > 1024 * 1024) { pendingLine = ""; discardingLine = true; }
+        }
+        if (index < lines.length - 1) {
+          if (!discardingLine) consumeLine(pendingLine);
+          pendingLine = "";
+          discardingLine = false;
+        }
+      }
+    });
+    child.stderr?.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-2000); });
     child.on("error", rejectProcess);
-    child.on("close", (status) => resolveProcess({ status, stdout, stderr }));
+    child.on("close", (status) => {
+      if (!discardingLine && pendingLine) consumeLine(pendingLine);
+      resolveProcess({ status, stdout, stderr });
+    });
   });
   if (processResult.status !== 0) {
     const detail = diagnosticExcerpt(`${processResult.stderr}\n${processResult.stdout}`);
     throw new Error(`O agente de papel encerrou com código ${processResult.status}${detail ? `: ${detail}` : "."}`);
   }
-  const events = processResult.stdout.split(/\r?\n/u).filter(Boolean).flatMap((line) => {
-    try { return [JSON.parse(line)]; } catch { return []; }
-  });
-  const threadId = events.find((event) => event.type === "thread.started")?.thread_id;
   const handoff = parseJson(handoffPath, "Handoff retornado");
   const finalized = finalizeHandoff({ handoff, request, role: input.role, threadId });
   writeFileSync(handoffPath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
@@ -213,11 +248,15 @@ export async function launchRoles(input = {}, dependencies = {}) {
     status.jobs[index].job_status = "running";
     persistStatus();
     try {
-      const result = await launch({ projectRoot, ...job }, dependencies);
+      const result = await launch({ projectRoot, ...job, onProgress: (progress) => {
+        status.jobs[index] = { ...status.jobs[index], ...progress };
+        persistStatus();
+      } }, dependencies);
       status.jobs[index] = { ...status.jobs[index], ...result };
-      return result;
+      return status.jobs[index];
     } catch (error) {
       const failure = {
+        ...status.jobs[index],
         contract_version: "0.2",
         status: "FAIL",
         job_status: "failed",
