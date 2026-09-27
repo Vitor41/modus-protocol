@@ -6,6 +6,18 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.1] - 2026-09-27
+
+### Corrigido
+
+- O launcher agora persiste no ledger os últimos eventos `error` com payload sanitizado, código e contexto útil; timeouts e falhas sem progresso preservam também os trechos finais sanitizados de `stdout` e `stderr`.
+- Três eventos `error` consecutivos sem trabalho observável, ou cinco minutos sem evento substancial, encerram o job como `no_progress` com diagnóstico estruturado em vez de consumir o timeout completo de 45 minutos.
+- Antes de qualquer subprocesso, o launcher compara todo caminho de handoff citado no prompt com `job.handoff`. Recuperações de segunda tentativa regeneram a instrução com o caminho exclusivo do novo job, impedindo que um handoff R2 seja escrito no arquivo R1.
+
+### Documentado
+
+- Manifests de recuperação usam `recovery.attempt: 2`; o status terminal distingue `no_progress`, `timeout`, `missing_handoff` e `launcher_error` sem transformar falha técnica em gate humano.
+
 ## [0.3.0] - 2026-09-27
 
 ### Adicionado

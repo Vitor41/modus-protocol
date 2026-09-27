@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 
-import { buildCodexArguments, finalizeHandoff, launchRoles } from "../src/role-launcher.mjs";
+import { buildCodexArguments, finalizeHandoff, launchRoles, prepareRolePrompt } from "../src/role-launcher.mjs";
 
 const request = {
   mapping_version: "gpt-5.6-2026-08-28",
@@ -155,5 +155,54 @@ test("launcher materializa ausência de handoff como falha terminal estruturada"
     assert.equal(result.jobs[0].job_status, "failed");
     assert.equal(result.jobs[0].failure_kind, "missing_handoff");
     assert.match(result.jobs[0].terminal_reason, /Handoff retornado/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher rejeita antes do spawn um prompt que aponta para handoff diferente", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-path-"));
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Escreva o resultado em .pipeline/tmp/run-dev-handoff.json.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: ".pipeline/tmp/run-dev-r2-handoff.json" }] }));
+  try {
+    await assert.rejects(() => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => { throw new Error("não deveria iniciar"); } }), /handoff divergente/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("prompt de recuperação é regenerado para o handoff exclusivo do job", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-recovery-prompt-"));
+  const promptPath = join(root, "prompt.txt");
+  const expected = join(root, ".pipeline", "tmp", "run-dev-r2-handoff.json");
+  await writeFile(promptPath, "Use .pipeline/tmp/run-dev-handoff.json como handoff.");
+  try {
+    const prompt = prepareRolePrompt({ projectRoot: root, promptFile: promptPath, handoffPath: expected, recovery: true });
+    assert.match(prompt, /run-dev-r2-handoff\.json/u);
+    assert.doesNotMatch(prompt, /run-dev-handoff\.json/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher encerra erros repetidos sem trabalho com diagnóstico sanitizado", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-no-progress-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = () => true;
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    await new Promise((resolve) => setImmediate(resolve));
+    child.stderr.emit("data", "stderr final com code=E_AGENT\n");
+    for (let index = 0; index < 3; index += 1) child.stdout.emit("data", `${JSON.stringify({ type: "error", code: "E_AGENT", message: "serviço indisponível", details: { authorization: "private-value" } })}\n`);
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].failure_kind, "no_progress");
+    assert.equal(result.jobs[0].diagnostics.no_progress_reason, "repeated_error_without_substantive_work");
+    assert.equal(result.jobs[0].diagnostics.recent_error_events.length, 3);
+    assert.equal(result.jobs[0].diagnostics.recent_error_events[0].details.authorization, "<redacted>");
+    assert.match(result.jobs[0].diagnostics.stderr_tail, /E_AGENT/u);
+    assert.doesNotMatch(result.jobs[0].diagnostics.stdout_tail, /private-value/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

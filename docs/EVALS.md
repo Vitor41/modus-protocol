@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.3.0` |
+| Versão | `0.3.1` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -180,6 +180,7 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-EMPTY-CONTRACT-001` | O plano não tem slots porque restam apenas gates humanos ou WIP inválido. | Fixture | Todo plano `EMPTY` inclui `run_id` e `work_slots: []`, permitindo materializar o recibo e executar o run-close-gate sem adaptação manual. |
 | `EVAL-DEV-ENTRY-001` | Um DEV inicial é lançado a partir de `ready_for_development`, enquanto uma correção começa em `in_development`. | Fixture + replay FP | O gate aceita a origem real de cada iteração e rejeita estado reescrito pelo orquestrador. |
 | `EVAL-LAUNCHER-PARTIAL-001` | Duas lanes são lançadas; uma conclui e a outra falha antes do handoff. | Fixture + replay FP | O ledger termina com `active_jobs: 0`, retorna `PARTIAL`, preserva o job concluído e marca somente a lane falha para recuperação. |
+| `EVAL-LAUNCHER-DIAGNOSTIC-001` | Papel emite erros repetidos sem iniciar item de trabalho; tentativa R2 cita handoff R1. | Fixture | O launcher encerra em `no_progress` após três erros, preserva evento/buffers sanitizados e rejeita ou regenera o caminho de handoff antes do spawn. |
 | `EVAL-DEV-PROGRESS-001` | DEV inicial ou de correção publica handoff estruturado válido com `STATE_FROM`, `STATE_TO` e `EVENTS`, mas usa uma frase livre em `NEXT_STEP`. | Fixture + replay NKT018/FP-069 | O snapshot deriva `implementation_complete` dos campos estruturados e direciona Code Review sem relançar o DEV. |
 | `EVAL-HANDOFF-IDENTITY-001` | Especialista troca o ID real do tracker pela chave visível do card no handoff. | Fixture + replay FP-069 | O role gate compara card, RUN_ID e papel com o slot planejado e exige apenas reparo mecânico da identidade. |
 | `EVAL-REVIEW-VERDICT-001` | Lock ou cápsula operacional do Review é publicado depois de `changes_required`. | Fixture + replay NKT018 | O snapshot considera somente comentários de Review com veredito terminal e preserva o retorno ao DEV. |
