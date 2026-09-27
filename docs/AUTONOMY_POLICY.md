@@ -17,10 +17,14 @@ Resolva sem solicitar ajuda humana:
 - achado de Code Review ou QA dentro do escopo aprovado;
 - bug de implementação, refatoração local, conflito de Git ou ajuste de migração compatível necessário para entregar o card;
 - ambiente local recuperável por comandos já autorizados no adapter.
+- anexar, substituir, reler ou remover evidência produzida pela esteira no card correto;
+- baixar anexo relevante do card para um arquivo novo e contido no projeto pelo launcher canônico, inclusive PDF enviado pelo usuário, para inspeção, teste ou evidência.
 
 Use até três tentativas totais para leituras idempotentes do tracker. Para lançamento de papel, tente no máximo duas vezes com a mesma configuração e sem fallback de modelo; se existir artefato, prefira repará-lo uma vez a repetir trabalho. Escritas de efeito externo nunca recebem repetição cega: releia a referência ou o estado oficial e reconcilie.
 
 Falha técnica ainda não resolvida após esse orçamento vira impedimento técnico localizado, com diagnóstico e próximo experimento. Ela não pede decisão humana e não encerra lanes independentes.
+
+Após `APROVADO PARA PRD` válido, a autorização operacional cobre documentação de entrega, commit, push, criação/atualização de PR, checks, resolução de conflitos dentro do escopo e merge em `origin/main`. Proteção remota efetivamente recusada, credencial ausente ou conflito que exige alterar escopo/arquitetura continuam sendo bloqueios externos ou estruturais reais.
 
 ## Intervenção humana
 

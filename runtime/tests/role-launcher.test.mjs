@@ -130,8 +130,30 @@ test("launcher preserva lane concluída quando outra falha e publica status term
     assert.equal(result.active_jobs, 0);
     assert.equal(result.jobs[0].job_status, "completed");
     assert.equal(result.jobs[1].job_status, "failed");
+    assert.equal(result.jobs[1].failure_kind, "launcher_error");
+    assert.match(result.jobs[1].terminal_reason, /limite temporário/u);
     const ledger = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
     assert.equal(ledger.status, "PARTIAL");
     assert.equal(ledger.active_jobs, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher materializa ausência de handoff como falha terminal estruturada", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-missing-handoff-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    child.emit("close", 0);
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].job_status, "failed");
+    assert.equal(result.jobs[0].failure_kind, "missing_handoff");
+    assert.match(result.jobs[0].terminal_reason, /Handoff retornado/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

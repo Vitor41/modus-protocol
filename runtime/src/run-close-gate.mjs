@@ -46,6 +46,10 @@ export function validateRunClose(input = {}) {
     if (receipt.final_plan.status === "READY" || receipt.final_plan.work_slots.length > 0) {
       diagnostic(diagnostics, "RUN_WORK_REMAINS", "final_plan", "O plano final ainda contém trabalho elegível.", "dispatch-and-continue");
     }
+    const capacityDeferred = receipt.final_plan.deferred.filter((item) => ["LANE_CAPACITY", "TECHNICAL_WIP_LIMIT"].includes(item?.reason));
+    if (capacityDeferred.length > 0) {
+      diagnostic(diagnostics, "RUN_DEFERRED_WORK_REQUIRES_REPLAN", "final_plan.deferred", "Há trabalho automático apenas adiado por capacidade; o orquestrador deve liberar/replanejar a lane antes de encerrar.", "refresh-snapshot-and-replan");
+    }
     if (receipt.final_plan.guarantees.all_actionable_cards_refreshed !== true) {
       diagnostic(diagnostics, "RUN_FINAL_REFRESH_MISSING", "final_plan.guarantees", "O plano final não comprova releitura de todos os cards acionáveis.", "refresh-snapshot-and-replan");
     }

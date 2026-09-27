@@ -26,10 +26,11 @@
     "final_plan": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["status", "work_slots", "guarantees"],
+      "required": ["status", "work_slots", "deferred", "guarantees"],
       "properties": {
         "status": { "enum": ["READY", "EMPTY", "BLOCKED"] },
         "work_slots": { "type": "array" },
+        "deferred": { "type": "array" },
         "guarantees": {
           "type": "object",
           "required": ["all_actionable_cards_refreshed", "comment_content_reconciled"],

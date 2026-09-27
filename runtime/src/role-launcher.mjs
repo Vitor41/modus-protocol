@@ -11,6 +11,7 @@ const PACKAGE = JSON.parse(readFileSync(join(RUNTIME_DIR, "package.json"), "utf8
 const ALLOWED_MODELS = new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]);
 const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "max"]);
 const ALLOWED_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"]);
+const DEFAULT_ROLE_TIMEOUT_MS = 45 * 60 * 1000;
 
 function parseJson(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
@@ -147,6 +148,8 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
   for (const [path, label] of [[promptFile, "Prompt"], [requestPath, "Execution request"], [handoffPath, "Handoff"]]) ensureInside(projectRoot, path, label);
   const request = parseJson(requestPath, "Execution request");
   const { args } = buildCodexArguments({ projectRoot, role: input.role, promptFile, handoffPath, request });
+  const timeoutMs = Number(input.timeout_ms ?? DEFAULT_ROLE_TIMEOUT_MS);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 60_000 || timeoutMs > 3 * 60 * 60 * 1000) throw new Error("timeout_ms do papel deve estar entre 60000 e 10800000.");
   mkdirSync(dirname(handoffPath), { recursive: true });
   const spawnImpl = dependencies.spawn ?? spawn;
   let threadId;
@@ -191,12 +194,18 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
       }
     });
     child.stderr?.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-2000); });
-    child.on("error", rejectProcess);
+    const timeout = setTimeout(() => {
+      try { child.kill?.(); } catch { /* close event still materializes terminal status */ }
+      resolveProcess({ status: null, stdout, stderr, timed_out: true });
+    }, timeoutMs);
+    child.on("error", (error) => { clearTimeout(timeout); rejectProcess(error); });
     child.on("close", (status) => {
+      clearTimeout(timeout);
       if (!discardingLine && pendingLine) consumeLine(pendingLine);
       resolveProcess({ status, stdout, stderr });
     });
   });
+  if (processResult.timed_out) throw new Error(`O agente de papel excedeu timeout terminal de ${timeoutMs}ms sem handoff consumível.`);
   if (processResult.status !== 0) {
     const detail = diagnosticExcerpt(`${processResult.stderr}\n${processResult.stdout}`);
     throw new Error(`O agente de papel encerrou com código ${processResult.status}${detail ? `: ${detail}` : "."}`);
@@ -261,6 +270,8 @@ export async function launchRoles(input = {}, dependencies = {}) {
         status: "FAIL",
         job_status: "failed",
         completion_barrier: "terminal-failure",
+        failure_kind: /timeout terminal/iu.test(String(error?.message ?? "")) ? "timeout" : /Handoff retornado/iu.test(String(error?.message ?? "")) ? "missing_handoff" : "launcher_error",
+        terminal_reason: diagnosticExcerpt(error?.message),
         lane: job.lane,
         role: job.role,
         handoff: job.handoff,

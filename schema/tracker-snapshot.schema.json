@@ -95,6 +95,16 @@
         "review_approved": { "type": "boolean" },
         "review_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "qa_approved": { "type": "boolean" },
+        "active_loop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["edge", "state", "count"],
+          "properties": {
+            "edge": { "enum": ["dev_review", "qa_dev"] },
+            "state": { "$ref": "#/$defs/nonEmptyString" },
+            "count": { "type": "integer", "minimum": 0 }
+          }
+        },
         "human_gate_kind": {
           "enum": ["business_rule", "screen_approval", "production_approval", "loop_limit", "structural_scope", "systemic_risk", "external_authorization"]
         },

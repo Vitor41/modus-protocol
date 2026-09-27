@@ -393,6 +393,7 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     const byRef = new Map(snapshot.cards.map((card) => [card.ref, card]));
     assert.equal(byRef.get("card-dev").signals.implementation_complete, false);
     assert.equal(byRef.get("card-dev").signals.review_evidence_ref, "review-return");
+    assert.deepEqual(byRef.get("card-dev").signals.active_loop, { edge: "dev_review", state: "in_development", count: 1 });
     assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
     assert.equal(byRef.get("card-po").signals.pending_transition, true);
     assert.equal(byRef.get("card-po").signals.pending_transition_to, "ux_ui");
@@ -401,6 +402,7 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     assert.equal(byRef.get("card-qa").signals.pending_transition, true);
     assert.equal(byRef.get("card-qa").signals.pending_transition_to, "in_development");
     assert.equal(byRef.get("card-qa").signals.pending_transition_evidence_ref, "qa-return");
+    assert.deepEqual(byRef.get("card-qa").signals.active_loop, { edge: "qa_dev", state: "ready_for_validation", count: 1 });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

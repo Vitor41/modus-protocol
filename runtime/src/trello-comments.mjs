@@ -272,12 +272,36 @@ function technicalProgress(comments, enteredAt, state) {
   const review = reviews.at(-1);
   const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
   const reviewRejected = review ? /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(review.text ?? "")) : false;
+  // O contador pertence à fronteira DEV → Review, não ao card inteiro. Uma
+  // aprovação de Review encerra a fronteira e zera o próximo ciclo antes do QA.
+  let reviewReturnCount = 0;
+  for (const item of reviews) {
+    if (positiveVerdict(String(item.text ?? ""))) reviewReturnCount = 0;
+    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(item.text ?? ""))) reviewReturnCount += 1;
+  }
   return {
     implementation_complete: !reviewRejected,
     review_approved: reviewApproved,
     implementation_evidence_ref: devPass.ref,
+    active_loop: { edge: "dev_review", state: "in_development", count: reviewRejected ? reviewReturnCount : 0 },
     ...(review ? { review_evidence_ref: review.ref } : {})
   };
+}
+
+function qaLoopProgress(comments, enteredAt, state) {
+  if (state !== "ready_for_validation") return {};
+  const verdicts = chronological(after(comments, enteredAt)).filter((comment) => {
+    const text = String(comment.text ?? "");
+    return roleIs(text, "pipeline-qa") && /^(?:VERDICT|STATUS):.*\b(?:PASS|APPROVED|COMPLETED|FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text);
+  });
+  let returnCount = 0;
+  let rejected = false;
+  for (const verdict of verdicts) {
+    const text = String(verdict.text ?? "");
+    if (positiveVerdict(text)) { returnCount = 0; rejected = false; }
+    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text)) { returnCount += 1; rejected = true; }
+  }
+  return { active_loop: { edge: "qa_dev", state: "ready_for_validation", count: rejected ? returnCount : 0 } };
 }
 
 function pendingTransition(comments, state) {
@@ -556,7 +580,7 @@ export async function executeTrelloComment(input = {}) {
       if (exactResolutionKind === "screen_approval") exactResolutions.push(gate.screen_approval ?? "Tela aprovada");
       if (exactResolutionKind === "production_approval") exactResolutions.push(gate.production_approval ?? "APROVADO PARA PRD");
       const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions, exactResolutionKind });
-      const progress = technicalProgress(allComments, enteredAt, state);
+      const progress = { ...technicalProgress(allComments, enteredAt, state), ...qaLoopProgress(allComments, enteredAt, state) };
       const transition = pendingTransition(comments, state);
       const lock = lockState(allComments, enteredAt);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);

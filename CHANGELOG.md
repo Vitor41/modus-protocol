@@ -6,6 +6,27 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.0] - 2026-09-27
+
+### Adicionado
+
+- O gatilho passa a delegar a execução a um subagente ORCHESTRATOR dedicado, com mandato explícito para drenar toda a fila até um gate humano real, consumir jobs terminais e concluir o gate de encerramento.
+- UX/UI ganha contrato de design system vivo: mock fiel ao shell atual do produto, referências de componentes/tokens e documentação obrigatória de qualquer componente realmente novo no repositório consumidor.
+- PO passa a entregar matriz de referências visuais e critério literal de reuso; DEV, Code Review e QA usam essa evidência para evitar recriação de componentes e divergência visual.
+- `release_queue` agrupa todas as entregas aprovadas para PRD numa única integração Git serial quando não existe DEV, Review ou QA em curso, preservando recibo e releitura individuais por card.
+- O launcher materializa falha terminal estruturada e timeout para impedir que ausência de handoff pareça agente em andamento.
+
+### Alterado
+
+- O limite de três retornos passa a ser contado por fronteira e escopo: DEV↔Review e QA↔DEV são independentes e um avanço aprovado zera o contador anterior.
+- O gate de encerramento recusa finalizar enquanto existir trabalho automático apenas adiado por capacidade; WIP e `LANE_CAPACITY` definem ordem, não permissão de parada.
+- O mandato do orquestrador passa a cobrir anexar/reler/remover mocks próprios e baixar anexos relevantes do card por launcher oficial para inspeção local segura.
+
+### Corrigido
+
+- Releases aprovadas não preemptam uma cadeia técnica ativa nem são desnecessariamente processadas card a card.
+- Handoff ausente, inválido ou atrasado passa a acionar recuperação estruturada a partir de evidências reais antes de qualquer decisão humana.
+
 ## [0.2.9] - 2026-09-13
 
 ### Corrigido

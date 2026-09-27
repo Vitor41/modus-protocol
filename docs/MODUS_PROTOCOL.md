@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.9` |
-| Versão do Kernel | `0.2.9` |
+| Versão pública | `0.3.0` |
+| Versão do Kernel | `0.3.0` |
 | Estado | Publicada |
-| Data | 2026-09-09 |
+| Data | 2026-09-27 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -15,7 +15,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Ela deve permitir que um projeto seja conectado a um núcleo comum sem copiar e evoluir isoladamente workflows, Skills, templates e políticas. O núcleo evolui uma vez; cada projeto preserva somente contexto, configurações e regras próprias.
 
-A v0.2 consolida a arquitetura e os contratos, implementa as Skills mínimas e empacota o núcleo como plugin reproduzível. Um piloto funcional ponta a ponta e um segundo cutover de integração comprovaram roteamento, Review e QA independentes, loops, Trello direto e compatibilidade entre adapters. A agenda atual permite PO, UX/UI e uma unidade técnica simultâneos sem abrir branches funcionais concorrentes.
+A v0.3 consolida a autonomia operacional: o orquestrador drena lanes independentes, reconcilia estado fresco antes de concluir e integra releases aprovadas em lote serial quando a lane técnica está livre. PO, UX/UI e uma unidade técnica podem trabalhar simultaneamente sem abrir branches funcionais concorrentes.
 
 Este documento é complementado por:
 

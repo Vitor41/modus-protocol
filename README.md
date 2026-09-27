@@ -4,7 +4,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Repositório oficial: [github.com/Vitor41/modus-protocol](https://github.com/Vitor41/modus-protocol).
 
-> Estado: v0.2 publicada. O Kernel e o plugin estão na versão `0.2.9`.
+> Estado: v0.3 publicada. O Kernel e o plugin estão na versão `0.3.0`.
 
 ## O que ele resolve
 
@@ -31,7 +31,7 @@ Trello + contexto + comandos + políticas locais
 
 `unified-development-pipeline` permanece como identificador técnico compatível do plugin e do Kernel. O nome público e a interface são **Modus Protocol**. Essa separação evita quebrar adapters já instalados.
 
-## Capacidades da v0.2
+## Capacidades da v0.3
 
 - oito skills empacotadas;
 - adapter YAML validado por JSON Schema;
