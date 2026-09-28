@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.1` |
-| Versão do Kernel | `0.3.1` |
+| Versão pública | `0.3.2` |
+| Versão do Kernel | `0.3.2` |
 | Estado | Publicada |
 | Data | 2026-09-27 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -440,6 +440,8 @@ Cada etapa ou ciclo produz um resumo incremental com:
 - fontes consultadas.
 
 Na retomada, o capsule reduz releitura, mas não substitui evidências necessárias.
+
+O capsule completo permanece no projeto. O tracker recebe somente um recibo mínimo e determinístico com `RUN_ID`, papel, estados, evento e hash SHA-256 do artefato local; ele nunca recebe descrição, histórico, prompt, caminhos ou narrativa interna. O gate usa o artefato local e o recibo torna sua versão auditável sem ampliar a superfície de divulgação.
 
 ### 14.3 Eficiência operacional
 

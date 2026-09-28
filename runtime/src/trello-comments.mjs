@@ -22,6 +22,10 @@ const HUMAN_GATE_KINDS = new Set([
   "systemic_risk",
   "external_authorization"
 ]);
+const TRACKER_RECEIPT_EVENTS = new Set(["lock", "capsule", "role_handoff", "blocker", "transition"]);
+const TRACKER_RECEIPT_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa", "orchestrator"]);
+const TRACKER_RECEIPT_STATUSES = new Set(["active", "pass", "approved", "completed", "blocked", "return", "rejected", "changes_required"]);
+const TRACKER_RECEIPT_ARTIFACT_LIMIT = 10 * 1024 * 1024;
 
 function parseData(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
@@ -68,6 +72,69 @@ function endpoint(path, credentials, query = {}) {
 
 function unsafeEncoding(text) {
   return text.includes("\uFFFD") || /Ã[\u0080-\u00BF]/u.test(text);
+}
+
+function receiptValue(value, name, { required = false, values, pattern } = {}) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    if (required) throw new Error(`${name} é obrigatório para o recibo seguro.`);
+    return undefined;
+  }
+  if (/[\r\n\u0000]/u.test(text) || text.length > 160) throw new Error(`${name} contém formato inseguro para o recibo seguro.`);
+  if (values && !values.has(text.toLowerCase())) throw new Error(`${name} não possui valor canônico para o recibo seguro.`);
+  if (pattern && !pattern.test(text)) throw new Error(`${name} possui formato inválido para o recibo seguro.`);
+  return text;
+}
+
+function safeTrackerReceipt(input, projectRoot, adapter) {
+  const events = String(input.events ?? input.event ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (!events.length || events.some((event) => !TRACKER_RECEIPT_EVENTS.has(event))) throw new Error("EVENTS precisa declarar somente eventos canônicos para o recibo seguro.");
+  const uniqueEvents = [...new Set(events)];
+  const runId = receiptValue(input.runId, "RUN_ID", { required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$/u });
+  const role = receiptValue(input.role, "ROLE", { required: true, values: TRACKER_RECEIPT_ROLES })?.toLowerCase();
+  const status = receiptValue(input.status, "STATUS", { required: true, values: TRACKER_RECEIPT_STATUSES })?.toLowerCase();
+  const states = new Set(Object.keys(adapter.tracker?.states ?? {}));
+  const state = receiptValue(input.state, "STATE", { values: states })?.toLowerCase();
+  const stateFrom = receiptValue(input.stateFrom, "STATE_FROM", { values: states })?.toLowerCase();
+  const stateTo = receiptValue(input.stateTo, "STATE_TO", { values: states })?.toLowerCase();
+  const nextRole = receiptValue(input.nextRole, "NEXT_ROLE", { values: TRACKER_RECEIPT_ROLES })?.toLowerCase();
+  const artifactPath = containedPath(projectRoot, resolve(projectRoot, input.artifactPath ?? ""), "artifact-file");
+  const artifact = statSync(artifactPath);
+  if (!artifact.isFile() || artifact.size > TRACKER_RECEIPT_ARTIFACT_LIMIT) throw new Error("artifact-file precisa ser um arquivo local de até 10 MiB.");
+  const artifactHash = createHash("sha256").update(readFileSync(artifactPath)).digest("hex");
+  const headline = uniqueEvents.includes("lock") ? "CODEX LOCK — MODUS TRACKER RECEIPT" : "MODUS TRACKER RECEIPT";
+  const lines = [
+    headline,
+    "RECEIPT_VERSION: 1",
+    `RUN_ID: ${runId}`,
+    `ROLE: ${role}`,
+    `STATUS: ${status}`,
+    `EVENTS: ${uniqueEvents.join(", ")}`,
+    ...(state ? [`STATE: ${state}`] : []),
+    ...(stateFrom ? [`STATE_FROM: ${stateFrom}`] : []),
+    ...(stateTo ? [`STATE_TO: ${stateTo}`] : []),
+    ...(nextRole ? [`NEXT_ROLE: ${nextRole}`] : []),
+    `LOCAL_ARTIFACT_SHA256: ${artifactHash}`,
+    "TRACKER_PAYLOAD: minimal-receipt"
+  ];
+  return { text: lines.join("\n"), artifactHash, events: uniqueEvents };
+}
+
+async function writeCommentReadback({ fetchImpl, credentials, cardRef, text, action, now }) {
+  if (!text.trim()) throw new Error("O comentário não pode ser vazio.");
+  if (unsafeEncoding(text)) throw new Error("O comentário contém sinais de codificação corrompida.");
+  const body = new URLSearchParams({ key: credentials.key, token: credentials.token, text });
+  const writeResponse = await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(cardRef)}/actions/comments`, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body
+  }, "a escrita do comentário");
+  const written = await responseJson(writeResponse, "a escrita do comentário");
+  const readResponse = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(written.id)}`, credentials), undefined, "a releitura do comentário");
+  const persisted = await responseJson(readResponse, "a releitura do comentário");
+  const persistedText = persisted.data?.text;
+  if (persisted.data?.card?.id !== cardRef || persistedText !== text || unsafeEncoding(persistedText ?? "")) {
+    return { contract_version: "0.1", tool: { name: "pipeline-trello-comments", version: PACKAGE.version }, status: "FAIL", action, provider: "environment", card_ref: cardRef, comment_ref: written.id, diagnostic: { code: "TRACKER_COMMENT_READBACK_FAILED" }, guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+  }
+  return { contract_version: "0.1", tool: { name: "pipeline-trello-comments", version: PACKAGE.version }, status: "PASS", action, provider: "environment", card_ref: cardRef, comment_ref: persisted.id, written_at: written.date, read_at: new Date(now ?? Date.now()).toISOString(), content_sha256: createHash("sha256").update(text, "utf8").digest("hex"), readback_status: "confirmed", encoding: "utf-8", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
 }
 
 async function responseJson(response, operation) {
@@ -840,45 +907,18 @@ export async function executeTrelloComment(input = {}) {
     if (!input.textPath) throw new Error("textPath é obrigatório para escrita.");
     const textPath = containedPath(projectRoot, resolve(projectRoot, input.textPath), "textPath");
     const text = readFileSync(textPath, "utf8");
-    if (!text.trim()) throw new Error("O comentário não pode ser vazio.");
-    if (unsafeEncoding(text)) throw new Error("O comentário contém sinais de codificação corrompida.");
-    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, text });
-    const writeResponse = await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}/actions/comments`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body
-    }, "a escrita do comentário");
-    const written = await responseJson(writeResponse, "a escrita do comentário");
-    const readResponse = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(written.id)}`, credentials), undefined, "a releitura do comentário");
-    const persisted = await responseJson(readResponse, "a releitura do comentário");
-    const persistedText = persisted.data?.text;
-    if (persisted.data?.card?.id !== input.cardRef || persistedText !== text || unsafeEncoding(persistedText ?? "")) {
-      return {
-        contract_version: "0.1",
-        tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
-        status: "FAIL",
-        action,
-        provider: "environment",
-        card_ref: input.cardRef,
-        comment_ref: written.id,
-        diagnostic: { code: "TRACKER_COMMENT_READBACK_FAILED" },
-        guarantees: { tracker_writes_performed: true, secrets_exposed: false }
-      };
-    }
+    return writeCommentReadback({ fetchImpl, credentials, cardRef: input.cardRef, text, action, now: input.now });
+  }
+
+  if (action === "write-tracker-receipt") {
+    if (!input.cardRef) throw new Error("cardRef é obrigatório para escrita do recibo seguro.");
+    const receipt = safeTrackerReceipt(input, projectRoot, adapter);
+    const result = await writeCommentReadback({ fetchImpl, credentials, cardRef: input.cardRef, text: receipt.text, action, now: input.now });
     return {
-      contract_version: "0.1",
-      tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
-      status: "PASS",
-      action,
-      provider: "environment",
-      card_ref: input.cardRef,
-      comment_ref: persisted.id,
-      written_at: written.date,
-      read_at: new Date(input.now ?? Date.now()).toISOString(),
-      content_sha256: createHash("sha256").update(text, "utf8").digest("hex"),
-      readback_status: "confirmed",
-      encoding: "utf-8",
-      guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+      ...result,
+      ...(result.status === "PASS" ? {
+        receipt: { version: 1, events: receipt.events, local_artifact_sha256: receipt.artifactHash, payload: "minimal" }
+      } : {})
     };
   }
 
@@ -903,6 +943,16 @@ function parseArguments(argv) {
       else if (argument === "--expected-name") options.expectedName = value;
       else if (argument === "--list-ref") options.listRef = value;
       else if (argument === "--text-file") options.textPath = value;
+      else if (argument === "--artifact-file") options.artifactPath = value;
+      else if (argument === "--event") options.event = value;
+      else if (argument === "--events") options.events = value;
+      else if (argument === "--run-id") options.runId = value;
+      else if (argument === "--role") options.role = value;
+      else if (argument === "--state") options.state = value;
+      else if (argument === "--state-from") options.stateFrom = value;
+      else if (argument === "--state-to") options.stateTo = value;
+      else if (argument === "--status") options.status = value;
+      else if (argument === "--next-role") options.nextRole = value;
       else if (argument === "--name-file") options.namePath = value;
       else if (argument === "--description-file") options.descriptionPath = value;
       else if (argument === "--expected-sha256") options.expectedSha256 = value;
@@ -925,7 +975,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|list-attachments|download-attachment|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|write-tracker-receipt|delete-comment-readback|move-readback|list-attachments|download-attachment|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

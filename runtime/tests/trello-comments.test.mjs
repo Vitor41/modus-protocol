@@ -19,6 +19,7 @@ async function projectFixture() {
       provider: "trello",
       comments: { read_provider: "environment", write_provider: "environment" },
       environment: { credential_file: "trello_key/trello.env" },
+      states: { refinement: "refinement", ux_ui: "ux", ready_for_development: "ready-dev", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release" },
       card_keys: [{ kind: "feature", pattern: "^FP-[0-9]{3}$" }],
       type_labels: { feature: "label-feature", bug: "label-bug" },
       domain_labels: { business: "label-business", technical: "label-technical" }
@@ -114,6 +115,55 @@ test("escreve e relê exatamente o comentário UTF-8", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("publica somente recibo mínimo e mantém a cápsula completa fora do tracker", async () => {
+  const root = await projectFixture();
+  const capsulePath = join(root, ".pipeline", "tmp", "capsule.txt");
+  const capsule = "CONTEXT CAPSULE\nDescrição interna completa do cliente\nComentários privados e referências locais";
+  await writeFile(capsulePath, capsule, "utf8");
+  let calls = 0;
+  let postedText;
+  try {
+    const result = await executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: capsulePath,
+      runId: "RUN-20260928-ABCDEF12", role: "pipeline-ux-ui", status: "active", events: "capsule",
+      state: "ux_ui", nextRole: "pipeline-ux-ui", now: "2026-09-28T12:00:05Z",
+      fetchImpl: async (_url, options = {}) => {
+        calls += 1;
+        if (calls === 1) {
+          const text = options.body.get("text");
+          postedText = text;
+          assert.equal(options.method, "POST");
+          assert.match(text, /^MODUS TRACKER RECEIPT/mu);
+          assert.match(text, /^LOCAL_ARTIFACT_SHA256: [a-f0-9]{64}$/mu);
+          assert.doesNotMatch(text, /Descrição interna|Comentários privados|referências locais/u);
+          return new Response(JSON.stringify({ id: "receipt-1", date: "2026-09-28T12:00:00Z" }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ id: "receipt-1", date: "2026-09-28T12:00:00Z", data: { card: { id: "card-1" }, text: postedText } }), { status: 200 });
+      }
+    });
+    assert.equal(result.status, "PASS");
+    assert.equal(result.receipt.payload, "minimal");
+    assert.equal(result.receipt.local_artifact_sha256, createHash("sha256").update(capsule, "utf8").digest("hex"));
+    assert.equal(calls, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recibo seguro recusa metadados livres e artefato externo", async () => {
+  const root = await projectFixture();
+  const capsulePath = join(root, ".pipeline", "tmp", "capsule.txt");
+  await writeFile(capsulePath, "seguro", "utf8");
+  try {
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: capsulePath,
+      runId: "RUN-20260928-ABCDEF12\nSEGREDO: não", role: "pipeline-po", status: "active", events: "capsule"
+    }), /formato inseguro/u);
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: "../capsule.txt",
+      runId: "RUN-20260928-ABCDEF12", role: "pipeline-po", status: "active", events: "capsule"
+    }), /contido na raiz/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("releitura individual renova a evidência temporal sem nova escrita", async () => {

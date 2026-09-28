@@ -6,6 +6,17 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.2] - 2026-09-28
+
+### Corrigido
+
+- Cápsulas, handoffs, bloqueios e transições passam a ter recibo mínimo verificável no tracker. O conteúdo completo continua local; o runtime publica somente metadados canônicos e o hash SHA-256 do artefato, reduzindo rejeições de revisão automática por divulgação de contexto interno.
+- O cliente Trello valida estritamente eventos, papel, estados, status, `RUN_ID` e arquivo local antes de construir o recibo; valores livres, caminhos externos e artefatos acima do limite são recusados antes de qualquer escrita.
+
+### Documentado
+
+- O protocolo operacional diferencia `write-tracker-receipt` de `write-readback`: o primeiro é obrigatório para evidência da esteira e o segundo fica restrito a mensagens humanas curtas e intencionais.
+
 ## [0.3.1] - 2026-09-27
 
 ### Corrigido
