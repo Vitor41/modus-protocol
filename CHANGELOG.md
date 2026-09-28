@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.4] - 2026-09-28
+
+### Corrigido
+
+- O gatilho `Processe a fila do Trello.` volta a exigir sempre um único subagente ORCHESTRATOR; a indisponibilidade inicial de rede não autoriza executar a fila no chat chamador.
+- O mandato do ORCHESTRATOR exige elevação externa antes da primeira chamada ao tracker. Uma recusa local de sandbox não consome as três tentativas idempotentes do Trello.
+
 ## [0.3.3] - 2026-09-28
 
 ### Corrigido

@@ -59,6 +59,13 @@ test("Skill de Code Review fixa o contrato técnico de changes_required", async 
   }
 });
 
+test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
+  assert.match(skill, /sempre abrir exatamente um subagente ORCHESTRATOR/u);
+  assert.match(skill, /Nunca execute a fila no chat chamador/u);
+  assert.match(skill, /solicite acesso externo elevado/u);
+});
+
 test("artefato inclui a política canônica de autonomia referenciada pelas Skills", async () => {
   const source = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"));
   const artifact = await readFile(join(built.targetRoot, "docs", "AUTONOMY_POLICY.md"));
@@ -97,7 +104,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.3");
+  assert.equal(status.active.runtime_version, "0.3.4");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {
