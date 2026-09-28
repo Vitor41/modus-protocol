@@ -13,6 +13,7 @@ const PACKAGE = JSON.parse(readFileSync(resolve(RUNTIME_DIR, "package.json"), "u
 const API_ROOT = "https://api.trello.com/1";
 const IDEMPOTENT_READ_ATTEMPTS = 3;
 const TRANSIENT_HTTP_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const READ_RETRY_DELAYS_MS = [250, 750];
 const HUMAN_GATE_KINDS = new Set([
   "business_rule",
   "screen_approval",
@@ -142,6 +143,33 @@ async function responseJson(response, operation) {
   return response.json();
 }
 
+function safeNetworkDetail(error) {
+  const values = [];
+  let current = error;
+  for (let depth = 0; current && depth < 3; depth += 1, current = current.cause) {
+    const code = String(current.code ?? "").trim();
+    const message = String(current.message ?? current ?? "").trim();
+    if (code) values.push(code);
+    if (message) values.push(message);
+  }
+  const detail = [...new Set(values)].join(" | ") || "causa não informada";
+  return detail
+    .replace(/([?&](?:key|token|api[_-]?key|authorization|cookie)=)[^&\s]+/giu, "$1<redacted>")
+    .replace(/https?:\/\/[^\s?]+\?[^\s]*/giu, "<url-com-parâmetros-redigidos>")
+    .replace(/[\r\n]+/gu, " ")
+    .slice(0, 320);
+}
+
+function networkPolicyHint(detail) {
+  return /(?:EACCES|EPERM|network access|network.*(?:denied|blocked)|sandbox)/iu.test(detail)
+    ? " A execução atual não possui acesso externo ao Trello; habilite rede para o comando do ORCHESTRATOR ou execute-o com aprovação de rede."
+    : "";
+}
+
+function delay(milliseconds) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
 async function safeFetch(fetchImpl, url, options, operation) {
   const method = String(options?.method ?? "GET").toUpperCase();
   const attempts = method === "GET" ? IDEMPOTENT_READ_ATTEMPTS : 1;
@@ -149,15 +177,19 @@ async function safeFetch(fetchImpl, url, options, operation) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const response = await fetchImpl(url, options);
-      if (attempt < attempts && TRANSIENT_HTTP_STATUS.has(response.status)) continue;
+      if (attempt < attempts && TRANSIENT_HTTP_STATUS.has(response.status)) {
+        await delay(READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1));
+        continue;
+      }
       return response;
     } catch (error) {
       lastError = error;
       if (attempt === attempts) break;
+      await delay(READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1));
     }
   }
-  const cause = String(lastError?.message ?? lastError ?? "causa não informada").replace(/[\r\n]+/gu, " ").slice(0, 240);
-  throw new Error(`Falha de acesso ao Trello durante ${operation} após ${attempts} tentativas de leitura: ${cause}`);
+  const cause = safeNetworkDetail(lastError);
+  throw new Error(`Falha de acesso ao Trello durante ${operation} após ${attempts} tentativas de leitura: ${cause}.${networkPolicyHint(cause)}`);
 }
 
 function publicComment(action) {

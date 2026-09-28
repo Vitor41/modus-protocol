@@ -4,7 +4,7 @@ Use este protocolo em toda execução live. O comentário é evidência operacio
 
 ## Gate físico
 
-Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-tracker-receipt` para os eventos operacionais, `write-readback` somente para mensagens humanas deliberadamente curtas e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
+Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-tracker-receipt` para os eventos operacionais, `write-readback` somente para mensagens humanas deliberadamente curtas e `read` para reconciliação. A chamada deve nascer em shell com rede autorizada/elevada; `network: restricted` ou `approval_policy: never` sem capacidade de escalar é falha local do launcher, não indisponibilidade do Trello. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais, com espera curta entre elas. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
 
 Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 

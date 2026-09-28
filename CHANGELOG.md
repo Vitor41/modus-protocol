@@ -6,6 +6,18 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.3] - 2026-09-28
+
+### Corrigido
+
+- Falhas de transporte do Trello agora preservam a cadeia de causa sanitizada, com código de rede quando disponível, e identificam explicitamente quando a execução nasceu sem permissão de rede no sandbox; tokens e parâmetros de URL continuam redigidos.
+- Leituras idempotentes aguardam brevemente entre tentativas, evitando que três recusas transitórias instantâneas sejam confundidas com uma indisponibilidade global do Trello.
+- O gatilho não delega o ORCHESTRATOR a uma tarefa incapaz de solicitar acesso externo; nesse cenário, preserva a execução no chamador autorizado em vez de produzir três falhas inevitáveis de snapshot.
+
+### Documentado
+
+- O ORCHESTRATOR deve iniciar snapshot e reconciliações do tracker em comando com acesso externo autorizado/elevado; uma sessão `network: restricted` com aprovação impossível é erro do launcher local, não diagnóstico da rede do usuário.
+
 ## [0.3.2] - 2026-09-28
 
 ### Corrigido

@@ -85,6 +85,22 @@ test("leituras idempotentes recuperam duas falhas transitórias sem trocar integ
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("diagnóstico de rede preserva causa sanitizada e identifica sandbox sem expor token", async () => {
+  const root = await projectFixture();
+  try {
+    const cause = Object.assign(new Error("connect EACCES https://api.trello.com/1/lists?token=super-secret"), { code: "EACCES" });
+    await assert.rejects(
+      executeTrelloComment({ action: "list-card-names", projectRoot: root, fetchImpl: async () => { throw Object.assign(new TypeError("fetch failed"), { cause }); } }),
+      (error) => {
+        assert.match(error.message, /EACCES/u);
+        assert.match(error.message, /não possui acesso externo/u);
+        assert.doesNotMatch(error.message, /super-secret/u);
+        return true;
+      }
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("escreve e relê exatamente o comentário UTF-8", async () => {
   const root = await projectFixture();
   const textPath = join(root, ".pipeline", "tmp", "comment.txt");
