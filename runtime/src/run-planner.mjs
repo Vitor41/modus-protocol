@@ -489,6 +489,13 @@ export function planRun(input = {}) {
         release_queue: {
           scope: "all-approved-ready-for-release-cards",
           strategy: "single-serial-git-integration",
+          run_id: id,
+          progress_file: `.pipeline/tmp/${id}-release-progress.json`,
+          execution_budget: {
+            max_active_ms: 3 * 60 * 60 * 1000,
+            no_progress_ms: 30 * 60 * 1000,
+            checkpoints: ["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]
+          },
           cards: cleanMembers,
           requires_per_card_readback: true
         },

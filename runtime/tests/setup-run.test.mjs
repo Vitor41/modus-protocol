@@ -637,6 +637,10 @@ test("releases aprovadas são integradas em uma única fila serial quando a lane
     assert.equal(release.unit_policy, "release-integration-batch-v0.3");
     assert.equal(release.release_queue.strategy, "single-serial-git-integration");
     assert.deepEqual(release.release_queue.cards.map((card) => card.key), ["FX-330", "FX-331"]);
+    assert.equal(release.release_queue.run_id, result.run_id);
+    assert.equal(release.release_queue.progress_file, `.pipeline/tmp/${result.run_id}-release-progress.json`);
+    assert.equal(release.release_queue.execution_budget.max_active_ms, 3 * 60 * 60 * 1000);
+    assert.equal(release.release_queue.execution_budget.no_progress_ms, 30 * 60 * 1000);
     assert.ok(result.deferred.some((item) => item.key === "FX-332" && item.reason === "LANE_CAPACITY"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });

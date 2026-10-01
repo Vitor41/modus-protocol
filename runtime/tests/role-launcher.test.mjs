@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -33,7 +33,7 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
     const start = JSON.stringify({ type: "thread.started", thread_id: threadId });
     child.stdout.emit("data", start.slice(0, 17));
     child.stdout.emit("data", start.slice(17) + "\n");
-    child.stdout.emit("data", JSON.stringify({ type: "item.completed", item: { text: "PRIVATE_SENTINEL" } }) + "\n");
+    child.stdout.emit("data", JSON.stringify({ type: "item.completed", item: { type: "commandExecution", status: "completed", text: "PRIVATE_SENTINEL", command: "secret-command" } }) + "\n");
     child.stdout.emit("data", "x".repeat(1024 * 1024 + 1));
     child.stdout.emit("data", '\ninvalid-json\n{"type":"turn.completed"}\n');
     const running = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
@@ -42,9 +42,12 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
     assert.equal(running.completion_barrier, "pending");
     assert.equal(running.jobs[0].evidence_ref, `agent:codex-thread:${threadId}`);
     assert.equal(running.jobs[0].event_count, 3);
+    assert.equal(running.jobs[0].last_item_type, "commandExecution");
+    assert.equal(running.jobs[0].last_item_status, "completed");
     assert.equal(running.jobs[0].last_event_type, "turn.completed");
     assert.ok(Number.isFinite(Date.parse(running.jobs[0].last_event_at)));
     assert.ok(!JSON.stringify(running).includes("PRIVATE_SENTINEL"));
+    assert.ok(!JSON.stringify(running).includes("secret-command"));
     await writeFile(handoffPath, JSON.stringify({ role: "pipeline-po" }));
     child.emit("close", 0);
     const completed = await pending;
@@ -54,6 +57,66 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
     assert.equal(completed.jobs[0].completion_barrier, "terminal-handoff-consumed");
     const handoff = JSON.parse(await readFile(handoffPath, "utf8"));
     assert.equal(handoff.execution.observation.evidence_ref, `agent:codex-thread:${threadId}`);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher falha antes do spawn se uma release em lote exceder o limite de 3 horas", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-budget-"));
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical",
+    role: "pipeline-dev",
+    unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 4 * 60 * 60 * 1000,
+    no_progress_ms: 30 * 60 * 1000,
+    progressFile: ".pipeline/tmp/RUN-20261001-AABBCCDD-release-progress.json",
+    release_queue: { run_id: "RUN-20261001-AABBCCDD" },
+    promptFile: "release-prompt.txt",
+    executionRequest: "release-request.json",
+    handoff: "release-handoff.json"
+  }] }));
+  try {
+    await assert.rejects(
+      () => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { launchAsync: async () => { throw new Error("não deveria iniciar"); } }),
+      /no máximo 3 horas/u
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("status do launcher expõe checkpoints de release sem copiar conteúdo do agente", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-checkpoint-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const runId = "RUN-20261001-AABBCCDD";
+  const manifestPath = join(root, "manifest.json");
+  const handoffPath = join(root, "release-handoff.json");
+  const progressPath = join(root, ".pipeline", "tmp", `${runId}-release-progress.json`);
+  await writeFile(join(root, "release-prompt.txt"), "Integre o lote.");
+  await writeFile(join(root, "release-request.json"), JSON.stringify({ ...request, profile: "EQUILIBRADO", model: "gpt-6-luna", reasoning_effort: "medium" }));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical", role: "pipeline-dev", unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 3 * 60 * 60 * 1000, no_progress_ms: 30 * 60 * 1000, progressFile: `.pipeline/tmp/${runId}-release-progress.json`,
+    release_queue: { run_id: runId }, promptFile: "release-prompt.txt", executionRequest: "release-request.json", handoff: "release-handoff.json"
+  }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    const threadId = "01a07e2e-8af0-70f3-b763-3588c5f9df86";
+    child.stdout.emit("data", `${JSON.stringify({ type: "thread.started", thread_id: threadId })}\n`);
+    await mkdir(join(root, ".pipeline", "tmp"), { recursive: true });
+    await writeFile(progressPath, JSON.stringify({
+      run_id: runId, stage: "pull_request", completed_stages: ["preflight", "documentation", "branch", "push"],
+      updated_at: "2026-10-01T18:00:00.000Z", notes: "PRIVATE_SENTINEL"
+    }));
+    child.stdout.emit("data", `${JSON.stringify({ type: "item.completed", item: { type: "commandExecution" } })}\n`);
+    const status = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
+    assert.deepEqual(status.jobs[0].release_checkpoint, {
+      run_id: runId, stage: "pull_request", completed_stages: ["preflight", "documentation", "branch", "push"], updated_at: "2026-10-01T18:00:00.000Z"
+    });
+    assert.ok(!JSON.stringify(status).includes("PRIVATE_SENTINEL"));
+    await writeFile(handoffPath, JSON.stringify({ role: "pipeline-dev" }));
+    child.emit("close", 0);
+    assert.equal((await pending).status, "PASS");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -6,6 +6,15 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.8] - 2026-10-01
+
+### Corrigido
+
+- Releases em lote mantêm timeout máximo de 3 horas e watchdog de 30 minutos sem progresso verificável, com checkpoints por etapa; o launcher rejeita manifests que tentem ampliar esses limites.
+- O status do launcher expõe o tipo/status do último item e o checkpoint sanitizado da release, sem copiar texto ou comandos privados do agente.
+- `pipeline-run` deixa de tratar contagens de eventos como prova de etapa concluída e proíbe polling minuto a minuto ou repetição cega de release interrompida.
+- DEV de release registra preflight, documentação, branch, push, PR, checks, merge e handoff em checkpoint local para retomada auditável do mesmo `RUN_ID`.
+
 ## [0.3.7] - 2026-10-01
 
 ### Corrigido

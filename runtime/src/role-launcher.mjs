@@ -13,6 +13,12 @@ const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const ALLOWED_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"]);
 const DEFAULT_ROLE_TIMEOUT_MS = 45 * 60 * 1000;
 const DEFAULT_NO_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000;
+const RELEASE_BATCH_POLICY = "release-integration-batch-v0.3";
+const RELEASE_MAX_ACTIVE_MS = 3 * 60 * 60 * 1000;
+const RELEASE_MAX_NO_PROGRESS_MS = 30 * 60 * 1000;
+const RELEASE_CHECKPOINTS = new Set(["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]);
+const SAFE_ITEM_TYPES = new Set(["agentMessage", "commandExecution", "fileChange", "reasoning", "webSearch", "mcpToolCall"]);
+const SAFE_ITEM_STATUSES = new Set(["inProgress", "completed", "failed", "cancelled"]);
 const MAX_ERROR_EVENTS_WITHOUT_PROGRESS = 3;
 const MAX_DIAGNOSTIC_EVENTS = 5;
 const DIAGNOSTIC_BUFFER_LIMIT = 2000;
@@ -25,6 +31,51 @@ function parseJson(path, label) {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {
     throw new Error(`${label} não contém JSON válido.`);
+  }
+}
+
+function validateReleaseJob(job, projectRoot) {
+  if (job.unit_policy !== RELEASE_BATCH_POLICY) return;
+  const runId = job.release_queue?.run_id;
+  if (!/^RUN-[0-9]{8}-[A-Z0-9]{8}$/u.test(String(runId ?? ""))) {
+    throw new Error("Release em lote exige o RUN_ID canônico em release_queue.run_id.");
+  }
+  if (!Number.isSafeInteger(job.timeout_ms) || job.timeout_ms > RELEASE_MAX_ACTIVE_MS) {
+    throw new Error("Release em lote exige timeout_ms de no máximo 3 horas.");
+  }
+  if (!Number.isSafeInteger(job.no_progress_ms) || job.no_progress_ms > RELEASE_MAX_NO_PROGRESS_MS) {
+    throw new Error("Release em lote exige no_progress_ms de no máximo 30 minutos.");
+  }
+  if (typeof job.progressFile !== "string" || !job.progressFile.trim()) {
+    throw new Error("Release em lote exige progressFile para checkpoints recuperáveis.");
+  }
+  const expectedProgressFile = `.pipeline/tmp/${runId}-release-progress.json`;
+  if (job.progressFile.replaceAll("\\", "/") !== expectedProgressFile) {
+    throw new Error("Release em lote exige progressFile vinculado ao RUN_ID da fila.");
+  }
+  ensureInside(projectRoot, resolve(projectRoot, job.progressFile), "Release progress file");
+}
+
+function readReleaseCheckpoint(projectRoot, progressFile, expectedRunId) {
+  if (typeof progressFile !== "string" || !progressFile.trim()) return undefined;
+  const path = resolve(projectRoot, progressFile);
+  if (!existsSync(path)) return undefined;
+  try {
+    const raw = readFileSync(path, "utf8");
+    if (Buffer.byteLength(raw, "utf8") > 32 * 1024) return { status: "invalid", reason: "too_large" };
+    const value = JSON.parse(raw);
+    if (value?.run_id !== expectedRunId || !RELEASE_CHECKPOINTS.has(value?.stage)) return { status: "invalid", reason: "schema_mismatch" };
+    const completedStages = Array.isArray(value.completed_stages)
+      ? value.completed_stages.filter((stage) => RELEASE_CHECKPOINTS.has(stage)).slice(0, RELEASE_CHECKPOINTS.size)
+      : [];
+    return {
+      run_id: expectedRunId,
+      stage: value.stage,
+      completed_stages: completedStages,
+      ...(typeof value.updated_at === "string" && Number.isFinite(Date.parse(value.updated_at)) ? { updated_at: value.updated_at } : {})
+    };
+  } catch {
+    return { status: "invalid", reason: "unreadable" };
   }
 }
 
@@ -241,10 +292,14 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
     let substantiveEventCount = 0;
     let consecutiveErrors = 0;
     const errorEvents = [];
+    let lastReleaseCheckpoint;
     let settled = false;
     let timeout;
     let noProgressWatchdog;
-    const diagnostics = (noProgressReason) => terminalDiagnostics({ stdout, stderr, errorEvents, eventCount, substantiveEventCount, noProgressReason });
+    const diagnostics = (noProgressReason) => ({
+      ...terminalDiagnostics({ stdout, stderr, errorEvents, eventCount, substantiveEventCount, noProgressReason }),
+      ...(lastReleaseCheckpoint ? { release_checkpoint: lastReleaseCheckpoint } : {})
+    });
     const settle = (result) => {
       if (settled) return;
       settled = true;
@@ -283,6 +338,9 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
         last_event_at: new Date().toISOString(),
         ...(event.type === "error" ? { last_error: errorEvents.at(-1), recent_error_events: errorEvents } : {}),
         progress_state: { substantive_event_count: substantiveEventCount, consecutive_errors_without_progress: consecutiveErrors },
+        ...(SAFE_ITEM_TYPES.has(event.item?.type) ? { last_item_type: event.item.type } : {}),
+        ...(SAFE_ITEM_STATUSES.has(event.item?.status) ? { last_item_status: event.item.status } : {}),
+        ...(input.unit_policy === RELEASE_BATCH_POLICY && (lastReleaseCheckpoint = readReleaseCheckpoint(projectRoot, input.progressFile, input.release_queue?.run_id)) ? { release_checkpoint: lastReleaseCheckpoint } : {}),
         ...(threadId ? { evidence_ref: `agent:codex-thread:${threadId}` } : {})
       });
       if (event.type === "error" && consecutiveErrors >= MAX_ERROR_EVENTS_WITHOUT_PROGRESS) abortForNoProgress("repeated_error_without_substantive_work");
@@ -356,6 +414,7 @@ export async function launchRoles(input = {}, dependencies = {}) {
   for (const job of manifest.jobs) {
     const compatible = job.lane === "po" ? job.role === "pipeline-po" : job.lane === "ux_ui" ? job.role === "pipeline-ux-ui" : ["pipeline-dev", "pipeline-code-review", "pipeline-qa", "pipeline-po"].includes(job.role);
     if (!compatible) throw new Error(`Papel ${job.role} incompatível com a lane ${job.lane}.`);
+    validateReleaseJob(job, projectRoot);
   }
   const jobs = manifest.jobs.map((job) => ({
     ...job,
@@ -370,7 +429,18 @@ export async function launchRoles(input = {}, dependencies = {}) {
     launch_strategy: "parallel",
     completion_barrier: "pending",
     active_jobs: jobs.length,
-    jobs: jobs.map((job) => ({ lane: job.lane, role: job.role, handoff: job.handoff, job_status: "queued" }))
+    jobs: jobs.map((job) => ({
+      lane: job.lane,
+      role: job.role,
+      handoff: job.handoff,
+      job_status: "queued",
+      ...(job.unit_policy === RELEASE_BATCH_POLICY ? {
+        unit_policy: job.unit_policy,
+        timeout_ms: job.timeout_ms,
+        no_progress_ms: job.no_progress_ms,
+        progress_file: job.progressFile
+      } : {})
+    }))
   };
   const persistStatus = () => writeFileSync(statusPath, `${JSON.stringify(status, null, 2)}\n`, "utf8");
   persistStatus();
