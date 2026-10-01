@@ -6,6 +6,14 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.10] - 2026-10-01
+
+### Corrigido
+
+- `pipeline-run` exige launcher externo elevado também para `role-launch`, impedindo a tentativa sandboxada que gerou socket `10013` antes da recuperação.
+- `run-close-gate` preserva tentativas falhas e aceita encerramento quando `superseded_by` aponta para tentativa concluída do mesmo papel e `scope_ref`; tentativas sem sucessora válida continuam bloqueando.
+- O recibo de encerramento detecta referências de evidência duplicadas e mantém a trilha de cada tentativa de recuperação.
+
 ## [0.3.9] - 2026-10-01
 
 ### Corrigido

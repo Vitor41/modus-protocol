@@ -23,6 +23,18 @@ function diagnostic(diagnostics, code, path, message, action) {
   diagnostics.push({ code, severity: "error", path, message, action });
 }
 
+function hasValidSupersedingJob(job, jobs) {
+  if (!job.superseded_by || !job.scope_ref) return false;
+  const successor = jobs.find((candidate) => candidate.evidence_ref === job.superseded_by);
+  return Boolean(
+    successor
+    && successor !== job
+    && successor.status === "completed"
+    && successor.role === job.role
+    && successor.scope_ref === job.scope_ref
+  );
+}
+
 export function validateRunClose(input = {}) {
   if (!input.receiptPath) throw new Error("receiptPath é obrigatório.");
   const receipt = parseData(resolve(input.receiptPath), "Recibo de encerramento");
@@ -39,7 +51,11 @@ export function validateRunClose(input = {}) {
     if (unfinished.length > 0) {
       diagnostic(diagnostics, "RUN_JOBS_STILL_ACTIVE", "jobs", "Há agentes ainda em execução; aguarde e consuma seus resultados antes de responder.", "wait-active-jobs");
     }
-    const unresolved = receipt.jobs.filter((job) => ["failed", "cancelled"].includes(job.status));
+    const evidenceRefs = receipt.jobs.map((job) => job.evidence_ref);
+    if (new Set(evidenceRefs).size !== evidenceRefs.length) {
+      diagnostic(diagnostics, "RUN_JOB_EVIDENCE_DUPLICATE", "jobs", "Cada tentativa lançada precisa de uma referência de evidência única.", "repair-close-receipt");
+    }
+    const unresolved = receipt.jobs.filter((job) => ["failed", "cancelled"].includes(job.status) && !hasValidSupersedingJob(job, receipt.jobs));
     if (unresolved.length > 0) {
       diagnostic(diagnostics, "RUN_JOBS_UNRESOLVED", "jobs", "Há execução técnica sem handoff terminal ou isolamento formal.", "recover-or-isolate-jobs");
     }

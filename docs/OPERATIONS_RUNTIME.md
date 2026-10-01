@@ -75,13 +75,15 @@ Dentro de `in_development`, uma execução resumível não pode ser preemptada. 
 
 Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra as outras lanes. Uma nova entrega em `PRONTO PARA DESENVOLVER` só começa quando a unidade técnica anterior sai do fluxo automatizado, evitando branches funcionais simultâneas.
 
-Depois de lançar um papel, o orquestrador precisa aguardar seu resultado terminal e consumi-lo. Code Review em andamento não é condição de encerramento: o resultado deve ser aplicado, QA deve ser lançado quando elegível e a lane técnica deve continuar. Antes de responder ao usuário, o orquestrador produz o recibo de [run-close-receipt.schema.json](../schema/run-close-receipt.schema.json) e exige `PASS / FINAL_RESPONSE_GRANTED` de `pipeline.ps1 run-close-gate`.
+Depois de lançar um papel, o orquestrador precisa aguardar seu resultado terminal e consumi-lo. Code Review em andamento não é condição de encerramento: o resultado deve ser aplicado, QA deve ser lançado quando elegível e a lane técnica deve continuar. Antes de responder ao usuário, o orquestrador produz o recibo de [run-close-receipt.schema.json](../schema/run-close-receipt.schema.json) e exige `PASS / FINAL_RESPONSE_GRANTED` de `pipeline.ps1 run-close-gate`. Tentativas `failed`/`cancelled` são preservadas no recibo; só deixam de bloquear quando `superseded_by` aponta para tentativa concluída do mesmo papel e `scope_ref`, validada pelo gate.
 
 Quando colaboração não estiver exposta, o launcher recebe um manifest de até três jobs:
 
 ```text
 pipeline.ps1 role-launch --project-root <projeto> --manifest <arquivo-json> --format json
 ```
+
+O comando `role-launch` deve ser invocado pelo launcher oficial com acesso externo elevado. Isso vale também para a conexão do processo Codex filho ao serviço de modelos; não execute uma primeira tentativa em sandbox restrito e depois gaste uma recuperação para repetir com rede.
 
 Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher valida antes do spawn que todo caminho de handoff citado no prompt coincide com `handoff`; uma recuperação declara `recovery.attempt: 2` e recebe prompt regenerado para o novo caminho exclusivo, nunca uma cópia do prompt anterior. O launcher inicia todos em paralelo, mantém o andamento observável em `<manifest>.status.json` e devolve um recibo individual com o ID real de cada tarefa. Todo job chega a estado terminal: sucesso com handoff consumido, ou falha estruturada (`no_progress`, `timeout`, `missing_handoff` ou `launcher_error`). O ledger preserva os últimos eventos `error` e os trechos finais sanitizados de `stdout`/`stderr`; três erros consecutivos sem evento de trabalho, ou cinco minutos sem evento substancial, encerra antecipadamente como `no_progress`. Se apenas parte das lanes falhar, o resultado `PARTIAL` preserva os handoffs concluídos e permite recuperar somente as lanes com `job_status: failed`.
 

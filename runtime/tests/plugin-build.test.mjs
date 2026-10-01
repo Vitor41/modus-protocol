@@ -118,7 +118,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.9");
+  assert.equal(status.active.runtime_version, "0.3.10");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

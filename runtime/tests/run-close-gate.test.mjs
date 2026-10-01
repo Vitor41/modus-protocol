@@ -36,6 +36,42 @@ test("agente de review em andamento obriga o orquestrador a esperar", async () =
   assert.ok(result.actions.includes("wait-active-jobs"));
 });
 
+test("tentativa falha pode ser fechada quando uma tentativa concluída substitui o mesmo papel e escopo", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:release-r2" },
+    { evidence_ref: "agent:release-r2", role: "pipeline-dev", status: "completed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "PASS");
+  assert.equal(result.authorization, "FINAL_RESPONSE_GRANTED");
+});
+
+test("tentativa falha sem substituta comprovada continua impedindo encerramento", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:release-r2" },
+    { evidence_ref: "agent:release-r2", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOBS_UNRESOLVED"));
+});
+
+test("tentativa de papel ou escopo diferente não substitui job falho", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:qa" },
+    { evidence_ref: "agent:qa", role: "pipeline-qa", status: "completed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOBS_UNRESOLVED"));
+});
+
+test("referências de tentativa duplicadas são rejeitadas", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:duplicate", role: "pipeline-dev", status: "completed" },
+    { evidence_ref: "agent:duplicate", role: "pipeline-dev", status: "completed" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOB_EVIDENCE_DUPLICATE"));
+});
+
 test("plano com QA elegível impede encerramento prematuro", async () => {
   const result = await validate({ final_plan: { status: "READY", work_slots: [{ role: "pipeline-qa" }], deferred: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } } });
   assert.equal(result.status, "FAIL");
