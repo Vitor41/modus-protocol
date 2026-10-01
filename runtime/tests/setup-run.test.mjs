@@ -157,7 +157,7 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
     assert.deepEqual(result.selected.execution_request, {
-      mapping_version: "modus-model-map-0.3.5",
+      mapping_version: "modus-model-map-0.3.6",
       profile: "EQUILIBRADO",
       model: "gpt-6-luna",
       reasoning_effort: "medium",
@@ -793,7 +793,7 @@ test("planner encaminha implementação concluída para code review sem mover co
     );
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH });
     assert.equal(result.selected.skill, "pipeline-code-review");
-    assert.equal(result.selected.execution_request.model, "gpt-5.6-sol");
+    assert.equal(result.selected.execution_request.model, "gpt-6-luna");
     assert.equal(result.selected.execution_request.reasoning_effort, "high");
     assert.equal(result.selected.execution_request.agent_mode, "independent");
     assert.equal(result.selected.state, "in_development");

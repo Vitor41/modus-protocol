@@ -152,7 +152,7 @@
       "additionalProperties": false,
       "required": ["mapping_version", "profile", "model", "reasoning_effort", "agent_mode", "configuration_source", "fallback_policy"],
       "properties": {
-        "mapping_version": { "const": "modus-model-map-0.3.5" },
+        "mapping_version": { "const": "modus-model-map-0.3.6" },
         "profile": { "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"] },
         "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-luna"] },
         "reasoning_effort": { "enum": ["low", "medium", "high", "xhigh", "max"] },

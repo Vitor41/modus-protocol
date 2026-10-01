@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.6] - 2026-10-01
+
+### Corrigido
+
+- Code Review com perfil `PROFUNDO` solicita agora `gpt-6-luna / high`, mantendo revisão independente e o esforço alto; os outros papéis `PROFUNDO` preservam seu mapeamento atual.
+- O contrato do handoff e o mapa versionado distinguem a execução do Reviewer, impedindo que o planner continue apontando para GPT-5.6 nesse papel.
+
 ## [0.3.5] - 2026-10-01
 
 ### Corrigido

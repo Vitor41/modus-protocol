@@ -15,13 +15,17 @@ for (const [profile, [model, effort]] of Object.entries(expected)) {
     const result = resolveExecutionProfile(profile, "pipeline-dev");
     assert.equal(result.model, model);
     assert.equal(result.reasoning_effort, effort);
-    assert.equal(result.mapping_version, "modus-model-map-0.3.5");
+    assert.equal(result.mapping_version, "modus-model-map-0.3.6");
     assert.equal(result.fallback_policy, "block");
   });
 }
 
 test("Code Review e QA exigem agente independente", () => {
-  assert.equal(resolveExecutionProfile("PROFUNDO", "pipeline-code-review").agent_mode, "independent");
+  const review = resolveExecutionProfile("PROFUNDO", "pipeline-code-review");
+  assert.equal(review.agent_mode, "independent");
+  assert.equal(review.model, "gpt-6-luna");
+  assert.equal(review.reasoning_effort, "high");
+  assert.equal(resolveExecutionProfile("PROFUNDO", "pipeline-dev").model, "gpt-5.6-sol");
   assert.equal(resolveExecutionProfile("EQUILIBRADO", "pipeline-qa").agent_mode, "independent");
 });
 

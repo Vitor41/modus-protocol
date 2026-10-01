@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events";
 import { buildCodexArguments, finalizeHandoff, launchRoles, prepareRolePrompt } from "../src/role-launcher.mjs";
 
 const request = {
-  mapping_version: "modus-model-map-0.3.5",
+  mapping_version: "modus-model-map-0.3.6",
   profile: "PROFUNDO",
   model: "gpt-5.6-sol",
   reasoning_effort: "high",
@@ -79,7 +79,7 @@ test("launcher aceita GPT-6 Luna com esforço médio para a lane equilibrada", a
   try {
     const balancedRequest = {
       ...request,
-      mapping_version: "modus-model-map-0.3.5",
+      mapping_version: "modus-model-map-0.3.6",
       profile: "EQUILIBRADO",
       model: "gpt-6-luna",
       reasoning_effort: "medium"

@@ -1,4 +1,4 @@
-const MAPPING_VERSION = "modus-model-map-0.3.5";
+const MAPPING_VERSION = "modus-model-map-0.3.6";
 
 const PROFILES = Object.freeze({
   RAPIDO: Object.freeze({ model: "gpt-5.6-luna", reasoning_effort: "low" }),
@@ -13,10 +13,11 @@ const INDEPENDENT_ROLES = new Set(["pipeline-code-review", "pipeline-qa"]);
 export function resolveExecutionProfile(profile, role) {
   const selected = PROFILES[profile];
   if (!selected) throw new Error(`Perfil de execução desconhecido: ${profile}`);
+  const model = profile === "PROFUNDO" && role === "pipeline-code-review" ? "gpt-6-luna" : selected.model;
   return {
     mapping_version: MAPPING_VERSION,
     profile,
-    model: selected.model,
+    model,
     reasoning_effort: selected.reasoning_effort,
     agent_mode:
       profile === "PARALELO" ? "parallel" : INDEPENDENT_ROLES.has(role) ? "independent" : "delegated",
