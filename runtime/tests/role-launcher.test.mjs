@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 
-import { buildCodexArguments, finalizeHandoff, launchRoles } from "../src/role-launcher.mjs";
+import { buildCodexArguments, finalizeHandoff, launchRoles, prepareRolePrompt } from "../src/role-launcher.mjs";
 
 const request = {
-  mapping_version: "gpt-5.6-2026-08-28",
+  mapping_version: "modus-model-map-0.3.7",
   profile: "PROFUNDO",
-  model: "gpt-5.6-sol",
+  model: "gpt-6.1-sol",
   reasoning_effort: "high",
   agent_mode: "delegated",
   configuration_source: "kernel-profile-map",
@@ -33,7 +33,7 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
     const start = JSON.stringify({ type: "thread.started", thread_id: threadId });
     child.stdout.emit("data", start.slice(0, 17));
     child.stdout.emit("data", start.slice(17) + "\n");
-    child.stdout.emit("data", JSON.stringify({ type: "item.completed", item: { text: "PRIVATE_SENTINEL" } }) + "\n");
+    child.stdout.emit("data", JSON.stringify({ type: "item.completed", item: { type: "commandExecution", status: "completed", text: "PRIVATE_SENTINEL", command: "secret-command" } }) + "\n");
     child.stdout.emit("data", "x".repeat(1024 * 1024 + 1));
     child.stdout.emit("data", '\ninvalid-json\n{"type":"turn.completed"}\n');
     const running = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
@@ -42,9 +42,12 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
     assert.equal(running.completion_barrier, "pending");
     assert.equal(running.jobs[0].evidence_ref, `agent:codex-thread:${threadId}`);
     assert.equal(running.jobs[0].event_count, 3);
+    assert.equal(running.jobs[0].last_item_type, "commandExecution");
+    assert.equal(running.jobs[0].last_item_status, "completed");
     assert.equal(running.jobs[0].last_event_type, "turn.completed");
     assert.ok(Number.isFinite(Date.parse(running.jobs[0].last_event_at)));
     assert.ok(!JSON.stringify(running).includes("PRIVATE_SENTINEL"));
+    assert.ok(!JSON.stringify(running).includes("secret-command"));
     await writeFile(handoffPath, JSON.stringify({ role: "pipeline-po" }));
     child.emit("close", 0);
     const completed = await pending;
@@ -57,16 +60,131 @@ test("launcher publica progresso seguro antes do terminal e aguarda close mesmo 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("launcher falha antes do spawn se uma release em lote exceder o limite de 3 horas", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-budget-"));
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical",
+    role: "pipeline-dev",
+    unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 4 * 60 * 60 * 1000,
+    no_progress_ms: 30 * 60 * 1000,
+    progressFile: ".pipeline/tmp/RUN-20261001-AABBCCDD-release-progress.json",
+    release_queue: { run_id: "RUN-20261001-AABBCCDD" },
+    promptFile: "release-prompt.txt",
+    executionRequest: "release-request.json",
+    handoff: "release-handoff.json"
+  }] }));
+  try {
+    await assert.rejects(
+      () => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { launchAsync: async () => { throw new Error("não deveria iniciar"); } }),
+      /no máximo 3 horas/u
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("status do launcher expõe checkpoints de release sem copiar conteúdo do agente", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-checkpoint-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const runId = "RUN-20261001-AABBCCDD";
+  const manifestPath = join(root, "manifest.json");
+  const handoffPath = join(root, "release-handoff.json");
+  const progressPath = join(root, ".pipeline", "tmp", `${runId}-release-progress.json`);
+  await writeFile(join(root, "release-prompt.txt"), "Integre o lote.");
+  await writeFile(join(root, "release-request.json"), JSON.stringify({ ...request, profile: "EQUILIBRADO", model: "gpt-6-luna", reasoning_effort: "medium" }));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical", role: "pipeline-dev", unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 3 * 60 * 60 * 1000, no_progress_ms: 30 * 60 * 1000, progressFile: `.pipeline/tmp/${runId}-release-progress.json`,
+    release_queue: { run_id: runId }, promptFile: "release-prompt.txt", executionRequest: "release-request.json", handoff: "release-handoff.json"
+  }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    const threadId = "01a07e2e-8af0-70f3-b763-3588c5f9df86";
+    child.stdout.emit("data", `${JSON.stringify({ type: "thread.started", thread_id: threadId })}\n`);
+    await mkdir(join(root, ".pipeline", "tmp"), { recursive: true });
+    await writeFile(progressPath, JSON.stringify({
+      run_id: runId, stage: "pull_request", completed_stages: ["preflight", "documentation", "branch", "push"],
+      updated_at: "2026-10-01T18:00:00.000Z", notes: "PRIVATE_SENTINEL"
+    }));
+    child.stdout.emit("data", `${JSON.stringify({ type: "item.completed", item: { type: "commandExecution" } })}\n`);
+    const status = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
+    assert.deepEqual(status.jobs[0].release_checkpoint, {
+      run_id: runId, stage: "pull_request", completed_stages: ["preflight", "documentation", "branch", "push"], updated_at: "2026-10-01T18:00:00.000Z"
+    });
+    assert.ok(!JSON.stringify(status).includes("PRIVATE_SENTINEL"));
+    await writeFile(handoffPath, JSON.stringify({ role: "pipeline-dev" }));
+    child.emit("close", 0);
+    assert.equal((await pending).status, "PASS");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("eventos genéricos não renovam watchdog de release sem checkpoint novo", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-watchdog-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = () => true;
+  const manifestPath = join(root, "manifest.json");
+  const runId = "RUN-20261001-AABBCCDD";
+  const timers = [];
+  await writeFile(join(root, "prompt.txt"), "Integre o lote em uma única branch.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical", role: "pipeline-dev", unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 3 * 60 * 60 * 1000, no_progress_ms: 30 * 60 * 1000,
+    progressFile: `.pipeline/tmp/${runId}-release-progress.json`, release_queue: { run_id: runId },
+    promptFile: "prompt.txt", executionRequest: "request.json", handoff: "release-handoff.json"
+  }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, {
+      spawn: () => child,
+      setTimeout: (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer; },
+      clearTimeout: (timer) => { if (timer) timer.cleared = true; }
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    child.stdout.emit("data", `${JSON.stringify({ type: "item.completed", item: { type: "reasoning", status: "completed" } })}\n`);
+    const watchdog = timers.find((timer) => timer.delay === 30 * 60 * 1000 && !timer.cleared);
+    assert.ok(watchdog, "watchdog remains armed after an uncheckpointed item event");
+    watchdog.callback();
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].failure_kind, "no_progress");
+    assert.equal(result.jobs[0].diagnostics.no_progress_reason, "no_release_checkpoint_progress");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-"));
   const promptFile = join(root, "prompt.txt");
   await writeFile(promptFile, "Refine o card informado.", "utf8");
   try {
     const { args } = buildCodexArguments({ projectRoot: root, role: "pipeline-po", promptFile, handoffPath: join(root, "handoff.json"), request });
-    assert.ok(args.includes("gpt-5.6-sol"));
+    assert.ok(args.includes("gpt-6.1-sol"));
     assert.ok(args.includes('model_reasoning_effort="high"'));
     assert.ok(args.includes("--approve-for-me"));
     assert.ok(args.includes("--ephemeral"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("launcher aceita GPT-6 Luna com esforço médio para a lane equilibrada", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-gpt6-luna-"));
+  const promptFile = join(root, "prompt.txt");
+  await writeFile(promptFile, "Implemente a correção aprovada.", "utf8");
+  try {
+    const balancedRequest = {
+      ...request,
+      mapping_version: "modus-model-map-0.3.7",
+      profile: "EQUILIBRADO",
+      model: "gpt-6-luna",
+      reasoning_effort: "medium"
+    };
+    const { args } = buildCodexArguments({ projectRoot: root, role: "pipeline-dev", promptFile, handoffPath: join(root, "handoff.json"), request: balancedRequest });
+    assert.ok(args.includes("gpt-6-luna"));
+    assert.ok(args.includes('model_reasoning_effort="medium"'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -78,7 +196,7 @@ test("launcher carimba recibo com thread real e sem fallback", () => {
   assert.equal(result.execution.request, request);
   assert.deepEqual(result.execution.observation, {
     status: "confirmed",
-    model: "gpt-5.6-sol",
+    model: "gpt-6.1-sol",
     reasoning_effort: "high",
     configuration_source: "explicit-codex-exec",
     evidence_ref: "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86",
@@ -130,8 +248,79 @@ test("launcher preserva lane concluída quando outra falha e publica status term
     assert.equal(result.active_jobs, 0);
     assert.equal(result.jobs[0].job_status, "completed");
     assert.equal(result.jobs[1].job_status, "failed");
+    assert.equal(result.jobs[1].failure_kind, "launcher_error");
+    assert.match(result.jobs[1].terminal_reason, /limite temporário/u);
     const ledger = JSON.parse(await readFile(`${manifestPath}.status.json`, "utf8"));
     assert.equal(ledger.status, "PARTIAL");
     assert.equal(ledger.active_jobs, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher materializa ausência de handoff como falha terminal estruturada", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-missing-handoff-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    child.emit("close", 0);
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].job_status, "failed");
+    assert.equal(result.jobs[0].failure_kind, "missing_handoff");
+    assert.match(result.jobs[0].terminal_reason, /Handoff retornado/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher rejeita antes do spawn um prompt que aponta para handoff diferente", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-path-"));
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Escreva o resultado em .pipeline/tmp/run-dev-handoff.json.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: ".pipeline/tmp/run-dev-r2-handoff.json" }] }));
+  try {
+    await assert.rejects(() => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => { throw new Error("não deveria iniciar"); } }), /handoff divergente/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("prompt de recuperação é regenerado para o handoff exclusivo do job", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-recovery-prompt-"));
+  const promptPath = join(root, "prompt.txt");
+  const expected = join(root, ".pipeline", "tmp", "run-dev-r2-handoff.json");
+  await writeFile(promptPath, "Use .pipeline/tmp/run-dev-handoff.json como handoff.");
+  try {
+    const prompt = prepareRolePrompt({ projectRoot: root, promptFile: promptPath, handoffPath: expected, recovery: true });
+    assert.match(prompt, /run-dev-r2-handoff\.json/u);
+    assert.doesNotMatch(prompt, /run-dev-handoff\.json/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher encerra erros repetidos sem trabalho com diagnóstico sanitizado", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-no-progress-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = () => true;
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    await new Promise((resolve) => setImmediate(resolve));
+    child.stderr.emit("data", "stderr final com code=E_AGENT\n");
+    for (let index = 0; index < 3; index += 1) child.stdout.emit("data", `${JSON.stringify({ type: "error", code: "E_AGENT", message: "serviço indisponível", details: { authorization: "private-value" } })}\n`);
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].failure_kind, "no_progress");
+    assert.equal(result.jobs[0].diagnostics.no_progress_reason, "repeated_error_without_substantive_work");
+    assert.equal(result.jobs[0].diagnostics.recent_error_events.length, 3);
+    assert.equal(result.jobs[0].diagnostics.recent_error_events[0].details.authorization, "<redacted>");
+    assert.match(result.jobs[0].diagnostics.stderr_tail, /E_AGENT/u);
+    assert.doesNotMatch(result.jobs[0].diagnostics.stdout_tail, /private-value/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

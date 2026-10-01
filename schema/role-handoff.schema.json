@@ -152,10 +152,10 @@
       "additionalProperties": false,
       "required": ["mapping_version", "profile", "model", "reasoning_effort", "agent_mode", "configuration_source", "fallback_policy"],
       "properties": {
-        "mapping_version": { "const": "gpt-5.6-2026-08-28" },
+        "mapping_version": { "const": "modus-model-map-0.3.7" },
         "profile": { "enum": ["RAPIDO", "EQUILIBRADO", "PROFUNDO", "MAXIMO", "PARALELO"] },
-        "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"] },
-        "reasoning_effort": { "enum": ["low", "medium", "high", "max"] },
+        "model": { "enum": ["gpt-6-luna", "gpt-6.1-sol"] },
+        "reasoning_effort": { "enum": ["low", "medium", "high", "xhigh", "max"] },
         "agent_mode": { "enum": ["delegated", "independent", "parallel"] },
         "configuration_source": { "const": "kernel-profile-map" },
         "fallback_policy": { "const": "block" }
@@ -167,8 +167,8 @@
       "required": ["status", "model", "reasoning_effort", "configuration_source", "evidence_ref", "fallback_used"],
       "properties": {
         "status": { "enum": ["confirmed", "not_observable"] },
-        "model": { "enum": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "not_observable"] },
-        "reasoning_effort": { "enum": ["low", "medium", "high", "max", "not_observable"] },
+        "model": { "enum": ["gpt-6-luna", "gpt-6.1-sol", "not_observable"] },
+        "reasoning_effort": { "enum": ["low", "medium", "high", "xhigh", "max", "not_observable"] },
         "configuration_source": { "enum": ["explicit-agent-launch", "explicit-codex-exec", "inherited", "not_observable"] },
         "evidence_ref": { "type": "string", "pattern": "^agent:[A-Za-z0-9][A-Za-z0-9._:/-]*$" },
         "fallback_used": { "type": "boolean" },

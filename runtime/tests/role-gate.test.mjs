@@ -312,7 +312,7 @@ test("bloqueio humano exige categoria grande ou gate canônico", async () => {
 
 test("handoff rejeita modelo diferente do perfil solicitado", async () => {
   const handoff = await fixture("valid-review.json");
-  handoff.execution.request.model = "gpt-5.6-terra";
+  handoff.execution.request.model = "gpt-6-luna";
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_REQUEST_MAPPING_MISMATCH"));
 });

@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.9` |
-| Versão do Kernel | `0.2.9` |
+| Versão pública | `0.3.10` |
+| Versão do Kernel | `0.3.10` |
 | Estado | Publicada |
-| Data | 2026-09-09 |
+| Data | 2026-10-01 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -15,7 +15,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Ela deve permitir que um projeto seja conectado a um núcleo comum sem copiar e evoluir isoladamente workflows, Skills, templates e políticas. O núcleo evolui uma vez; cada projeto preserva somente contexto, configurações e regras próprias.
 
-A v0.2 consolida a arquitetura e os contratos, implementa as Skills mínimas e empacota o núcleo como plugin reproduzível. Um piloto funcional ponta a ponta e um segundo cutover de integração comprovaram roteamento, Review e QA independentes, loops, Trello direto e compatibilidade entre adapters. A agenda atual permite PO, UX/UI e uma unidade técnica simultâneos sem abrir branches funcionais concorrentes.
+A v0.3 consolida a autonomia operacional: o orquestrador drena lanes independentes, reconcilia estado fresco antes de concluir e integra releases aprovadas em lote serial quando a lane técnica está livre. PO, UX/UI e uma unidade técnica podem trabalhar simultaneamente sem abrir branches funcionais concorrentes.
 
 Este documento é complementado por:
 
@@ -441,6 +441,8 @@ Cada etapa ou ciclo produz um resumo incremental com:
 
 Na retomada, o capsule reduz releitura, mas não substitui evidências necessárias.
 
+O capsule completo permanece no projeto. O tracker recebe somente um recibo mínimo e determinístico com `RUN_ID`, papel, estados, evento e hash SHA-256 do artefato local; ele nunca recebe descrição, histórico, prompt, caminhos ou narrativa interna. O gate usa o artefato local e o recibo torna sua versão auditável sem ampliar a superfície de divulgação.
+
 ### 14.3 Eficiência operacional
 
 - usar RTK para compactar saídas extensas quando ele preservar o sinal necessário;
@@ -456,11 +458,13 @@ As Skills não fixam modelos. Elas podem indicar o perfil necessário; o ORCHEST
 
 | Perfil | Finalidade | Mapeamento inicial sugerido |
 | --- | --- | --- |
-| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-5.6-luna` / `low` |
-| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-5.6-terra` / `medium` |
-| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-5.6-sol` / `high` |
-| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-5.6-sol` / `max` |
-| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-5.6-sol` / `high`, com orquestração paralela |
+| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-6-luna` / `low` |
+| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-6-luna` / `medium` |
+| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-6.1-sol` / `high` |
+| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-6.1-sol` / `max` |
+| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-6.1-sol` / `high`, com orquestração paralela |
+
+Code Review usa o mesmo perfil `PROFUNDO` e modelo `gpt-6.1-sol` que PO, UX/UI e arquitetura, mantendo execução independente. A separação de modelos é por nível de esforço, não por papel.
 
 Baseline por etapa:
 
@@ -486,7 +490,7 @@ Regras:
 
 - reler o lock antes de cada transição;
 - não processar o mesmo lote com identificadores concorrentes;
-- não expirar lock automaticamente sem uma política confiável;
+- não expirar lock automaticamente; encerramento excepcional exige autorização humana explícita, recibo `released` vinculado ao RUN_ID antigo e confirmação por releitura;
 - permitir retomada somente com card, capsule e estado consistentes;
 - não permitir escrita paralela na mesma branch;
 - permitir uma lane de PO, uma de UX/UI e uma técnica simultâneas;

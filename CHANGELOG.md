@@ -6,6 +6,121 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.10] - 2026-10-01
+
+### Corrigido
+
+- `pipeline-run` exige launcher externo elevado também para `role-launch`, impedindo a tentativa sandboxada que gerou socket `10013` antes da recuperação.
+- `run-close-gate` preserva tentativas falhas e aceita encerramento quando `superseded_by` aponta para tentativa concluída do mesmo papel e `scope_ref`; tentativas sem sucessora válida continuam bloqueando.
+- O recibo de encerramento detecta referências de evidência duplicadas e mantém a trilha de cada tentativa de recuperação.
+
+## [0.3.9] - 2026-10-01
+
+### Corrigido
+
+- O ORCHESTRATOR pode encerrar locks de runs interrompidos somente após autorização humana explícita, mantendo o RUN_ID anterior e registrando recibo de liberação relido no card.
+- Autorização via comentário exige frase exata no card correto e autoria correspondente à conta Trello autenticada; o gatilho comum nunca libera locks.
+- A Skill `pipeline-run` documenta a exceção sem permitir expiração automática, liberação de cards fora do escopo ou movimentação implícita.
+
+## [0.3.8] - 2026-10-01
+
+### Corrigido
+
+- Releases em lote mantêm timeout máximo de 3 horas e watchdog de 30 minutos sem progresso verificável, com checkpoints por etapa; o launcher rejeita manifests que tentem ampliar esses limites.
+- Na release, mensagens e eventos genéricos não renovam o watchdog: somente um checkpoint novo e validado representa progresso operacional.
+- O status do launcher expõe o tipo/status do último item e o checkpoint sanitizado da release, sem copiar texto ou comandos privados do agente.
+- `pipeline-run` deixa de tratar contagens de eventos como prova de etapa concluída e proíbe polling minuto a minuto ou repetição cega de release interrompida.
+- DEV de release registra preflight, documentação, branch, push, PR, checks, merge e handoff em checkpoint local para retomada auditável do mesmo `RUN_ID`.
+
+## [0.3.7] - 2026-10-01
+
+### Corrigido
+
+- Todos os perfis executáveis deixam de fixar modelos GPT-5.6: `RAPIDO` e `EQUILIBRADO` usam `gpt-6-luna`; `PROFUNDO`, `MAXIMO` e `PARALELO` usam `gpt-6.1-sol`, preservando os respectivos esforços.
+- Planner, launcher, schema e handoffs compartilham o mapa `modus-model-map-0.3.7`; Code Review mantém papel independente com perfil `PROFUNDO` e esforço `high`.
+- O launcher/schema aceitam somente os modelos do mapa ativo, evitando que um recibo de papel volte a declarar GPT-5.6 sob o contrato 0.3.7.
+
+## [0.3.6] - 2026-10-01
+
+### Corrigido
+
+- Code Review com perfil `PROFUNDO` solicita agora `gpt-6-luna / high`, mantendo revisão independente e o esforço alto; os outros papéis `PROFUNDO` preservam seu mapeamento atual.
+- O contrato do handoff e o mapa versionado distinguem a execução do Reviewer, impedindo que o planner continue apontando para GPT-5.6 nesse papel.
+
+## [0.3.5] - 2026-10-01
+
+### Corrigido
+
+- O perfil `EQUILIBRADO` passa a solicitar `gpt-6-luna` com esforço `medium`; launcher, schema e recibos aceitam esse modelo e o esforço `xhigh`, preservando os demais perfis existentes.
+- A identidade do mapa de execução passa a ser `modus-model-map-0.3.5`, evitando que handoffs produzidos com a nova configuração sejam comparados com o contrato antigo.
+
+### Limite conhecido
+
+- Esta versão remove a rejeição estrutural de GPT-6 Luna, mas não detecta automaticamente todo modelo disponível nem corrige falhas externas de inicialização/conectividade do executor.
+
+## [0.3.4] - 2026-09-28
+
+### Corrigido
+
+- O gatilho `Processe a fila do Trello.` volta a exigir sempre um único subagente ORCHESTRATOR; a indisponibilidade inicial de rede não autoriza executar a fila no chat chamador.
+- O mandato do ORCHESTRATOR exige elevação externa antes da primeira chamada ao tracker. Uma recusa local de sandbox não consome as três tentativas idempotentes do Trello.
+
+## [0.3.3] - 2026-09-28
+
+### Corrigido
+
+- Falhas de transporte do Trello agora preservam a cadeia de causa sanitizada, com código de rede quando disponível, e identificam explicitamente quando a execução nasceu sem permissão de rede no sandbox; tokens e parâmetros de URL continuam redigidos.
+- Leituras idempotentes aguardam brevemente entre tentativas, evitando que três recusas transitórias instantâneas sejam confundidas com uma indisponibilidade global do Trello.
+- O gatilho não delega o ORCHESTRATOR a uma tarefa incapaz de solicitar acesso externo; nesse cenário, preserva a execução no chamador autorizado em vez de produzir três falhas inevitáveis de snapshot.
+
+### Documentado
+
+- O ORCHESTRATOR deve iniciar snapshot e reconciliações do tracker em comando com acesso externo autorizado/elevado; uma sessão `network: restricted` com aprovação impossível é erro do launcher local, não diagnóstico da rede do usuário.
+
+## [0.3.2] - 2026-09-28
+
+### Corrigido
+
+- Cápsulas, handoffs, bloqueios e transições passam a ter recibo mínimo verificável no tracker. O conteúdo completo continua local; o runtime publica somente metadados canônicos e o hash SHA-256 do artefato, reduzindo rejeições de revisão automática por divulgação de contexto interno.
+- O cliente Trello valida estritamente eventos, papel, estados, status, `RUN_ID` e arquivo local antes de construir o recibo; valores livres, caminhos externos e artefatos acima do limite são recusados antes de qualquer escrita.
+
+### Documentado
+
+- O protocolo operacional diferencia `write-tracker-receipt` de `write-readback`: o primeiro é obrigatório para evidência da esteira e o segundo fica restrito a mensagens humanas curtas e intencionais.
+
+## [0.3.1] - 2026-09-27
+
+### Corrigido
+
+- O launcher agora persiste no ledger os últimos eventos `error` com payload sanitizado, código e contexto útil; timeouts e falhas sem progresso preservam também os trechos finais sanitizados de `stdout` e `stderr`.
+- Três eventos `error` consecutivos sem trabalho observável, ou cinco minutos sem evento substancial, encerram o job como `no_progress` com diagnóstico estruturado em vez de consumir o timeout completo de 45 minutos.
+- Antes de qualquer subprocesso, o launcher compara todo caminho de handoff citado no prompt com `job.handoff`. Recuperações de segunda tentativa regeneram a instrução com o caminho exclusivo do novo job, impedindo que um handoff R2 seja escrito no arquivo R1.
+
+### Documentado
+
+- Manifests de recuperação usam `recovery.attempt: 2`; o status terminal distingue `no_progress`, `timeout`, `missing_handoff` e `launcher_error` sem transformar falha técnica em gate humano.
+
+## [0.3.0] - 2026-09-27
+
+### Adicionado
+
+- O gatilho passa a delegar a execução a um subagente ORCHESTRATOR dedicado, com mandato explícito para drenar toda a fila até um gate humano real, consumir jobs terminais e concluir o gate de encerramento.
+- UX/UI ganha contrato de design system vivo: mock fiel ao shell atual do produto, referências de componentes/tokens e documentação obrigatória de qualquer componente realmente novo no repositório consumidor.
+- PO passa a entregar matriz de referências visuais e critério literal de reuso; DEV, Code Review e QA usam essa evidência para evitar recriação de componentes e divergência visual.
+- `release_queue` agrupa todas as entregas aprovadas para PRD numa única integração Git serial quando não existe DEV, Review ou QA em curso, preservando recibo e releitura individuais por card.
+- O launcher materializa falha terminal estruturada e timeout para impedir que ausência de handoff pareça agente em andamento.
+
+### Alterado
+
+- O limite de três retornos passa a ser contado por fronteira e escopo: DEV↔Review e QA↔DEV são independentes e um avanço aprovado zera o contador anterior.
+- O gate de encerramento recusa finalizar enquanto existir trabalho automático apenas adiado por capacidade; WIP e `LANE_CAPACITY` definem ordem, não permissão de parada.
+- O mandato do orquestrador passa a cobrir anexar/reler/remover mocks próprios e baixar anexos relevantes do card por launcher oficial para inspeção local segura.
+
+### Corrigido
+
+- Releases aprovadas não preemptam uma cadeia técnica ativa nem são desnecessariamente processadas card a card.
+- Handoff ausente, inválido ou atrasado passa a acionar recuperação estruturada a partir de evidências reais antes de qualquer decisão humana.
+
 ## [0.2.9] - 2026-09-13
 
 ### Corrigido

@@ -59,6 +59,27 @@ test("Skill de Code Review fixa o contrato técnico de changes_required", async 
   }
 });
 
+test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
+  assert.match(skill, /sempre abrir exatamente um subagente ORCHESTRATOR/u);
+  assert.match(skill, /Nunca execute a fila no chat chamador/u);
+  assert.match(skill, /solicite acesso externo elevado/u);
+});
+
+test("Skills do pipeline limitam releases em lote e exigem checkpoints recuperáveis", async () => {
+  const run = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
+  const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
+  assert.match(run, /timeout.*3 horas/u);
+  assert.match(run, /30 minutos/u);
+  assert.match(run, /somente um checkpoint novo de release reinicia o watchdog/u);
+  assert.match(run, /não repita o mesmo prompt/u);
+  assert.match(run, /Contagens e eventos `item\.\*` indicam atividade da sessão, não conclusão de etapa/u);
+  assert.match(dev, /release_queue\.progress_file/u);
+  for (const checkpoint of ["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]) {
+    assert.ok(dev.includes(`\`${checkpoint}\``), checkpoint);
+  }
+});
+
 test("artefato inclui a política canônica de autonomia referenciada pelas Skills", async () => {
   const source = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"));
   const artifact = await readFile(join(built.targetRoot, "docs", "AUTONOMY_POLICY.md"));
@@ -97,7 +118,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.2.9");
+  assert.equal(status.active.runtime_version, "0.3.10");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

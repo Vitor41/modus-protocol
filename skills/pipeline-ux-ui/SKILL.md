@@ -17,8 +17,9 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, anexo
    Se a rota for `handoff-approved-design`, releia no card o comentário `Tela aprovada`, a especificação e os anexos vigentes. Quando a aprovação for posterior à evidência visual atual, reutilize esses artefatos e conclua o handoff; não regenere mock, especificação nem solicite nova aprovação sem evidência de que foram substituídos depois do comentário humano.
 2. Classifique explicitamente `no_frontend` ou `frontend`; toda demanda passa por essa decisão.
 3. Em `no_frontend`, registre a justificativa e o aval sem criar trabalho visual artificial.
-4. Em `frontend`, leia `references/design-gate.md` e descreva fluxo, hierarquia, estados, feedback, teclado, foco, acessibilidade e responsividade proporcionais ao card.
-5. Reuse o design system e os padrões reais do produto antes de propor componente novo.
+4. Em `frontend`, leia `references/design-gate.md` e `references/design-system-contract.md`, além da referência de design system declarada pelo projeto. Descreva fluxo, hierarquia, estados, feedback, teclado, foco, acessibilidade e responsividade proporcionais ao card.
+5. Reuse o design system e os padrões reais do produto antes de propor componente novo. O mock deve reproduzir o shell atual do produto (menu, header, tipografia, cores, espaçamentos e elementos de contexto) com fidelidade visual; somente a navegação ligada ao card precisa ser interativa.
+5.1 Quando um componente realmente novo for necessário, documente tokens, estados, acessibilidade, justificativa de não reuso e impacto no design system do projeto. Não use o mock HTML como código de produção nem como substituto da implementação existente.
 6. Se faltar regra de negócio material, retorne ao PO com pergunta e impacto; não preencha a lacuna visualmente e não solicite diretamente ao humano antes da investigação do PO.
 7. Não implemente código de produção durante este papel.
 8. Em toda classificação `frontend`, gere ao menos um mock ou protótipo visual consultável que represente a solução proposta; descrição textual isolada não atende ao gate.

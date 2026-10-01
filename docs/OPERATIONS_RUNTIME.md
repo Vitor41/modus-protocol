@@ -1,4 +1,4 @@
-# Runtime de Operações v0.2
+# Runtime de Operações v0.3
 
 Esta versão implementa as operações centrais e os gates executáveis da esteira:
 
@@ -55,7 +55,7 @@ Status:
 
 Quando existe execução unificada ativa, o planner retoma diretamente se `RUN_ID`, card, estado, papel, lock e cápsula permanecerem consistentes. Se o tracker comprovar que o card já mudou de lista ou papel, a execução antiga é reconciliada: o `RUN_ID` é preservado, lock/cápsula obsoletos não prevalecem e o contexto operacional é reconstruído. Cápsula ausente não transforma uma fila atual e legível em gate humano. Execução legada ativa continua bloqueante.
 
-## Política de lanes, fila e Delivery Groups v0.2
+## Política de lanes, fila e Delivery Groups v0.3
 
 O planner mantém até três capacidades independentes:
 
@@ -65,18 +65,17 @@ O planner mantém até três capacidades independentes:
 
 Quando as três capacidades possuem trabalho elegível, `work_slots` contém as três e o orquestrador deve lançá-las antes de aguardar resultados. A lane técnica prioriza:
 
-1. release já aprovada;
-2. QA pendente;
-3. implementação/review em andamento, preservando primeiro uma retomada com lock e cápsula consistentes e depois o handoff técnico mais avançado;
-4. entrada de DEV.
+1. QA, Review ou DEV já em andamento, preservando primeiro uma retomada com lock e cápsula consistentes e depois o handoff técnico mais avançado;
+2. quando a lane está livre, todas as releases já aprovadas em uma única `release_queue` serial;
+3. entrada de DEV.
 
-Um gate humano canônico ou `loop_limit` com escopo de card retira somente esse card do WIP técnico. Cards independentes em `ready_for_development` continuam elegíveis; locks ativos e estados técnicos estruturalmente inválidos permanecem ocupando a lane por segurança. A espera por aprovação para PRD também libera a lane, mas uma aprovação posterior recupera prioridade para a integração Git.
+Um gate humano canônico ou `loop_limit` com escopo de card retira somente esse card do WIP técnico. Cards independentes em `ready_for_development` continuam elegíveis; locks ativos e estados técnicos estruturalmente inválidos permanecem ocupando a lane por segurança. A espera por aprovação para PRD libera a lane. Quando houver aprovação e não existir trabalho técnico ativo, o planner agrupa os cards aprovados numa única integração Git serial com recibo por card.
 
 Dentro de `in_development`, uma execução resumível não pode ser preemptada. Além de `active_execution` consistente, um lock ativo do `continueRunId` cujo estado e papel ainda correspondem à rota atual preserva a retomada mesmo quando o snapshot não materializa `active_execution`; o planner reutiliza o lock e a cápsula em vez de criar trabalho concorrente. Sem retomada explícita, reconciliação de transição, handoff para validação e Code Review já liberado precedem uma implementação ainda pendente; posição e chave permanecem como desempate. Nos demais estados, prevalecem posição do card e chave. Quando a rota selecionada é `pipeline-po`, o plano entrega uma `refinement_queue` com todos os cards elegíveis em `REFINAMENTO`: o PO precisa normalizar, refinar, rotular e decidir grupos para a fila inteira antes de devolver o controle.
 
 Depois disso, o orquestrador drena o trabalho independente na mesma execução. Um gate humano ou falha localizada vira `blocked` com escopo explícito, mas não encerra as outras lanes. Uma nova entrega em `PRONTO PARA DESENVOLVER` só começa quando a unidade técnica anterior sai do fluxo automatizado, evitando branches funcionais simultâneas.
 
-Depois de lançar um papel, o orquestrador precisa aguardar seu resultado terminal e consumi-lo. Code Review em andamento não é condição de encerramento: o resultado deve ser aplicado, QA deve ser lançado quando elegível e a lane técnica deve continuar. Antes de responder ao usuário, o orquestrador produz o recibo de [run-close-receipt.schema.json](../schema/run-close-receipt.schema.json) e exige `PASS / FINAL_RESPONSE_GRANTED` de `pipeline.ps1 run-close-gate`.
+Depois de lançar um papel, o orquestrador precisa aguardar seu resultado terminal e consumi-lo. Code Review em andamento não é condição de encerramento: o resultado deve ser aplicado, QA deve ser lançado quando elegível e a lane técnica deve continuar. Antes de responder ao usuário, o orquestrador produz o recibo de [run-close-receipt.schema.json](../schema/run-close-receipt.schema.json) e exige `PASS / FINAL_RESPONSE_GRANTED` de `pipeline.ps1 run-close-gate`. Tentativas `failed`/`cancelled` são preservadas no recibo; só deixam de bloquear quando `superseded_by` aponta para tentativa concluída do mesmo papel e `scope_ref`, validada pelo gate.
 
 Quando colaboração não estiver exposta, o launcher recebe um manifest de até três jobs:
 
@@ -84,7 +83,9 @@ Quando colaboração não estiver exposta, o launcher recebe um manifest de até
 pipeline.ps1 role-launch --project-root <projeto> --manifest <arquivo-json> --format json
 ```
 
-Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher inicia todos em paralelo, mantém o andamento observável em `<manifest>.status.json` e devolve um recibo individual com o ID real de cada tarefa. Se apenas parte das lanes falhar, o resultado `PARTIAL` preserva os handoffs concluídos e permite recuperar somente as lanes com `job_status: failed`.
+O comando `role-launch` deve ser invocado pelo launcher oficial com acesso externo elevado. Isso vale também para a conexão do processo Codex filho ao serviço de modelos; não execute uma primeira tentativa em sandbox restrito e depois gaste uma recuperação para repetir com rede.
+
+Cada job declara `lane`, `role`, `promptFile`, `executionRequest` e `handoff`. O launcher valida antes do spawn que todo caminho de handoff citado no prompt coincide com `handoff`; uma recuperação declara `recovery.attempt: 2` e recebe prompt regenerado para o novo caminho exclusivo, nunca uma cópia do prompt anterior. O launcher inicia todos em paralelo, mantém o andamento observável em `<manifest>.status.json` e devolve um recibo individual com o ID real de cada tarefa. Todo job chega a estado terminal: sucesso com handoff consumido, ou falha estruturada (`no_progress`, `timeout`, `missing_handoff` ou `launcher_error`). O ledger preserva os últimos eventos `error` e os trechos finais sanitizados de `stdout`/`stderr`; três erros consecutivos sem evento de trabalho, ou cinco minutos sem evento substancial, encerra antecipadamente como `no_progress`. Se apenas parte das lanes falhar, o resultado `PARTIAL` preserva os handoffs concluídos e permite recuperar somente as lanes com `job_status: failed`.
 
 `DELIVERY GROUP` é declarado somente pelo PO e pode ser:
 

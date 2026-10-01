@@ -13,6 +13,7 @@ const PACKAGE = JSON.parse(readFileSync(resolve(RUNTIME_DIR, "package.json"), "u
 const API_ROOT = "https://api.trello.com/1";
 const IDEMPOTENT_READ_ATTEMPTS = 3;
 const TRANSIENT_HTTP_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const READ_RETRY_DELAYS_MS = [250, 750];
 const HUMAN_GATE_KINDS = new Set([
   "business_rule",
   "screen_approval",
@@ -22,6 +23,11 @@ const HUMAN_GATE_KINDS = new Set([
   "systemic_risk",
   "external_authorization"
 ]);
+const TRACKER_RECEIPT_EVENTS = new Set(["lock", "capsule", "role_handoff", "blocker", "transition"]);
+const TRACKER_RECEIPT_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa", "orchestrator"]);
+const TRACKER_RECEIPT_STATUSES = new Set(["active", "pass", "approved", "completed", "blocked", "released", "return", "rejected", "changes_required"]);
+const LOCK_RELEASE_AUTH_SOURCES = new Set(["conversation", "trello-comment"]);
+const TRACKER_RECEIPT_ARTIFACT_LIMIT = 10 * 1024 * 1024;
 
 function parseData(path, label) {
   if (!existsSync(path)) throw new Error(`${label} não encontrado.`);
@@ -70,9 +76,145 @@ function unsafeEncoding(text) {
   return text.includes("\uFFFD") || /Ã[\u0080-\u00BF]/u.test(text);
 }
 
+function receiptValue(value, name, { required = false, values, pattern } = {}) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    if (required) throw new Error(`${name} é obrigatório para o recibo seguro.`);
+    return undefined;
+  }
+  if (/[\r\n\u0000]/u.test(text) || text.length > 160) throw new Error(`${name} contém formato inseguro para o recibo seguro.`);
+  if (values && !values.has(text.toLowerCase())) throw new Error(`${name} não possui valor canônico para o recibo seguro.`);
+  if (pattern && !pattern.test(text)) throw new Error(`${name} possui formato inválido para o recibo seguro.`);
+  return text;
+}
+
+function safeTrackerReceipt(input, projectRoot, adapter) {
+  const events = String(input.events ?? input.event ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (!events.length || events.some((event) => !TRACKER_RECEIPT_EVENTS.has(event))) throw new Error("EVENTS precisa declarar somente eventos canônicos para o recibo seguro.");
+  const uniqueEvents = [...new Set(events)];
+  const runId = receiptValue(input.runId, "RUN_ID", { required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$/u });
+  const role = receiptValue(input.role, "ROLE", { required: true, values: TRACKER_RECEIPT_ROLES })?.toLowerCase();
+  const status = receiptValue(input.status, "STATUS", { required: true, values: TRACKER_RECEIPT_STATUSES })?.toLowerCase();
+  const states = new Set(Object.keys(adapter.tracker?.states ?? {}));
+  const state = receiptValue(input.state, "STATE", { values: states })?.toLowerCase();
+  const stateFrom = receiptValue(input.stateFrom, "STATE_FROM", { values: states })?.toLowerCase();
+  const stateTo = receiptValue(input.stateTo, "STATE_TO", { values: states })?.toLowerCase();
+  const nextRole = receiptValue(input.nextRole, "NEXT_ROLE", { values: TRACKER_RECEIPT_ROLES })?.toLowerCase();
+  const authorizationSource = receiptValue(input.authorizationSource, "AUTHORIZATION_SOURCE", { values: LOCK_RELEASE_AUTH_SOURCES })?.toLowerCase();
+  const authorizationRef = receiptValue(input.authorizationRef, "AUTHORIZATION_REF", { pattern: /^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$/u });
+  if (status === "released") {
+    if (uniqueEvents.length !== 1 || uniqueEvents[0] !== "lock" || role !== "orchestrator" || !state) {
+      throw new Error("STATUS: released exige somente EVENTS: lock, ROLE: orchestrator e o estado atual do card.");
+    }
+    if (!/^RUN-[0-9]{8}-[A-Z0-9]{8}$/iu.test(runId)) throw new Error("Liberação de lock exige o RUN_ID canônico do lock encerrado.");
+    if (!authorizationSource) throw new Error("Liberação de lock exige autorização humana explícita.");
+    if (!authorizationRef) throw new Error("Liberação de lock exige AUTHORIZATION_REF.");
+    if (authorizationSource === "conversation" && authorizationRef !== "current-conversation") {
+      throw new Error("AUTHORIZATION_REF deve ser current-conversation para autorização nesta conversa.");
+    }
+    if (authorizationSource === "trello-comment" && !/^[a-f0-9]{24}$/iu.test(authorizationRef)) {
+      throw new Error("AUTHORIZATION_REF deve ser o id de um comentário Trello de autorização.");
+    }
+  } else if (authorizationSource || authorizationRef) {
+    throw new Error("Metadados de autorização só podem ser usados para encerrar um lock explicitamente.");
+  }
+  const artifactPath = containedPath(projectRoot, resolve(projectRoot, input.artifactPath ?? ""), "artifact-file");
+  const artifact = statSync(artifactPath);
+  if (!artifact.isFile() || artifact.size > TRACKER_RECEIPT_ARTIFACT_LIMIT) throw new Error("artifact-file precisa ser um arquivo local de até 10 MiB.");
+  const artifactHash = createHash("sha256").update(readFileSync(artifactPath)).digest("hex");
+  const headline = uniqueEvents.includes("lock") ? "CODEX LOCK — MODUS TRACKER RECEIPT" : "MODUS TRACKER RECEIPT";
+  const lines = [
+    headline,
+    "RECEIPT_VERSION: 1",
+    `RUN_ID: ${runId}`,
+    `ROLE: ${role}`,
+    `STATUS: ${status}`,
+    `EVENTS: ${uniqueEvents.join(", ")}`,
+    ...(state ? [`STATE: ${state}`] : []),
+    ...(stateFrom ? [`STATE_FROM: ${stateFrom}`] : []),
+    ...(stateTo ? [`STATE_TO: ${stateTo}`] : []),
+    ...(nextRole ? [`NEXT_ROLE: ${nextRole}`] : []),
+    ...(authorizationSource ? [`LOCK_RELEASE_AUTHORIZATION: ${authorizationSource}`, `AUTHORIZATION_REF: ${authorizationRef}`] : []),
+    `LOCAL_ARTIFACT_SHA256: ${artifactHash}`,
+    "TRACKER_PAYLOAD: minimal-receipt"
+  ];
+  return { text: lines.join("\n"), artifactHash, events: uniqueEvents };
+}
+
+async function verifyActiveLockForRelease(fetchImpl, credentials, adapter, cardRef, state, runId) {
+  const card = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}`, { fields: "id,idBoard,idList" }, "a validação do card para liberar lock");
+  if (card.id !== cardRef || card.idBoard !== adapter.tracker.board_ref || card.idList !== adapter.tracker.states?.[state]) {
+    throw new Error("O card, board ou estado atual divergiu do recibo de liberação do lock.");
+  }
+  const actions = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}/actions`, { filter: "commentCard,updateCard", limit: 1000 }, "a releitura do lock atual");
+  const comments = actions.filter((item) => item.type === "commentCard" || item.data?.text).map(publicComment);
+  const lock = lockState(comments, stateEntryDate(actions, card.idList));
+  if (lock?.status !== "active" || lock.run_id !== runId || (lock.state && lock.state !== state)) {
+    throw new Error("O RUN_ID indicado não corresponde ao lock ativo mais recente deste card e estado.");
+  }
+  return { lock, actions };
+}
+
+async function verifyLockReleaseComment(fetchImpl, credentials, cardRef, runId, authorizationRef, lock, actions) {
+  const authorization = actions.find((item) => item.id === authorizationRef);
+  const currentMember = await getJson(fetchImpl, credentials, "/members/me", { fields: "id" }, "a identificação da conta Trello autorizadora");
+  const expectedText = `AUTORIZO LIBERAR LOCK: ${runId}`;
+  if (!authorization || authorization.type !== "commentCard" || authorization.data?.card?.id !== cardRef || String(authorization.data?.text ?? "").trim() !== expectedText) {
+    throw new Error("O comentário de autorização precisa pertencer ao card e declarar exatamente o RUN_ID do lock.");
+  }
+  if (!lock.updated_at || String(authorization.date) <= String(lock.updated_at)) throw new Error("O comentário de autorização precisa ser posterior ao lock ativo.");
+  if (!currentMember.id || authorization.idMemberCreator !== currentMember.id) {
+    throw new Error("O comentário de autorização não foi publicado pela conta Trello autenticada.");
+  }
+}
+
+async function writeCommentReadback({ fetchImpl, credentials, cardRef, text, action, now }) {
+  if (!text.trim()) throw new Error("O comentário não pode ser vazio.");
+  if (unsafeEncoding(text)) throw new Error("O comentário contém sinais de codificação corrompida.");
+  const body = new URLSearchParams({ key: credentials.key, token: credentials.token, text });
+  const writeResponse = await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(cardRef)}/actions/comments`, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" }, body
+  }, "a escrita do comentário");
+  const written = await responseJson(writeResponse, "a escrita do comentário");
+  const readResponse = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(written.id)}`, credentials), undefined, "a releitura do comentário");
+  const persisted = await responseJson(readResponse, "a releitura do comentário");
+  const persistedText = persisted.data?.text;
+  if (persisted.data?.card?.id !== cardRef || persistedText !== text || unsafeEncoding(persistedText ?? "")) {
+    return { contract_version: "0.1", tool: { name: "pipeline-trello-comments", version: PACKAGE.version }, status: "FAIL", action, provider: "environment", card_ref: cardRef, comment_ref: written.id, diagnostic: { code: "TRACKER_COMMENT_READBACK_FAILED" }, guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+  }
+  return { contract_version: "0.1", tool: { name: "pipeline-trello-comments", version: PACKAGE.version }, status: "PASS", action, provider: "environment", card_ref: cardRef, comment_ref: persisted.id, written_at: written.date, read_at: new Date(now ?? Date.now()).toISOString(), content_sha256: createHash("sha256").update(text, "utf8").digest("hex"), readback_status: "confirmed", encoding: "utf-8", guarantees: { tracker_writes_performed: true, secrets_exposed: false } };
+}
+
 async function responseJson(response, operation) {
   if (!response.ok) throw new Error(`Trello recusou ${operation} com HTTP ${response.status}.`);
   return response.json();
+}
+
+function safeNetworkDetail(error) {
+  const values = [];
+  let current = error;
+  for (let depth = 0; current && depth < 3; depth += 1, current = current.cause) {
+    const code = String(current.code ?? "").trim();
+    const message = String(current.message ?? current ?? "").trim();
+    if (code) values.push(code);
+    if (message) values.push(message);
+  }
+  const detail = [...new Set(values)].join(" | ") || "causa não informada";
+  return detail
+    .replace(/([?&](?:key|token|api[_-]?key|authorization|cookie)=)[^&\s]+/giu, "$1<redacted>")
+    .replace(/https?:\/\/[^\s?]+\?[^\s]*/giu, "<url-com-parâmetros-redigidos>")
+    .replace(/[\r\n]+/gu, " ")
+    .slice(0, 320);
+}
+
+function networkPolicyHint(detail) {
+  return /(?:EACCES|EPERM|network access|network.*(?:denied|blocked)|sandbox)/iu.test(detail)
+    ? " A execução atual não possui acesso externo ao Trello; habilite rede para o comando do ORCHESTRATOR ou execute-o com aprovação de rede."
+    : "";
+}
+
+function delay(milliseconds) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
 async function safeFetch(fetchImpl, url, options, operation) {
@@ -82,15 +224,19 @@ async function safeFetch(fetchImpl, url, options, operation) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const response = await fetchImpl(url, options);
-      if (attempt < attempts && TRANSIENT_HTTP_STATUS.has(response.status)) continue;
+      if (attempt < attempts && TRANSIENT_HTTP_STATUS.has(response.status)) {
+        await delay(READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1));
+        continue;
+      }
       return response;
     } catch (error) {
       lastError = error;
       if (attempt === attempts) break;
+      await delay(READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1));
     }
   }
-  const cause = String(lastError?.message ?? lastError ?? "causa não informada").replace(/[\r\n]+/gu, " ").slice(0, 240);
-  throw new Error(`Falha de acesso ao Trello durante ${operation} após ${attempts} tentativas de leitura: ${cause}`);
+  const cause = safeNetworkDetail(lastError);
+  throw new Error(`Falha de acesso ao Trello durante ${operation} após ${attempts} tentativas de leitura: ${cause}.${networkPolicyHint(cause)}`);
 }
 
 function publicComment(action) {
@@ -272,12 +418,36 @@ function technicalProgress(comments, enteredAt, state) {
   const review = reviews.at(-1);
   const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
   const reviewRejected = review ? /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(review.text ?? "")) : false;
+  // O contador pertence à fronteira DEV → Review, não ao card inteiro. Uma
+  // aprovação de Review encerra a fronteira e zera o próximo ciclo antes do QA.
+  let reviewReturnCount = 0;
+  for (const item of reviews) {
+    if (positiveVerdict(String(item.text ?? ""))) reviewReturnCount = 0;
+    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(item.text ?? ""))) reviewReturnCount += 1;
+  }
   return {
     implementation_complete: !reviewRejected,
     review_approved: reviewApproved,
     implementation_evidence_ref: devPass.ref,
+    active_loop: { edge: "dev_review", state: "in_development", count: reviewRejected ? reviewReturnCount : 0 },
     ...(review ? { review_evidence_ref: review.ref } : {})
   };
+}
+
+function qaLoopProgress(comments, enteredAt, state) {
+  if (state !== "ready_for_validation") return {};
+  const verdicts = chronological(after(comments, enteredAt)).filter((comment) => {
+    const text = String(comment.text ?? "");
+    return roleIs(text, "pipeline-qa") && /^(?:VERDICT|STATUS):.*\b(?:PASS|APPROVED|COMPLETED|FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text);
+  });
+  let returnCount = 0;
+  let rejected = false;
+  for (const verdict of verdicts) {
+    const text = String(verdict.text ?? "");
+    if (positiveVerdict(text)) { returnCount = 0; rejected = false; }
+    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text)) { returnCount += 1; rejected = true; }
+  }
+  return { active_loop: { edge: "qa_dev", state: "ready_for_validation", count: rejected ? returnCount : 0 } };
 }
 
 function pendingTransition(comments, state) {
@@ -556,7 +726,7 @@ export async function executeTrelloComment(input = {}) {
       if (exactResolutionKind === "screen_approval") exactResolutions.push(gate.screen_approval ?? "Tela aprovada");
       if (exactResolutionKind === "production_approval") exactResolutions.push(gate.production_approval ?? "APROVADO PARA PRD");
       const wait = humanWaitState(comments, { state, unblockPrefix: gate.unblock_prefix, exactResolutions, exactResolutionKind });
-      const progress = technicalProgress(allComments, enteredAt, state);
+      const progress = { ...technicalProgress(allComments, enteredAt, state), ...qaLoopProgress(allComments, enteredAt, state) };
       const transition = pendingTransition(comments, state);
       const lock = lockState(allComments, enteredAt);
       const screenEvidenceAt = latestDate(phaseAttachments, visualAttachment);
@@ -816,45 +986,24 @@ export async function executeTrelloComment(input = {}) {
     if (!input.textPath) throw new Error("textPath é obrigatório para escrita.");
     const textPath = containedPath(projectRoot, resolve(projectRoot, input.textPath), "textPath");
     const text = readFileSync(textPath, "utf8");
-    if (!text.trim()) throw new Error("O comentário não pode ser vazio.");
-    if (unsafeEncoding(text)) throw new Error("O comentário contém sinais de codificação corrompida.");
-    const body = new URLSearchParams({ key: credentials.key, token: credentials.token, text });
-    const writeResponse = await safeFetch(fetchImpl, `${API_ROOT}/cards/${encodeURIComponent(input.cardRef)}/actions/comments`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body
-    }, "a escrita do comentário");
-    const written = await responseJson(writeResponse, "a escrita do comentário");
-    const readResponse = await safeFetch(fetchImpl, endpoint(`/actions/${encodeURIComponent(written.id)}`, credentials), undefined, "a releitura do comentário");
-    const persisted = await responseJson(readResponse, "a releitura do comentário");
-    const persistedText = persisted.data?.text;
-    if (persisted.data?.card?.id !== input.cardRef || persistedText !== text || unsafeEncoding(persistedText ?? "")) {
-      return {
-        contract_version: "0.1",
-        tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
-        status: "FAIL",
-        action,
-        provider: "environment",
-        card_ref: input.cardRef,
-        comment_ref: written.id,
-        diagnostic: { code: "TRACKER_COMMENT_READBACK_FAILED" },
-        guarantees: { tracker_writes_performed: true, secrets_exposed: false }
-      };
+    return writeCommentReadback({ fetchImpl, credentials, cardRef: input.cardRef, text, action, now: input.now });
+  }
+
+  if (action === "write-tracker-receipt") {
+    if (!input.cardRef) throw new Error("cardRef é obrigatório para escrita do recibo seguro.");
+    const receipt = safeTrackerReceipt(input, projectRoot, adapter);
+    if (String(input.status ?? "").toLowerCase() === "released") {
+      const { lock, actions } = await verifyActiveLockForRelease(fetchImpl, credentials, adapter, input.cardRef, String(input.state).toLowerCase(), input.runId);
+      if (String(input.authorizationSource ?? "").toLowerCase() === "trello-comment") {
+        await verifyLockReleaseComment(fetchImpl, credentials, input.cardRef, input.runId, input.authorizationRef, lock, actions);
+      }
     }
+    const result = await writeCommentReadback({ fetchImpl, credentials, cardRef: input.cardRef, text: receipt.text, action, now: input.now });
     return {
-      contract_version: "0.1",
-      tool: { name: "pipeline-trello-comments", version: PACKAGE.version },
-      status: "PASS",
-      action,
-      provider: "environment",
-      card_ref: input.cardRef,
-      comment_ref: persisted.id,
-      written_at: written.date,
-      read_at: new Date(input.now ?? Date.now()).toISOString(),
-      content_sha256: createHash("sha256").update(text, "utf8").digest("hex"),
-      readback_status: "confirmed",
-      encoding: "utf-8",
-      guarantees: { tracker_writes_performed: true, secrets_exposed: false }
+      ...result,
+      ...(result.status === "PASS" ? {
+        receipt: { version: 1, events: receipt.events, local_artifact_sha256: receipt.artifactHash, payload: "minimal" }
+      } : {})
     };
   }
 
@@ -879,6 +1028,18 @@ function parseArguments(argv) {
       else if (argument === "--expected-name") options.expectedName = value;
       else if (argument === "--list-ref") options.listRef = value;
       else if (argument === "--text-file") options.textPath = value;
+      else if (argument === "--artifact-file") options.artifactPath = value;
+      else if (argument === "--event") options.event = value;
+      else if (argument === "--events") options.events = value;
+      else if (argument === "--run-id") options.runId = value;
+      else if (argument === "--role") options.role = value;
+      else if (argument === "--state") options.state = value;
+      else if (argument === "--state-from") options.stateFrom = value;
+      else if (argument === "--state-to") options.stateTo = value;
+      else if (argument === "--status") options.status = value;
+      else if (argument === "--next-role") options.nextRole = value;
+      else if (argument === "--authorization-source") options.authorizationSource = value;
+      else if (argument === "--authorization-ref") options.authorizationRef = value;
       else if (argument === "--name-file") options.namePath = value;
       else if (argument === "--description-file") options.descriptionPath = value;
       else if (argument === "--expected-sha256") options.expectedSha256 = value;
@@ -901,7 +1062,7 @@ if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
     if (options.help) {
-      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|delete-comment-readback|move-readback|list-attachments|download-attachment|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
+      process.stdout.write("Uso: pipeline.ps1 trello --action snapshot|list-card-names|list|read|read-card|update-card-readback|update-labels-readback|write-readback|write-tracker-receipt|delete-comment-readback|move-readback|list-attachments|download-attachment|attach-file|attach-url|delete-attachment-readback --project-root <path> [opções]\n");
     } else {
       const result = await executeTrelloComment(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

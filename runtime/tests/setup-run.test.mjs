@@ -152,14 +152,14 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-002");
     assert.equal(result.selected.skill, "pipeline-qa");
-    assert.equal(result.selected.continuation_policy.mode, "drain-independent-work-v0.2");
+    assert.equal(result.selected.continuation_policy.mode, "drain-independent-work-v0.3");
     assert.equal(result.selected.continuation_policy.continue_after_role_handoff, true);
     assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
     assert.deepEqual(result.selected.execution_request, {
-      mapping_version: "gpt-5.6-2026-08-28",
+      mapping_version: "modus-model-map-0.3.7",
       profile: "EQUILIBRADO",
-      model: "gpt-5.6-terra",
+      model: "gpt-6-luna",
       reasoning_effort: "medium",
       agent_mode: "independent",
       configuration_source: "kernel-profile-map",
@@ -186,8 +186,8 @@ test("planner preserva lote coeso definido pelo PO", async () => {
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH, mode: "shadow", now: new Date("2026-08-29T00:00:00Z"), uuid: "11111111-2222-3333-4444-555555555555" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
-    assert.equal(result.selected.unit_policy, "cohesive-delivery-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.3");
+    assert.equal(result.selected.unit_policy, "cohesive-delivery-v0.3");
     assert.deepEqual(result.selected.capsule_seed.cards, ["FX-101", "FX-102"]);
     assert.equal(result.selected.lock_proposals.length, 2);
     assert.equal(result.deferred.length, 0);
@@ -237,8 +237,8 @@ test("PO recebe toda a fila elegível de refinamento na mesma execução", async
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
-    assert.equal(result.selected.unit_policy, "refinement-queue-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.3");
+    assert.equal(result.selected.unit_policy, "refinement-queue-v0.3");
     assert.equal(result.selected.refinement_queue.scope, "all-eligible-refinement-cards");
     assert.deepEqual(result.selected.refinement_queue.cards.map((card) => card.card_ref), ["r1", "r2", "r3"]);
     assert.deepEqual(result.selected.continuation_policy.defer_on.slice(0, 3), ["human_decision", "screen_approval", "production_approval"]);
@@ -338,7 +338,7 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
     assert.ok(result.deferred.some((item) => item.key === "FX-222" && item.reason === "TECHNICAL_WIP_LIMIT"));
     assert.deepEqual(result.schedule.capacities, { po: 1, ux_ui: 1, technical: 1 });
     assert.equal(result.schedule.agent_completion_barrier, "terminal-handoff-before-replan");
-    assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.2");
+    assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.3");
     assert.equal(result.recovery_policy.technical_failures_require_human, false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -624,6 +624,55 @@ test("release aprovada recupera prioridade técnica antes de novo desenvolviment
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("releases aprovadas são integradas em uma única fila serial quando a lane técnica está livre", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "release-one", key: "FX-330", title: "Integrar primeiro", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { production_approval_valid: true } },
+      { ref: "release-two", key: "FX-331", title: "Integrar segundo", list_ref: adapter.tracker.states.ready_for_release, position: 2, signals: { production_approval_valid: true } },
+      { ref: "next-dev", key: "FX-332", title: "Novo desenvolvimento", list_ref: adapter.tracker.states.ready_for_development, position: 3 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    const release = result.work_slots.find((slot) => slot.lane === "technical");
+    assert.equal(release.unit_policy, "release-integration-batch-v0.3");
+    assert.equal(release.release_queue.strategy, "single-serial-git-integration");
+    assert.deepEqual(release.release_queue.cards.map((card) => card.key), ["FX-330", "FX-331"]);
+    assert.equal(release.release_queue.run_id, result.run_id);
+    assert.equal(release.release_queue.progress_file, `.pipeline/tmp/${result.run_id}-release-progress.json`);
+    assert.equal(release.release_queue.execution_budget.max_active_ms, 3 * 60 * 60 * 1000);
+    assert.equal(release.release_queue.execution_budget.no_progress_ms, 30 * 60 * 1000);
+    assert.ok(result.deferred.some((item) => item.key === "FX-332" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("release aprovada não interrompe DEV, Review ou QA em andamento", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "review", key: "FX-340", title: "Review atual", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: true } },
+      { ref: "release", key: "FX-341", title: "Release aprovada", list_ref: adapter.tracker.states.ready_for_release, position: 2, signals: { production_approval_valid: true } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.work_slots[0].key, "FX-340");
+    assert.equal(result.work_slots[0].skill, "pipeline-code-review");
+    assert.ok(result.deferred.some((item) => item.key === "FX-341" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("limite de loop considera apenas a fronteira ativa e é zerado após avanço", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "qa-reset", key: "FX-350", title: "QA após review aprovado", list_ref: adapter.tracker.states.ready_for_validation, position: 1, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
+      { ref: "dev-loop", key: "FX-351", title: "Quarto retorno DEV Review", list_ref: adapter.tracker.states.in_development, position: 2, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.work_slots[0].key, "FX-350");
+    assert.equal(result.work_slots[0].skill, "pipeline-qa");
+    assert.ok(result.blocked.some((item) => item.key === "FX-351" && item.reason === "LOOP_LIMIT_REACHED"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("plano vazio por gate humano mantém contrato de encerramento completo", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
@@ -748,7 +797,7 @@ test("planner encaminha implementação concluída para code review sem mover co
     );
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH });
     assert.equal(result.selected.skill, "pipeline-code-review");
-    assert.equal(result.selected.execution_request.model, "gpt-5.6-sol");
+    assert.equal(result.selected.execution_request.model, "gpt-6.1-sol");
     assert.equal(result.selected.execution_request.reasoning_effort, "high");
     assert.equal(result.selected.execution_request.agent_mode, "independent");
     assert.equal(result.selected.state, "in_development");

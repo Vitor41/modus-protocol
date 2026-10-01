@@ -19,6 +19,7 @@ async function projectFixture() {
       provider: "trello",
       comments: { read_provider: "environment", write_provider: "environment" },
       environment: { credential_file: "trello_key/trello.env" },
+      states: { refinement: "refinement", ux_ui: "ux", ready_for_development: "ready-dev", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release" },
       card_keys: [{ kind: "feature", pattern: "^FP-[0-9]{3}$" }],
       type_labels: { feature: "label-feature", bug: "label-bug" },
       domain_labels: { business: "label-business", technical: "label-technical" }
@@ -84,6 +85,22 @@ test("leituras idempotentes recuperam duas falhas transitórias sem trocar integ
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("diagnóstico de rede preserva causa sanitizada e identifica sandbox sem expor token", async () => {
+  const root = await projectFixture();
+  try {
+    const cause = Object.assign(new Error("connect EACCES https://api.trello.com/1/lists?token=super-secret"), { code: "EACCES" });
+    await assert.rejects(
+      executeTrelloComment({ action: "list-card-names", projectRoot: root, fetchImpl: async () => { throw Object.assign(new TypeError("fetch failed"), { cause }); } }),
+      (error) => {
+        assert.match(error.message, /EACCES/u);
+        assert.match(error.message, /não possui acesso externo/u);
+        assert.doesNotMatch(error.message, /super-secret/u);
+        return true;
+      }
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("escreve e relê exatamente o comentário UTF-8", async () => {
   const root = await projectFixture();
   const textPath = join(root, ".pipeline", "tmp", "comment.txt");
@@ -114,6 +131,172 @@ test("escreve e relê exatamente o comentário UTF-8", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("publica somente recibo mínimo e mantém a cápsula completa fora do tracker", async () => {
+  const root = await projectFixture();
+  const capsulePath = join(root, ".pipeline", "tmp", "capsule.txt");
+  const capsule = "CONTEXT CAPSULE\nDescrição interna completa do cliente\nComentários privados e referências locais";
+  await writeFile(capsulePath, capsule, "utf8");
+  let calls = 0;
+  let postedText;
+  try {
+    const result = await executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: capsulePath,
+      runId: "RUN-20260928-ABCDEF12", role: "pipeline-ux-ui", status: "active", events: "capsule",
+      state: "ux_ui", nextRole: "pipeline-ux-ui", now: "2026-09-28T12:00:05Z",
+      fetchImpl: async (_url, options = {}) => {
+        calls += 1;
+        if (calls === 1) {
+          const text = options.body.get("text");
+          postedText = text;
+          assert.equal(options.method, "POST");
+          assert.match(text, /^MODUS TRACKER RECEIPT/mu);
+          assert.match(text, /^LOCAL_ARTIFACT_SHA256: [a-f0-9]{64}$/mu);
+          assert.doesNotMatch(text, /Descrição interna|Comentários privados|referências locais/u);
+          return new Response(JSON.stringify({ id: "receipt-1", date: "2026-09-28T12:00:00Z" }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ id: "receipt-1", date: "2026-09-28T12:00:00Z", data: { card: { id: "card-1" }, text: postedText } }), { status: 200 });
+      }
+    });
+    assert.equal(result.status, "PASS");
+    assert.equal(result.receipt.payload, "minimal");
+    assert.equal(result.receipt.local_artifact_sha256, createHash("sha256").update(capsule, "utf8").digest("hex"));
+    assert.equal(calls, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("encerra lock somente com autorização explícita e autoria Trello confirmada", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const artifactPath = join(root, ".pipeline", "tmp", "lock-release.json");
+  const runId = "RUN-20261001-ABCDEF12";
+  await writeFile(artifactPath, JSON.stringify({ run_id: runId, authorization: "explicit human recovery" }), "utf8");
+  let postedText;
+  let calls = 0;
+  try {
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath,
+      runId, role: "orchestrator", status: "released", events: "lock", state: "ready_for_release"
+    }), /autorização humana explícita/u);
+
+    const result = await executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath,
+      runId, role: "orchestrator", status: "released", events: "lock", state: "ready_for_release",
+      authorizationSource: "trello-comment", authorizationRef: "aabbccddeeff001122334455",
+      fetchImpl: async (url, options = {}) => {
+        calls += 1;
+        const parsed = new URL(url);
+        if (parsed.pathname === "/1/cards/card-1" && options.method !== "POST") return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1", idList: "release" }));
+        if (parsed.pathname === "/1/cards/card-1/actions") return new Response(JSON.stringify([
+          { id: "active-lock", type: "commentCard", date: "2026-10-01T11:00:00Z", idMemberCreator: "agent", data: { card: { id: "card-1" }, text: `CODEX LOCK\nRUN_ID: ${runId}\nSTATE: ready_for_release\nROLE: pipeline-dev\nSTATUS: active` } },
+          { id: "aabbccddeeff001122334455", type: "commentCard", date: "2026-10-01T11:01:00Z", idMemberCreator: "human-member", data: { card: { id: "card-1" }, text: `AUTORIZO LIBERAR LOCK: ${runId}` } }
+        ]));
+        if (parsed.pathname.endsWith("/members/me")) return new Response(JSON.stringify({ id: "human-member" }));
+        if (parsed.pathname.endsWith("/actions/comments") && options.method === "POST") {
+          postedText = options.body.get("text");
+          return new Response(JSON.stringify({ id: "release-receipt", date: "2026-10-01T12:00:00Z" }));
+        }
+        if (parsed.pathname.endsWith("/actions/release-receipt")) {
+          return new Response(JSON.stringify({ id: "release-receipt", date: "2026-10-01T12:00:00Z", data: { card: { id: "card-1" }, text: postedText } }));
+        }
+        throw new Error(`Unexpected URL ${parsed.pathname}`);
+      }
+    });
+    assert.equal(result.status, "PASS");
+    assert.equal(result.readback_status, "confirmed");
+    assert.match(postedText, /^STATUS: released$/mu);
+    assert.match(postedText, /^ROLE: orchestrator$/mu);
+    assert.match(postedText, /^RUN_ID: RUN-20261001-ABCDEF12$/mu);
+    assert.match(postedText, /^LOCK_RELEASE_AUTHORIZATION: trello-comment$/mu);
+    assert.match(postedText, /^AUTHORIZATION_REF: aabbccddeeff001122334455$/mu);
+    assert.equal(calls, 5);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recusa autorização de liberação criada por outra conta Trello", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const artifactPath = join(root, ".pipeline", "tmp", "lock-release.json");
+  const runId = "RUN-20261001-ABCDEF12";
+  await writeFile(artifactPath, JSON.stringify({ run_id: runId }), "utf8");
+  let writes = 0;
+  try {
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath,
+      runId, role: "orchestrator", status: "released", events: "lock", state: "ready_for_release",
+      authorizationSource: "trello-comment", authorizationRef: "aabbccddeeff001122334455",
+      fetchImpl: async (url, options = {}) => {
+        const parsed = new URL(url);
+        if (parsed.pathname === "/1/cards/card-1" && options.method !== "POST") return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1", idList: "release" }));
+        if (parsed.pathname === "/1/cards/card-1/actions") return new Response(JSON.stringify([
+          { id: "active-lock", type: "commentCard", date: "2026-10-01T11:00:00Z", idMemberCreator: "agent", data: { card: { id: "card-1" }, text: `CODEX LOCK\nRUN_ID: ${runId}\nSTATE: ready_for_release\nROLE: pipeline-dev\nSTATUS: active` } },
+          { id: "aabbccddeeff001122334455", type: "commentCard", date: "2026-10-01T11:01:00Z", idMemberCreator: "another-member", data: { card: { id: "card-1" }, text: `AUTORIZO LIBERAR LOCK: ${runId}` } }
+        ]));
+        if (parsed.pathname.endsWith("/members/me")) return new Response(JSON.stringify({ id: "human-member" }));
+        if (options.method === "POST") writes += 1;
+        return new Response(JSON.stringify({}));
+      }
+    }), /não foi publicado pela conta Trello autenticada/u);
+    assert.equal(writes, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("aceita encerramento de lock autorizado explicitamente na conversa atual", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await (await import("node:fs/promises")).readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const artifactPath = join(root, ".pipeline", "tmp", "lock-release.json");
+  const runId = "RUN-20261001-ABCDEF12";
+  await writeFile(artifactPath, JSON.stringify({ run_id: runId, authorized_in: "current human conversation" }), "utf8");
+  let postedText;
+  try {
+    const result = await executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath,
+      runId, role: "orchestrator", status: "released", events: "lock", state: "ready_for_release",
+      authorizationSource: "conversation", authorizationRef: "current-conversation",
+      fetchImpl: async (url, options = {}) => {
+        const parsed = new URL(url);
+        if (parsed.pathname === "/1/cards/card-1" && options.method !== "POST") return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1", idList: "release" }));
+        if (parsed.pathname === "/1/cards/card-1/actions") return new Response(JSON.stringify([
+          { id: "active-lock", type: "commentCard", date: "2026-10-01T11:00:00Z", data: { card: { id: "card-1" }, text: `CODEX LOCK\nRUN_ID: ${runId}\nSTATE: ready_for_release\nROLE: pipeline-dev\nSTATUS: active` } }
+        ]));
+        if (parsed.pathname.endsWith("/actions/comments") && options.method === "POST") {
+          postedText = options.body.get("text");
+          return new Response(JSON.stringify({ id: "conversation-release", date: "2026-10-01T12:00:00Z" }));
+        }
+        if (parsed.pathname.endsWith("/actions/conversation-release")) return new Response(JSON.stringify({ id: "conversation-release", date: "2026-10-01T12:00:00Z", data: { card: { id: "card-1" }, text: postedText } }));
+        throw new Error(`Unexpected URL ${parsed.pathname}`);
+      }
+    });
+    assert.equal(result.status, "PASS");
+    assert.match(postedText, /^LOCK_RELEASE_AUTHORIZATION: conversation$/mu);
+    assert.match(postedText, /^AUTHORIZATION_REF: current-conversation$/mu);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recibo seguro recusa metadados livres e artefato externo", async () => {
+  const root = await projectFixture();
+  const capsulePath = join(root, ".pipeline", "tmp", "capsule.txt");
+  await writeFile(capsulePath, "seguro", "utf8");
+  try {
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: capsulePath,
+      runId: "RUN-20260928-ABCDEF12\nSEGREDO: não", role: "pipeline-po", status: "active", events: "capsule"
+    }), /formato inseguro/u);
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: "../capsule.txt",
+      runId: "RUN-20260928-ABCDEF12", role: "pipeline-po", status: "active", events: "capsule"
+    }), /contido na raiz/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("releitura individual renova a evidência temporal sem nova escrita", async () => {
@@ -393,6 +576,7 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     const byRef = new Map(snapshot.cards.map((card) => [card.ref, card]));
     assert.equal(byRef.get("card-dev").signals.implementation_complete, false);
     assert.equal(byRef.get("card-dev").signals.review_evidence_ref, "review-return");
+    assert.deepEqual(byRef.get("card-dev").signals.active_loop, { edge: "dev_review", state: "in_development", count: 1 });
     assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
     assert.equal(byRef.get("card-po").signals.pending_transition, true);
     assert.equal(byRef.get("card-po").signals.pending_transition_to, "ux_ui");
@@ -401,6 +585,7 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     assert.equal(byRef.get("card-qa").signals.pending_transition, true);
     assert.equal(byRef.get("card-qa").signals.pending_transition_to, "in_development");
     assert.equal(byRef.get("card-qa").signals.pending_transition_evidence_ref, "qa-return");
+    assert.deepEqual(byRef.get("card-qa").signals.active_loop, { edge: "qa_dev", state: "ready_for_validation", count: 1 });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -436,7 +621,7 @@ test("snapshot reconstrói somente o lock vigente da lista atual", async () => {
   adapter.tracker.board_ref = "board-1";
   adapter.tracker.states = { refinement: "refinement", ux_ui: "ux", ready_for_development: "dev-ready", in_development: "dev", ready_for_validation: "qa", ready_for_release: "release", ideas: "ideas", ready_for_production: "prd", done: "done" };
   await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
-  const lock = (runId) => `CODEX LOCK\nRUN_ID: ${runId}\nCARD_REF: card\nSTATE: in_development\nROLE: pipeline-dev\nSTATUS: active`;
+  const lock = (runId, status = "active") => `CODEX LOCK\nRUN_ID: ${runId}\nCARD_REF: card\nSTATE: in_development\nROLE: pipeline-dev\nSTATUS: ${status}`;
   try {
     await executeTrelloComment({ action: "snapshot", projectRoot: root, outputPath: ".pipeline/tmp/snapshot.json", fetchImpl: async (url) => {
       const value = String(url);
@@ -452,7 +637,8 @@ test("snapshot reconstrói somente o lock vigente da lista atual", async () => {
       ]));
       if (value.includes("card-terminal/actions")) return new Response(JSON.stringify([
         { id: "terminal-handoff", type: "commentCard", date: "2026-09-08T10:01:00Z", data: { card: { id: "card-terminal" }, text: "RUN_ID: RUN-20260908-AAAAAA02\nROLE: pipeline-dev\nSTATUS: completed\nSTATE_FROM: in_development\nSTATE_TO: in_development\nEVENTS: role_handoff" } },
-        { id: "terminal-lock", type: "commentCard", date: "2026-09-08T10:00:00Z", data: { card: { id: "card-terminal" }, text: lock("RUN-20260908-AAAAAA02") } }
+        { id: "terminal-lock", type: "commentCard", date: "2026-09-08T10:00:00Z", data: { card: { id: "card-terminal" }, text: lock("RUN-20260908-AAAAAA02") } },
+        { id: "explicit-lock-release", type: "commentCard", date: "2026-09-08T10:02:00Z", data: { card: { id: "card-terminal" }, text: lock("RUN-20260908-AAAAAA02", "released") } }
       ]));
       if (value.includes("card-transitioned/actions")) return new Response(JSON.stringify([
         { id: "entered", type: "updateCard", date: "2026-09-08T10:02:00Z", data: { card: { id: "card-transitioned" }, listAfter: { id: "dev" } } },
@@ -465,7 +651,7 @@ test("snapshot reconstrói somente o lock vigente da lista atual", async () => {
     assert.equal(cards.get("card-active").lock.status, "active");
     assert.equal(cards.get("card-active").lock.run_id, "RUN-20260908-AAAAAA01");
     assert.equal(cards.get("card-terminal").lock.status, "released");
-    assert.equal(cards.get("card-terminal").lock.updated_at, "2026-09-08T10:01:00Z");
+    assert.equal(cards.get("card-terminal").lock.updated_at, "2026-09-08T10:02:00Z");
     assert.equal(cards.get("card-transitioned").lock, undefined);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
