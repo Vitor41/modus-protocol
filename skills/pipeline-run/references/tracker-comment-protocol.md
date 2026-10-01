@@ -28,9 +28,13 @@ O conteúdo completo de cápsulas, handoffs, bloqueios e transições é interno
 
 O recibo não pode conter descrição do card, comentários, anexos, dados de negócio, caminhos locais, prompts, logs, texto de evidência, stack trace ou credenciais. O gate semântico lê o artefato local; o tracker apenas atesta a versão por hash e a sequência de estados. Isso reduz a superfície de divulgação e permite a revisão automática avaliar uma escrita pequena e determinística.
 
+### Encerramento excepcional de lock
+
+Um lock ativo externo só pode ser encerrado por pedido humano explícito na conversa atual ou por comentário humano no próprio card com o texto exato `AUTORIZO LIBERAR LOCK: <RUN_ID>`. O recibo continua vinculado ao RUN_ID antigo, usa `ROLE: orchestrator`, `STATUS: released`, `EVENTS: lock`, `STATE` atual e informa `LOCK_RELEASE_AUTHORIZATION: conversation|trello-comment` mais `AUTHORIZATION_REF`. Na autorização por comentário, o launcher valida a referência, o card, o texto exato e a autoria contra `/members/me`; o ORCHESTRATOR ainda precisa confirmar que o comentário é posterior ao lock e que o job antigo não está ativo. A ação exige escrita e releitura confirmadas, não move o card e não expira nenhum outro lock.
+
 ## Eventos mínimos
 
-- `lock`: `CODEX LOCK`, `RUN_ID`, papel, estado e status;
+- `lock`: `CODEX LOCK`, `RUN_ID`, papel, estado e status; em recuperação humana explícita pode registrar `STATUS: released` com a proveniência da autorização acima;
 - `capsule`: recibo de cápsula local por hash;
 - `role_handoff`: recibo do papel, commit/artefato fixado localmente, veredito e hash;
 - `blocker`: recibo do bloqueio local, estado preservado e hash; falha técnica usa `requires_human: false` no artefato local;

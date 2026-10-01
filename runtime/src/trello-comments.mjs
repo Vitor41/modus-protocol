@@ -25,7 +25,8 @@ const HUMAN_GATE_KINDS = new Set([
 ]);
 const TRACKER_RECEIPT_EVENTS = new Set(["lock", "capsule", "role_handoff", "blocker", "transition"]);
 const TRACKER_RECEIPT_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa", "orchestrator"]);
-const TRACKER_RECEIPT_STATUSES = new Set(["active", "pass", "approved", "completed", "blocked", "return", "rejected", "changes_required"]);
+const TRACKER_RECEIPT_STATUSES = new Set(["active", "pass", "approved", "completed", "blocked", "released", "return", "rejected", "changes_required"]);
+const LOCK_RELEASE_AUTH_SOURCES = new Set(["conversation", "trello-comment"]);
 const TRACKER_RECEIPT_ARTIFACT_LIMIT = 10 * 1024 * 1024;
 
 function parseData(path, label) {
@@ -99,6 +100,24 @@ function safeTrackerReceipt(input, projectRoot, adapter) {
   const stateFrom = receiptValue(input.stateFrom, "STATE_FROM", { values: states })?.toLowerCase();
   const stateTo = receiptValue(input.stateTo, "STATE_TO", { values: states })?.toLowerCase();
   const nextRole = receiptValue(input.nextRole, "NEXT_ROLE", { values: TRACKER_RECEIPT_ROLES })?.toLowerCase();
+  const authorizationSource = receiptValue(input.authorizationSource, "AUTHORIZATION_SOURCE", { values: LOCK_RELEASE_AUTH_SOURCES })?.toLowerCase();
+  const authorizationRef = receiptValue(input.authorizationRef, "AUTHORIZATION_REF", { pattern: /^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$/u });
+  if (status === "released") {
+    if (uniqueEvents.length !== 1 || uniqueEvents[0] !== "lock" || role !== "orchestrator" || !state) {
+      throw new Error("STATUS: released exige somente EVENTS: lock, ROLE: orchestrator e o estado atual do card.");
+    }
+    if (!/^RUN-[0-9]{8}-[A-Z0-9]{8}$/iu.test(runId)) throw new Error("Liberação de lock exige o RUN_ID canônico do lock encerrado.");
+    if (!authorizationSource) throw new Error("Liberação de lock exige autorização humana explícita.");
+    if (!authorizationRef) throw new Error("Liberação de lock exige AUTHORIZATION_REF.");
+    if (authorizationSource === "conversation" && authorizationRef !== "current-conversation") {
+      throw new Error("AUTHORIZATION_REF deve ser current-conversation para autorização nesta conversa.");
+    }
+    if (authorizationSource === "trello-comment" && !/^[a-f0-9]{24}$/iu.test(authorizationRef)) {
+      throw new Error("AUTHORIZATION_REF deve ser o id de um comentário Trello de autorização.");
+    }
+  } else if (authorizationSource || authorizationRef) {
+    throw new Error("Metadados de autorização só podem ser usados para encerrar um lock explicitamente.");
+  }
   const artifactPath = containedPath(projectRoot, resolve(projectRoot, input.artifactPath ?? ""), "artifact-file");
   const artifact = statSync(artifactPath);
   if (!artifact.isFile() || artifact.size > TRACKER_RECEIPT_ARTIFACT_LIMIT) throw new Error("artifact-file precisa ser um arquivo local de até 10 MiB.");
@@ -115,10 +134,38 @@ function safeTrackerReceipt(input, projectRoot, adapter) {
     ...(stateFrom ? [`STATE_FROM: ${stateFrom}`] : []),
     ...(stateTo ? [`STATE_TO: ${stateTo}`] : []),
     ...(nextRole ? [`NEXT_ROLE: ${nextRole}`] : []),
+    ...(authorizationSource ? [`LOCK_RELEASE_AUTHORIZATION: ${authorizationSource}`, `AUTHORIZATION_REF: ${authorizationRef}`] : []),
     `LOCAL_ARTIFACT_SHA256: ${artifactHash}`,
     "TRACKER_PAYLOAD: minimal-receipt"
   ];
   return { text: lines.join("\n"), artifactHash, events: uniqueEvents };
+}
+
+async function verifyActiveLockForRelease(fetchImpl, credentials, adapter, cardRef, state, runId) {
+  const card = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}`, { fields: "id,idBoard,idList" }, "a validação do card para liberar lock");
+  if (card.id !== cardRef || card.idBoard !== adapter.tracker.board_ref || card.idList !== adapter.tracker.states?.[state]) {
+    throw new Error("O card, board ou estado atual divergiu do recibo de liberação do lock.");
+  }
+  const actions = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}/actions`, { filter: "commentCard,updateCard", limit: 1000 }, "a releitura do lock atual");
+  const comments = actions.filter((item) => item.type === "commentCard" || item.data?.text).map(publicComment);
+  const lock = lockState(comments, stateEntryDate(actions, card.idList));
+  if (lock?.status !== "active" || lock.run_id !== runId || (lock.state && lock.state !== state)) {
+    throw new Error("O RUN_ID indicado não corresponde ao lock ativo mais recente deste card e estado.");
+  }
+  return { lock, actions };
+}
+
+async function verifyLockReleaseComment(fetchImpl, credentials, cardRef, runId, authorizationRef, lock, actions) {
+  const authorization = actions.find((item) => item.id === authorizationRef);
+  const currentMember = await getJson(fetchImpl, credentials, "/members/me", { fields: "id" }, "a identificação da conta Trello autorizadora");
+  const expectedText = `AUTORIZO LIBERAR LOCK: ${runId}`;
+  if (!authorization || authorization.type !== "commentCard" || authorization.data?.card?.id !== cardRef || String(authorization.data?.text ?? "").trim() !== expectedText) {
+    throw new Error("O comentário de autorização precisa pertencer ao card e declarar exatamente o RUN_ID do lock.");
+  }
+  if (!lock.updated_at || String(authorization.date) <= String(lock.updated_at)) throw new Error("O comentário de autorização precisa ser posterior ao lock ativo.");
+  if (!currentMember.id || authorization.idMemberCreator !== currentMember.id) {
+    throw new Error("O comentário de autorização não foi publicado pela conta Trello autenticada.");
+  }
 }
 
 async function writeCommentReadback({ fetchImpl, credentials, cardRef, text, action, now }) {
@@ -945,6 +992,12 @@ export async function executeTrelloComment(input = {}) {
   if (action === "write-tracker-receipt") {
     if (!input.cardRef) throw new Error("cardRef é obrigatório para escrita do recibo seguro.");
     const receipt = safeTrackerReceipt(input, projectRoot, adapter);
+    if (String(input.status ?? "").toLowerCase() === "released") {
+      const { lock, actions } = await verifyActiveLockForRelease(fetchImpl, credentials, adapter, input.cardRef, String(input.state).toLowerCase(), input.runId);
+      if (String(input.authorizationSource ?? "").toLowerCase() === "trello-comment") {
+        await verifyLockReleaseComment(fetchImpl, credentials, input.cardRef, input.runId, input.authorizationRef, lock, actions);
+      }
+    }
     const result = await writeCommentReadback({ fetchImpl, credentials, cardRef: input.cardRef, text: receipt.text, action, now: input.now });
     return {
       ...result,
@@ -985,6 +1038,8 @@ function parseArguments(argv) {
       else if (argument === "--state-to") options.stateTo = value;
       else if (argument === "--status") options.status = value;
       else if (argument === "--next-role") options.nextRole = value;
+      else if (argument === "--authorization-source") options.authorizationSource = value;
+      else if (argument === "--authorization-ref") options.authorizationRef = value;
       else if (argument === "--name-file") options.namePath = value;
       else if (argument === "--description-file") options.descriptionPath = value;
       else if (argument === "--expected-sha256") options.expectedSha256 = value;

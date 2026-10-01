@@ -6,6 +6,14 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.9] - 2026-10-01
+
+### Corrigido
+
+- O ORCHESTRATOR pode encerrar locks de runs interrompidos somente após autorização humana explícita, mantendo o RUN_ID anterior e registrando recibo de liberação relido no card.
+- Autorização via comentário exige frase exata no card correto e autoria correspondente à conta Trello autenticada; o gatilho comum nunca libera locks.
+- A Skill `pipeline-run` documenta a exceção sem permitir expiração automática, liberação de cards fora do escopo ou movimentação implícita.
+
 ## [0.3.8] - 2026-10-01
 
 ### Corrigido

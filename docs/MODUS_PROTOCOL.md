@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.8` |
-| Versão do Kernel | `0.3.8` |
+| Versão pública | `0.3.9` |
+| Versão do Kernel | `0.3.9` |
 | Estado | Publicada |
 | Data | 2026-10-01 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -490,7 +490,7 @@ Regras:
 
 - reler o lock antes de cada transição;
 - não processar o mesmo lote com identificadores concorrentes;
-- não expirar lock automaticamente sem uma política confiável;
+- não expirar lock automaticamente; encerramento excepcional exige autorização humana explícita, recibo `released` vinculado ao RUN_ID antigo e confirmação por releitura;
 - permitir retomada somente com card, capsule e estado consistentes;
 - não permitir escrita paralela na mesma branch;
 - permitir uma lane de PO, uma de UX/UI e uma técnica simultâneas;
