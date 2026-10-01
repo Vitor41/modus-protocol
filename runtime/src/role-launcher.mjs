@@ -40,10 +40,10 @@ function validateReleaseJob(job, projectRoot) {
   if (!/^RUN-[0-9]{8}-[A-Z0-9]{8}$/u.test(String(runId ?? ""))) {
     throw new Error("Release em lote exige o RUN_ID canônico em release_queue.run_id.");
   }
-  if (!Number.isSafeInteger(job.timeout_ms) || job.timeout_ms > RELEASE_MAX_ACTIVE_MS) {
+  if (!Number.isSafeInteger(job.timeout_ms) || job.timeout_ms < 60_000 || job.timeout_ms > RELEASE_MAX_ACTIVE_MS) {
     throw new Error("Release em lote exige timeout_ms de no máximo 3 horas.");
   }
-  if (!Number.isSafeInteger(job.no_progress_ms) || job.no_progress_ms > RELEASE_MAX_NO_PROGRESS_MS) {
+  if (!Number.isSafeInteger(job.no_progress_ms) || job.no_progress_ms < 60_000 || job.no_progress_ms > RELEASE_MAX_NO_PROGRESS_MS || job.no_progress_ms > job.timeout_ms) {
     throw new Error("Release em lote exige no_progress_ms de no máximo 30 minutos.");
   }
   if (typeof job.progressFile !== "string" || !job.progressFile.trim()) {
@@ -68,11 +68,12 @@ function readReleaseCheckpoint(projectRoot, progressFile, expectedRunId) {
     const completedStages = Array.isArray(value.completed_stages)
       ? value.completed_stages.filter((stage) => RELEASE_CHECKPOINTS.has(stage)).slice(0, RELEASE_CHECKPOINTS.size)
       : [];
+    if (typeof value.updated_at !== "string" || !Number.isFinite(Date.parse(value.updated_at))) return { status: "invalid", reason: "missing_timestamp" };
     return {
       run_id: expectedRunId,
       stage: value.stage,
       completed_stages: completedStages,
-      ...(typeof value.updated_at === "string" && Number.isFinite(Date.parse(value.updated_at)) ? { updated_at: value.updated_at } : {})
+      updated_at: value.updated_at
     };
   } catch {
     return { status: "invalid", reason: "unreadable" };
@@ -279,6 +280,9 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 60_000 || timeoutMs > 3 * 60 * 60 * 1000) throw new Error("timeout_ms do papel deve estar entre 60000 e 10800000.");
   const noProgressMs = Number(input.no_progress_ms ?? DEFAULT_NO_PROGRESS_TIMEOUT_MS);
   if (!Number.isSafeInteger(noProgressMs) || noProgressMs < 60_000 || noProgressMs > timeoutMs) throw new Error("no_progress_ms do papel deve estar entre 60000 e o timeout terminal.");
+  const isReleaseBatch = input.unit_policy === RELEASE_BATCH_POLICY;
+  const setTimer = dependencies.setTimeout ?? setTimeout;
+  const clearTimer = dependencies.clearTimeout ?? clearTimeout;
   mkdirSync(dirname(handoffPath), { recursive: true });
   const spawnImpl = dependencies.spawn ?? spawn;
   let threadId;
@@ -292,7 +296,10 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
     let substantiveEventCount = 0;
     let consecutiveErrors = 0;
     const errorEvents = [];
-    let lastReleaseCheckpoint;
+    let lastReleaseCheckpoint = isReleaseBatch ? readReleaseCheckpoint(projectRoot, input.progressFile, input.release_queue?.run_id) : undefined;
+    let lastReleaseCheckpointSignature = lastReleaseCheckpoint && lastReleaseCheckpoint.status !== "invalid"
+      ? JSON.stringify([lastReleaseCheckpoint.stage, lastReleaseCheckpoint.completed_stages, lastReleaseCheckpoint.updated_at])
+      : undefined;
     let settled = false;
     let timeout;
     let noProgressWatchdog;
@@ -303,8 +310,8 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
     const settle = (result) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeout);
-      clearTimeout(noProgressWatchdog);
+      clearTimer(timeout);
+      clearTimer(noProgressWatchdog);
       resolveProcess(result);
     };
     const abortForNoProgress = (reason) => {
@@ -312,8 +319,8 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
       settle({ status: null, no_progress: true, no_progress_reason: reason, diagnostics: diagnostics(reason) });
     };
     const refreshNoProgressWatchdog = () => {
-      clearTimeout(noProgressWatchdog);
-      noProgressWatchdog = setTimeout(() => abortForNoProgress("no_substantive_work_event"), noProgressMs);
+      clearTimer(noProgressWatchdog);
+      noProgressWatchdog = setTimer(() => abortForNoProgress(isReleaseBatch ? "no_release_checkpoint_progress" : "no_substantive_work_event"), noProgressMs);
     };
     const consumeLine = (line) => {
       let event;
@@ -322,10 +329,23 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
       if (event.type === "thread.started" && /^[0-9a-f-]{36}$/iu.test(event.thread_id ?? "")) threadId = event.thread_id;
       if (!TRACKED_EVENT_TYPES.has(event.type)) return;
       eventCount += 1;
-      if (SUBSTANTIVE_EVENT_TYPES.has(event.type)) {
+      if (!isReleaseBatch && SUBSTANTIVE_EVENT_TYPES.has(event.type)) {
         substantiveEventCount += 1;
         consecutiveErrors = 0;
         refreshNoProgressWatchdog();
+      }
+      if (isReleaseBatch) {
+        const checkpoint = readReleaseCheckpoint(projectRoot, input.progressFile, input.release_queue?.run_id);
+        if (checkpoint && checkpoint.status !== "invalid") {
+          const signature = JSON.stringify([checkpoint.stage, checkpoint.completed_stages, checkpoint.updated_at]);
+          lastReleaseCheckpoint = checkpoint;
+          if (signature !== lastReleaseCheckpointSignature) {
+            lastReleaseCheckpointSignature = signature;
+            substantiveEventCount += 1;
+            consecutiveErrors = 0;
+            refreshNoProgressWatchdog();
+          }
+        }
       }
       if (event.type === "error") {
         consecutiveErrors += 1;
@@ -364,7 +384,7 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
       }
     });
     child.stderr?.on("data", (chunk) => { stderr = (stderr + String(chunk)).slice(-2000); });
-    timeout = setTimeout(() => {
+    timeout = setTimer(() => {
       try { child.kill?.(); } catch { /* close event still materializes terminal status */ }
       settle({ status: null, timed_out: true, diagnostics: diagnostics("timeout") });
     }, timeoutMs);

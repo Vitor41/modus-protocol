@@ -120,6 +120,41 @@ test("status do launcher expõe checkpoints de release sem copiar conteúdo do a
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("eventos genéricos não renovam watchdog de release sem checkpoint novo", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-release-watchdog-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = () => true;
+  const manifestPath = join(root, "manifest.json");
+  const runId = "RUN-20261001-AABBCCDD";
+  const timers = [];
+  await writeFile(join(root, "prompt.txt"), "Integre o lote em uma única branch.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{
+    lane: "technical", role: "pipeline-dev", unit_policy: "release-integration-batch-v0.3",
+    timeout_ms: 3 * 60 * 60 * 1000, no_progress_ms: 30 * 60 * 1000,
+    progressFile: `.pipeline/tmp/${runId}-release-progress.json`, release_queue: { run_id: runId },
+    promptFile: "prompt.txt", executionRequest: "request.json", handoff: "release-handoff.json"
+  }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, {
+      spawn: () => child,
+      setTimeout: (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer; },
+      clearTimeout: (timer) => { if (timer) timer.cleared = true; }
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    child.stdout.emit("data", `${JSON.stringify({ type: "item.completed", item: { type: "reasoning", status: "completed" } })}\n`);
+    const watchdog = timers.find((timer) => timer.delay === 30 * 60 * 1000 && !timer.cleared);
+    assert.ok(watchdog, "watchdog remains armed after an uncheckpointed item event");
+    watchdog.callback();
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].failure_kind, "no_progress");
+    assert.equal(result.jobs[0].diagnostics.no_progress_reason, "no_release_checkpoint_progress");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-"));
   const promptFile = join(root, "prompt.txt");

@@ -71,6 +71,7 @@ test("Skills do pipeline limitam releases em lote e exigem checkpoints recuperá
   const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
   assert.match(run, /timeout.*3 horas/u);
   assert.match(run, /30 minutos/u);
+  assert.match(run, /somente um checkpoint novo de release reinicia o watchdog/u);
   assert.match(run, /não repita o mesmo prompt/u);
   assert.match(run, /Contagens e eventos `item\.\*` indicam atividade da sessão, não conclusão de etapa/u);
   assert.match(dev, /release_queue\.progress_file/u);
