@@ -5,8 +5,8 @@
   "role": "pipeline-qa",
   "profile": "EQUILIBRADO",
   "execution": {
-    "request": { "mapping_version": "gpt-5.6-2026-08-28", "profile": "EQUILIBRADO", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "agent_mode": "independent", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
-    "observation": { "status": "confirmed", "model": "gpt-5.6-terra", "reasoning_effort": "medium", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:qa-fixture", "fallback_used": false },
+    "request": { "mapping_version": "modus-model-map-0.3.5", "profile": "EQUILIBRADO", "model": "gpt-6-luna", "reasoning_effort": "medium", "agent_mode": "independent", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-6-luna", "reasoning_effort": "medium", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:qa-fixture", "fallback_used": false },
     "usage": { "status": "not_observable" }
   },
   "status": "completed",

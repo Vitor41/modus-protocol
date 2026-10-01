@@ -5,7 +5,7 @@ import { resolveExecutionProfile } from "../src/execution-profiles.mjs";
 
 const expected = {
   RAPIDO: ["gpt-5.6-luna", "low"],
-  EQUILIBRADO: ["gpt-5.6-terra", "medium"],
+  EQUILIBRADO: ["gpt-6-luna", "medium"],
   PROFUNDO: ["gpt-5.6-sol", "high"],
   MAXIMO: ["gpt-5.6-sol", "max"]
 };
@@ -15,6 +15,7 @@ for (const [profile, [model, effort]] of Object.entries(expected)) {
     const result = resolveExecutionProfile(profile, "pipeline-dev");
     assert.equal(result.model, model);
     assert.equal(result.reasoning_effort, effort);
+    assert.equal(result.mapping_version, "modus-model-map-0.3.5");
     assert.equal(result.fallback_policy, "block");
   });
 }
@@ -30,4 +31,3 @@ test("PARALELO é modo de orquestração e não esforço ultra implícito", () =
   assert.equal(result.model, "gpt-5.6-sol");
   assert.equal(result.reasoning_effort, "high");
 });
-

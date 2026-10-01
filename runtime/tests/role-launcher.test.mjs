@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events";
 import { buildCodexArguments, finalizeHandoff, launchRoles, prepareRolePrompt } from "../src/role-launcher.mjs";
 
 const request = {
-  mapping_version: "gpt-5.6-2026-08-28",
+  mapping_version: "modus-model-map-0.3.5",
   profile: "PROFUNDO",
   model: "gpt-5.6-sol",
   reasoning_effort: "high",
@@ -67,6 +67,26 @@ test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera"
     assert.ok(args.includes('model_reasoning_effort="high"'));
     assert.ok(args.includes("--approve-for-me"));
     assert.ok(args.includes("--ephemeral"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("launcher aceita GPT-6 Luna com esforço médio para a lane equilibrada", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-gpt6-luna-"));
+  const promptFile = join(root, "prompt.txt");
+  await writeFile(promptFile, "Implemente a correção aprovada.", "utf8");
+  try {
+    const balancedRequest = {
+      ...request,
+      mapping_version: "modus-model-map-0.3.5",
+      profile: "EQUILIBRADO",
+      model: "gpt-6-luna",
+      reasoning_effort: "medium"
+    };
+    const { args } = buildCodexArguments({ projectRoot: root, role: "pipeline-dev", promptFile, handoffPath: join(root, "handoff.json"), request: balancedRequest });
+    assert.ok(args.includes("gpt-6-luna"));
+    assert.ok(args.includes('model_reasoning_effort="medium"'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

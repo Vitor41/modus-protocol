@@ -157,9 +157,9 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
     assert.deepEqual(result.selected.execution_request, {
-      mapping_version: "gpt-5.6-2026-08-28",
+      mapping_version: "modus-model-map-0.3.5",
       profile: "EQUILIBRADO",
-      model: "gpt-5.6-terra",
+      model: "gpt-6-luna",
       reasoning_effort: "medium",
       agent_mode: "independent",
       configuration_source: "kernel-profile-map",

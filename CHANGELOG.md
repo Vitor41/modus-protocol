@@ -6,6 +6,17 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.5] - 2026-10-01
+
+### Corrigido
+
+- O perfil `EQUILIBRADO` passa a solicitar `gpt-6-luna` com esforço `medium`; launcher, schema e recibos aceitam esse modelo e o esforço `xhigh`, preservando os demais perfis existentes.
+- A identidade do mapa de execução passa a ser `modus-model-map-0.3.5`, evitando que handoffs produzidos com a nova configuração sejam comparados com o contrato antigo.
+
+### Limite conhecido
+
+- Esta versão remove a rejeição estrutural de GPT-6 Luna, mas não detecta automaticamente todo modelo disponível nem corrige falhas externas de inicialização/conectividade do executor.
+
 ## [0.3.4] - 2026-09-28
 
 ### Corrigido

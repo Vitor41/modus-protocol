@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.4` |
-| Versão do Kernel | `0.3.4` |
+| Versão pública | `0.3.5` |
+| Versão do Kernel | `0.3.5` |
 | Estado | Publicada |
-| Data | 2026-09-27 |
+| Data | 2026-10-01 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -459,7 +459,7 @@ As Skills não fixam modelos. Elas podem indicar o perfil necessário; o ORCHEST
 | Perfil | Finalidade | Mapeamento inicial sugerido |
 | --- | --- | --- |
 | `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-5.6-luna` / `low` |
-| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-5.6-terra` / `medium` |
+| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-6-luna` / `medium` |
 | `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-5.6-sol` / `high` |
 | `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-5.6-sol` / `max` |
 | `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-5.6-sol` / `high`, com orquestração paralela |
