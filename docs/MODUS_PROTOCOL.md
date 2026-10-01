@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.6` |
-| Versão do Kernel | `0.3.6` |
+| Versão pública | `0.3.7` |
+| Versão do Kernel | `0.3.7` |
 | Estado | Publicada |
 | Data | 2026-10-01 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -458,13 +458,13 @@ As Skills não fixam modelos. Elas podem indicar o perfil necessário; o ORCHEST
 
 | Perfil | Finalidade | Mapeamento inicial sugerido |
 | --- | --- | --- |
-| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-5.6-luna` / `low` |
+| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-6-luna` / `low` |
 | `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-6-luna` / `medium` |
-| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-5.6-sol` / `high` |
-| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-5.6-sol` / `max` |
-| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-5.6-sol` / `high`, com orquestração paralela |
+| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-6.1-sol` / `high` |
+| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-6.1-sol` / `max` |
+| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-6.1-sol` / `high`, com orquestração paralela |
 
-Exceção de roteamento: Code Review usa `gpt-6-luna` / `high` para o perfil `PROFUNDO`, mantendo execução independente. PO, UX/UI e demais usos de `PROFUNDO` permanecem no mapa geral.
+Code Review usa o mesmo perfil `PROFUNDO` e modelo `gpt-6.1-sol` que PO, UX/UI e arquitetura, mantendo execução independente. A separação de modelos é por nível de esforço, não por papel.
 
 Baseline por etapa:
 

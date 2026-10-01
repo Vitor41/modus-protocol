@@ -5,8 +5,8 @@
   "role": "pipeline-ux-ui",
   "profile": "PROFUNDO",
   "execution": {
-    "request": { "mapping_version": "modus-model-map-0.3.6", "profile": "PROFUNDO", "model": "gpt-5.6-sol", "reasoning_effort": "high", "agent_mode": "delegated", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
-    "observation": { "status": "confirmed", "model": "gpt-5.6-sol", "reasoning_effort": "high", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:ux-fixture", "fallback_used": false },
+    "request": { "mapping_version": "modus-model-map-0.3.7", "profile": "PROFUNDO", "model": "gpt-6.1-sol", "reasoning_effort": "high", "agent_mode": "delegated", "configuration_source": "kernel-profile-map", "fallback_policy": "block" },
+    "observation": { "status": "confirmed", "model": "gpt-6.1-sol", "reasoning_effort": "high", "configuration_source": "explicit-agent-launch", "evidence_ref": "agent:ux-fixture", "fallback_used": false },
     "usage": { "status": "not_observable" }
   },
   "status": "completed",

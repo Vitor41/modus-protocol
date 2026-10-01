@@ -6,6 +6,14 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.7] - 2026-10-01
+
+### Corrigido
+
+- Todos os perfis executáveis deixam de fixar modelos GPT-5.6: `RAPIDO` e `EQUILIBRADO` usam `gpt-6-luna`; `PROFUNDO`, `MAXIMO` e `PARALELO` usam `gpt-6.1-sol`, preservando os respectivos esforços.
+- Planner, launcher, schema e handoffs compartilham o mapa `modus-model-map-0.3.7`; Code Review mantém papel independente com perfil `PROFUNDO` e esforço `high`.
+- O launcher/schema aceitam somente os modelos do mapa ativo, evitando que um recibo de papel volte a declarar GPT-5.6 sob o contrato 0.3.7.
+
 ## [0.3.6] - 2026-10-01
 
 ### Corrigido

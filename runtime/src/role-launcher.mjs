@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_DIR = resolve(SOURCE_DIR, "..");
 const PACKAGE = JSON.parse(readFileSync(join(RUNTIME_DIR, "package.json"), "utf8"));
-const ALLOWED_MODELS = new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-luna"]);
+const ALLOWED_MODELS = new Set(["gpt-6-luna", "gpt-6.1-sol"]);
 const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const ALLOWED_ROLES = new Set(["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"]);
 const DEFAULT_ROLE_TIMEOUT_MS = 45 * 60 * 1000;

@@ -6,13 +6,13 @@ Cada papel executado pela Esteira possui uma configuração solicitada e um reci
 
 | Perfil semântico | Modelo | Esforço | Uso inicial |
 |---|---|---|---|
-| `RAPIDO` | `gpt-5.6-luna` | `low` | Trabalho mecânico e reteste determinístico |
+| `RAPIDO` | `gpt-6-luna` | `low` | Trabalho mecânico e reteste determinístico |
 | `EQUILIBRADO` | `gpt-6-luna` | `medium` | Implementação especificada e validação ordinária |
-| `PROFUNDO` | `gpt-5.6-sol` | `high` | PO, UX/UI e arquitetura |
-| `MAXIMO` | `gpt-5.6-sol` | `max` | Exceção de alto risco ou auditoria de alto valor |
-| `PARALELO` | `gpt-5.6-sol` | `high` | Frentes independentes; paralelismo é modo de orquestração |
+| `PROFUNDO` | `gpt-6.1-sol` | `high` | PO, UX/UI, Code Review e arquitetura |
+| `MAXIMO` | `gpt-6.1-sol` | `max` | Exceção de alto risco ou auditoria de alto valor |
+| `PARALELO` | `gpt-6.1-sol` | `high` | Frentes independentes; paralelismo é modo de orquestração |
 
-O mapeamento possui a identidade `modus-model-map-0.3.6`. Skills solicitam perfis; somente o Kernel traduz perfil em configuração executável. Code Review usa `gpt-6-luna / high` como exceção específica para o perfil `PROFUNDO`, preservando independência. A lista ainda é versionada e explícita: ela não consulta dinamicamente o catálogo de modelos da ferramenta.
+O mapeamento possui a identidade `modus-model-map-0.3.7`. Skills solicitam perfis; somente o Kernel traduz perfil em configuração executável. Todos os papéis usam modelos GPT-6 no mapa ativo. A lista ainda é versionada e explícita: ela não consulta dinamicamente o catálogo de modelos da ferramenta.
 
 ## Solicitação e observação
 
@@ -21,8 +21,8 @@ O planner inclui `execution_request` no plano:
 ```yaml
 profile: PROFUNDO
 execution_request:
-  mapping_version: modus-model-map-0.3.6
-  model: gpt-5.6-sol
+  mapping_version: modus-model-map-0.3.7
+  model: gpt-6.1-sol
   reasoning_effort: high
   agent_mode: independent
   configuration_source: kernel-profile-map

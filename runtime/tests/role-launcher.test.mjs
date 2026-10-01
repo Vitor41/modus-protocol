@@ -8,9 +8,9 @@ import { EventEmitter } from "node:events";
 import { buildCodexArguments, finalizeHandoff, launchRoles, prepareRolePrompt } from "../src/role-launcher.mjs";
 
 const request = {
-  mapping_version: "modus-model-map-0.3.6",
+  mapping_version: "modus-model-map-0.3.7",
   profile: "PROFUNDO",
-  model: "gpt-5.6-sol",
+  model: "gpt-6.1-sol",
   reasoning_effort: "high",
   agent_mode: "delegated",
   configuration_source: "kernel-profile-map",
@@ -63,7 +63,7 @@ test("launcher fixa modelo, esforço, aprovação automática e tarefa efêmera"
   await writeFile(promptFile, "Refine o card informado.", "utf8");
   try {
     const { args } = buildCodexArguments({ projectRoot: root, role: "pipeline-po", promptFile, handoffPath: join(root, "handoff.json"), request });
-    assert.ok(args.includes("gpt-5.6-sol"));
+    assert.ok(args.includes("gpt-6.1-sol"));
     assert.ok(args.includes('model_reasoning_effort="high"'));
     assert.ok(args.includes("--approve-for-me"));
     assert.ok(args.includes("--ephemeral"));
@@ -79,7 +79,7 @@ test("launcher aceita GPT-6 Luna com esforço médio para a lane equilibrada", a
   try {
     const balancedRequest = {
       ...request,
-      mapping_version: "modus-model-map-0.3.6",
+      mapping_version: "modus-model-map-0.3.7",
       profile: "EQUILIBRADO",
       model: "gpt-6-luna",
       reasoning_effort: "medium"
@@ -98,7 +98,7 @@ test("launcher carimba recibo com thread real e sem fallback", () => {
   assert.equal(result.execution.request, request);
   assert.deepEqual(result.execution.observation, {
     status: "confirmed",
-    model: "gpt-5.6-sol",
+    model: "gpt-6.1-sol",
     reasoning_effort: "high",
     configuration_source: "explicit-codex-exec",
     evidence_ref: "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86",
