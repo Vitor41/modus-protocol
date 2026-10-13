@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.18] - 2026-10-13
+
+### Corrigido
+
+- Liberação humana explícita agora pode encerrar um lock cujo handoff terminal do mesmo RUN_ID terminou em `BLOCKED`, sem permitir locks marcados diretamente como bloqueados; card, estado, autoria, autorização posterior e readback continuam obrigatórios.
+
 ## [0.3.17] - 2026-10-13
 
 ### Corrigido

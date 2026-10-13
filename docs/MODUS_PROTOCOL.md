@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.17` |
-| Versão do Kernel | `0.3.17` |
+| Versão pública | `0.3.18` |
+| Versão do Kernel | `0.3.18` |
 | Estado | Publicada |
 | Data | 2026-10-13 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -493,7 +493,7 @@ Regras:
 
 - reler o lock antes de cada transição;
 - não processar o mesmo lote com identificadores concorrentes;
-- não expirar lock automaticamente; encerramento excepcional exige autorização humana explícita, recibo `released` vinculado ao RUN_ID antigo e confirmação por releitura;
+- não expirar lock automaticamente; encerramento excepcional exige autorização humana explícita, recibo `released` vinculado ao RUN_ID antigo e confirmação por releitura. Um lock `blocked` só pode ser liberado quando deriva de um lock `active` do mesmo RUN_ID seguido por handoff terminal `BLOCKED`; locks declarados diretamente como `blocked` não são elegíveis;
 - permitir retomada somente com card, capsule e estado consistentes;
 - não permitir escrita paralela na mesma branch;
 - permitir uma lane de PO, uma de UX/UI e uma técnica simultâneas;

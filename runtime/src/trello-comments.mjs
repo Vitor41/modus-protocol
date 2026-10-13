@@ -149,8 +149,10 @@ async function verifyActiveLockForRelease(fetchImpl, credentials, adapter, cardR
   const actions = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}/actions`, { filter: "commentCard,updateCard", limit: 1000 }, "a releitura do lock atual");
   const comments = actions.filter((item) => item.type === "commentCard" || item.data?.text).map(publicComment);
   const lock = lockState(comments, stateEntryDate(actions, card.idList));
-  if (lock?.status !== "active" || lock.run_id !== runId || (lock.state && lock.state !== state)) {
-    throw new Error("O RUN_ID indicado não corresponde ao lock ativo mais recente deste card e estado.");
+  const explicitlyReleasable = lock?.status === "active"
+    || (lock?.status === "blocked" && lock.lock_status === "active" && lock.terminal_status === "blocked");
+  if (!explicitlyReleasable || lock.run_id !== runId || (lock.state && lock.state !== state)) {
+    throw new Error("O RUN_ID indicado não corresponde a um lock ativo ou terminal bloqueado elegível deste card e estado.");
   }
   return { lock, actions };
 }
@@ -335,6 +337,8 @@ function lockState(comments, enteredAt) {
   return {
     run_id: runId,
     status,
+    lock_status: rawStatus,
+    terminal_status: rawStatus === "active" && status !== "active" ? status : undefined,
     ...(structuredField(text, "ROLE") ? { role: structuredField(text, "ROLE").toLowerCase() } : {}),
     ...(structuredField(text, "STATE") ? { state: structuredField(text, "STATE").toLowerCase() } : {}),
     ...(updatedAt ? { updated_at: updatedAt } : {})
