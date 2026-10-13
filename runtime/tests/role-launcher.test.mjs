@@ -276,6 +276,52 @@ test("launcher materializa ausência de handoff como falha terminal estruturada"
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("launcher repara somente um delimitador extra no fim de um handoff JSON válido", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-extra-brace-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const manifestPath = join(root, "manifest.json");
+  const handoffPath = join(root, "handoff.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    child.stdout.emit("data", `${JSON.stringify({ type: "thread.started", thread_id: "01a07e2e-8af0-70f3-b763-3588c5f9df86" })}\n`);
+    await writeFile(handoffPath, `${JSON.stringify({ role: "pipeline-po", summary: "handoff concluído" })}}\n`);
+    child.emit("close", 0);
+    const result = await pending;
+    assert.equal(result.status, "PASS");
+    assert.equal(result.jobs[0].handoff_repair, "removed_one_trailing_closing_brace");
+    const handoff = JSON.parse(await readFile(handoffPath, "utf8"));
+    assert.equal(handoff.role, "pipeline-po");
+    assert.equal(handoff.summary, "handoff concluído");
+    assert.equal(handoff.execution.observation.evidence_ref, "agent:codex-thread:01a07e2e-8af0-70f3-b763-3588c5f9df86");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("launcher mantém falha quando handoff tem mais de um delimitador excedente", async () => {
+  const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-invalid-tail-"));
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const manifestPath = join(root, "manifest.json");
+  await writeFile(join(root, "prompt.txt"), "Refine o card.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: "handoff.json" }] }));
+  try {
+    const pending = launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => child });
+    child.stdout.emit("data", `${JSON.stringify({ type: "thread.started", thread_id: "01a07e2e-8af0-70f3-b763-3588c5f9df86" })}\n`);
+    await writeFile(join(root, "handoff.json"), `${JSON.stringify({ role: "pipeline-po" })}}}}\n`);
+    child.emit("close", 0);
+    const result = await pending;
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.jobs[0].failure_kind, "missing_handoff");
+    assert.match(result.jobs[0].terminal_reason, /JSON válido/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("launcher rejeita antes do spawn um prompt que aponta para handoff diferente", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-path-"));
   const manifestPath = join(root, "manifest.json");

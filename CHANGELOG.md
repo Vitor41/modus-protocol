@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.13] - 2026-10-13
+
+### Corrigido
+
+- O launcher repara um delimitador `}` excedente no fim de um handoff que, sem essa sobra, é JSON válido; qualquer outro conteúdo inválido continua bloqueado. A recuperação fica explícita no recibo do job.
+
 ## [0.3.12] - 2026-10-13
 
 ### Corrigido

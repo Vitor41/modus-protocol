@@ -34,6 +34,27 @@ function parseJson(path, label) {
   }
 }
 
+function parseHandoff(path) {
+  if (!existsSync(path)) throw new Error("Handoff retornado não encontrado.");
+  const raw = readFileSync(path, "utf8");
+  try { return { handoff: JSON.parse(raw), repair: undefined }; }
+  catch {
+    // The CLI can occasionally append one surplus object-closing brace to an
+    // otherwise complete --output-last-message JSON document. Recover only
+    // that unambiguous mechanical defect; all other malformed output fails.
+    const trimmed = raw.trimEnd();
+    if (trimmed.endsWith("}}")) {
+      try {
+        const handoff = JSON.parse(trimmed.slice(0, -1));
+        if (handoff && typeof handoff === "object" && !Array.isArray(handoff)) {
+          return { handoff, repair: "removed_one_trailing_closing_brace" };
+        }
+      } catch { /* preserve the strict failure below */ }
+    }
+    throw new Error("Handoff retornado não contém JSON válido.");
+  }
+}
+
 function validateReleaseJob(job, projectRoot) {
   if (job.unit_policy !== RELEASE_BATCH_POLICY) return;
   const runId = job.release_queue?.run_id;
@@ -254,7 +275,7 @@ export function launchRole(input = {}, dependencies = {}) {
     try { return [JSON.parse(line)]; } catch { return []; }
   });
   const threadId = events.find((event) => event.type === "thread.started")?.thread_id;
-  const handoff = parseJson(handoffPath, "Handoff retornado");
+  const { handoff, repair } = parseHandoff(handoffPath);
   const finalized = finalizeHandoff({ handoff, request, role: input.role, threadId });
   writeFileSync(handoffPath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
   return {
@@ -269,6 +290,7 @@ export function launchRole(input = {}, dependencies = {}) {
     configuration_source: "explicit-codex-exec",
     evidence_ref: `agent:codex-thread:${threadId}`,
     handoff: relative(projectRoot, handoffPath).replaceAll("\\", "/"),
+    ...(repair ? { handoff_repair: repair } : {}),
     fallback_used: false
   };
 }
@@ -402,9 +424,9 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
     const detail = diagnosticExcerpt(`${processResult.stderr}\n${processResult.stdout}`);
     throw makeLaunchError(`O agente de papel encerrou com código ${processResult.status}${detail ? `: ${detail}` : "."}`, { diagnostics: processResult.diagnostics });
   }
-  if (!existsSync(handoffPath)) throw makeLaunchError("Handoff retornado não encontrado.", { failureKind: "missing_handoff", diagnostics: processResult.diagnostics });
   let handoff;
-  try { handoff = parseJson(handoffPath, "Handoff retornado"); }
+  let handoffRepair;
+  try { ({ handoff, repair: handoffRepair } = parseHandoff(handoffPath)); }
   catch (error) { throw makeLaunchError(error.message, { failureKind: "missing_handoff", diagnostics: processResult.diagnostics }); }
   const finalized = finalizeHandoff({ handoff, request, role: input.role, threadId });
   writeFileSync(handoffPath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
@@ -413,7 +435,8 @@ async function launchRoleAsync(input = {}, dependencies = {}) {
     job_status: "completed", completion_barrier: "terminal-handoff-consumed",
     lane: input.lane, role: input.role, model: request.model, reasoning_effort: request.reasoning_effort,
     configuration_source: "explicit-codex-exec", evidence_ref: `agent:codex-thread:${threadId}`,
-    handoff: relative(projectRoot, handoffPath).replaceAll("\\", "/"), fallback_used: false
+    handoff: relative(projectRoot, handoffPath).replaceAll("\\", "/"),
+    ...(handoffRepair ? { handoff_repair: handoffRepair } : {}), fallback_used: false
   };
 }
 

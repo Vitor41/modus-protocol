@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.3.12` |
+| Versão | `0.3.13` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -217,6 +217,7 @@ O replay autorizado de `PILOT-A-065` a `PILOT-A-068` acrescentou evidência real
 | `EVAL-AGENT-LIFECYCLE-001` | Aprovado | No piloto NKT016, o handoff terminal do Code Review foi consumido, o card avançou para QA no mesmo `RUN_ID` e a reprovação técnica retornou automaticamente ao DEV; o launcher agora comprova zero jobs ativos antes de retornar. |
 | `EVAL-STATE-001` | Aprovado | Replay de eventos reais ignorou o bloqueio antigo de UX/UI depois da transição confirmada e roteou `ready_for_development` para DEV. |
 | `EVAL-STATE-002` | Aprovado | Replay conjunto isolou somente o card com `SCREEN_APPROVAL_REQUIRED`, manteve o refinamento desbloqueado elegível para PO e preservou o mesmo RUN no replanejamento. |
+| `EVAL-HANDOFF-REPAIR-001` | Aprovado | O launcher repara um único delimitador de fechamento excedente no handoff e rejeita múltiplos delimitadores, preservando a validação estrita do contrato. |
 
 O replay não começou em `REFINAMENTO`; por isso PO e UX/UI ao vivo continuam como critério do primeiro run após o cutover. Métricas e decisões completas estão em [RETROSPECTIVE_PROJECT_A.md](RETROSPECTIVE_PROJECT_A.md).
 
