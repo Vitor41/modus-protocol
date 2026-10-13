@@ -143,7 +143,7 @@ test("publica somente recibo mínimo e mantém a cápsula completa fora do track
   try {
     const result = await executeTrelloComment({
       action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath: capsulePath,
-      runId: "RUN-20260928-ABCDEF12", role: "pipeline-ux-ui", status: "active", events: "capsule",
+      runId: "RUN-20260928-ABCDEF12", role: "pipeline-ux-ui", status: "active", events: "lock,capsule",
       state: "ux_ui", nextRole: "pipeline-ux-ui", now: "2026-09-28T12:00:05Z",
       fetchImpl: async (_url, options = {}) => {
         calls += 1;
@@ -151,7 +151,8 @@ test("publica somente recibo mínimo e mantém a cápsula completa fora do track
           const text = options.body.get("text");
           postedText = text;
           assert.equal(options.method, "POST");
-          assert.match(text, /^MODUS TRACKER RECEIPT/mu);
+          assert.match(text, /^CODEX LOCK — MODUS TRACKER RECEIPT/mu);
+          assert.match(text, /^EVENTS: lock, capsule$/mu);
           assert.match(text, /^LOCAL_ARTIFACT_SHA256: [a-f0-9]{64}$/mu);
           assert.doesNotMatch(text, /Descrição interna|Comentários privados|referências locais/u);
           return new Response(JSON.stringify({ id: "receipt-1", date: "2026-09-28T12:00:00Z" }), { status: 200 });
@@ -585,8 +586,11 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
       if (value.includes("/lists")) return new Response(JSON.stringify([{ id: "dev", pos: 1 }, { id: "qa", pos: 2 }, { id: "refinement", pos: 3 }]));
       if (value.includes("/boards/") && value.includes("/cards")) return new Response(JSON.stringify([
         { id: "card-dev", name: "FP-228 Corrigir", idList: "dev", pos: 1 },
+        { id: "card-dev-blocked", name: "FP-231 Review bloqueado", idList: "dev", pos: 2 },
         { id: "card-po", name: "FP-229 Refinado", idList: "refinement", pos: 2 },
-        { id: "card-qa", name: "FP-230 Reprovado", idList: "qa", pos: 3 }
+        { id: "card-qa", name: "FP-230 Reprovado", idList: "qa", pos: 3 },
+        { id: "card-qa-blocked", name: "FP-232 QA bloqueado tecnicamente", idList: "qa", pos: 4 },
+        { id: "card-qa-history", name: "FP-233 QA após retorno anterior", idList: "qa", pos: 5 }
       ]));
       if (value.includes("/attachments")) return new Response(JSON.stringify([]));
       if (value.includes("card-dev/actions")) return new Response(JSON.stringify([
@@ -595,12 +599,26 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
         { id: "move-dev", type: "updateCard", date: "2026-09-08T10:01:00Z", data: { listAfter: { id: "dev" } } },
         { id: "dev-pass", type: "commentCard", date: "2026-09-08T10:00:59Z", data: { card: { id: "card-dev" }, text: "ROLE: pipeline-dev\nVERDICT: PASS\nTRANSITION: ready_for_development -> in_development\nNEXT_ROLE: pipeline-code-review" } }
       ]));
+      if (value.includes("card-dev-blocked/actions")) return new Response(JSON.stringify([
+        { id: "review-blocked", type: "commentCard", date: "2026-09-08T11:05:00Z", data: { card: { id: "card-dev-blocked" }, text: "ROLE: pipeline-code-review\nSTATUS: blocked\nSTATE_FROM: in_development\nSTATE_TO: in_development\nEVENT: role_handoff, blocker\nBLOCKER_KIND: technical\nREQUIRES_HUMAN: false" } },
+        { id: "dev-pass-blocked", type: "commentCard", date: "2026-09-08T10:00:59Z", data: { card: { id: "card-dev-blocked" }, text: "ROLE: pipeline-dev\nVERDICT: PASS\nTRANSITION: ready_for_development -> in_development\nNEXT_ROLE: pipeline-code-review" } },
+        { id: "move-dev-blocked", type: "updateCard", date: "2026-09-08T10:01:00Z", data: { listAfter: { id: "dev" } } }
+      ]));
       if (value.includes("card-po/actions")) return new Response(JSON.stringify([
         { id: "technical-note", type: "commentCard", date: "2026-09-08T11:02:00Z", data: { card: { id: "card-po" }, text: "CODEX BLOCKER\nCAUSE: diferença de relógio\nHUMAN ACTION: Não requerida." } },
         { id: "po-handoff", type: "commentCard", date: "2026-09-08T11:01:00Z", data: { card: { id: "card-po" }, text: "RUN_ID: RUN-20260908-ABCDEF12\nROLE: pipeline-po\nSTATUS: completed\nSTATE_FROM: refinement\nSTATE_TO: ux_ui\nEVENT: role_handoff, transition" } }
       ]));
       if (value.includes("card-qa/actions")) return new Response(JSON.stringify([
         { id: "qa-return", type: "commentCard", date: "2026-09-08T11:03:00Z", data: { card: { id: "card-qa" }, text: "RUN_ID: RUN-20260908-ABCDEF13\nROLE: pipeline-qa\nSTATUS: return / rejected\nSTATE_FROM: ready_for_validation\nSTATE_TO: in_development\nEVENT: role_handoff, transition" } }
+      ]));
+      if (value.includes("card-qa-blocked/actions")) return new Response(JSON.stringify([
+        { id: "qa-blocked", type: "commentCard", date: "2026-09-08T11:03:00Z", data: { card: { id: "card-qa-blocked" }, text: "RUN_ID: RUN-20260908-ABCDEF14\nROLE: pipeline-qa\nSTATUS: blocked\nSTATE_FROM: ready_for_validation\nSTATE_TO: ready_for_validation\nEVENT: blocker\nBLOCKER_KIND: technical\nREQUIRES_HUMAN: false" } }
+      ]));
+      if (value.includes("card-qa-history/actions")) return new Response(JSON.stringify([
+        { id: "qa-return-old", type: "commentCard", date: "2026-09-08T10:30:00Z", data: { card: { id: "card-qa-history" }, text: "ROLE: pipeline-qa\nSTATUS: rejected\nSTATE_FROM: ready_for_validation\nSTATE_TO: in_development\nEVENT: role_handoff, transition" } },
+        { id: "move-to-dev", type: "updateCard", date: "2026-09-08T10:31:00Z", data: { listAfter: { id: "dev" } } },
+        { id: "dev-correction", type: "commentCard", date: "2026-09-08T10:45:00Z", data: { card: { id: "card-qa-history" }, text: "ROLE: pipeline-dev\nSTATUS: completed\nEVENT: role_handoff" } },
+        { id: "move-to-qa", type: "updateCard", date: "2026-09-08T11:00:00Z", data: { listAfter: { id: "qa" } } }
       ]));
       return new Response(JSON.stringify([]));
     }});
@@ -610,6 +628,9 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     assert.equal(byRef.get("card-dev").signals.review_evidence_ref, "review-return");
     assert.deepEqual(byRef.get("card-dev").signals.active_loop, { edge: "dev_review", state: "in_development", count: 1 });
     assert.equal(byRef.get("card-dev").signals.awaiting_human, false);
+    assert.equal(byRef.get("card-dev-blocked").signals.implementation_complete, true);
+    assert.equal(byRef.get("card-dev-blocked").signals.review_approved, false);
+    assert.deepEqual(byRef.get("card-dev-blocked").signals.active_loop, { edge: "dev_review", state: "in_development", count: 0 });
     assert.equal(byRef.get("card-po").signals.pending_transition, true);
     assert.equal(byRef.get("card-po").signals.pending_transition_to, "ux_ui");
     assert.equal(byRef.get("card-po").signals.pending_transition_run_id, "RUN-20260908-ABCDEF12");
@@ -618,6 +639,8 @@ test("snapshot transforma retornos técnicos e transição PO pendente em açõe
     assert.equal(byRef.get("card-qa").signals.pending_transition_to, "in_development");
     assert.equal(byRef.get("card-qa").signals.pending_transition_evidence_ref, "qa-return");
     assert.deepEqual(byRef.get("card-qa").signals.active_loop, { edge: "qa_dev", state: "ready_for_validation", count: 1 });
+    assert.deepEqual(byRef.get("card-qa-blocked").signals.active_loop, { edge: "qa_dev", state: "ready_for_validation", count: 0 });
+    assert.deepEqual(byRef.get("card-qa-history").signals.active_loop, { edge: "qa_dev", state: "ready_for_validation", count: 1 });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

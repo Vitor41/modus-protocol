@@ -6,7 +6,7 @@ Esta é a fonte canônica para decidir quando o Modus Protocol resolve, retorna 
 
 Problema técnico dentro do escopo aprovado é trabalho da equipe, não gate humano. O especialista investiga, corrige, comprova e continua o loop. Um handoff inválido, teste falho, conflito corrigível, evidência incompleta, estado obsoleto ou indisponibilidade transitória nunca se torna decisão humana apenas porque impediu um gate na primeira tentativa.
 
-O limite de `loop_limit` conta somente retornos confirmados entre papéis na mesma fronteira (por exemplo, DEV → Code Review → DEV ou QA → DEV → QA). Repetições internas do mesmo papel para testar, inspecionar, corrigir ou obter evidência não incrementam esse contador e não podem, por si, gerar bloqueio humano. Essas tentativas continuam sujeitas ao timeout e ao watchdog de progresso da execução; se uma ferramenta falhar, o especialista tenta uma alternativa segura, sem inventar evidência. Se a verificação continuar indisponível, registra impedimento técnico localizado, mantém o card sem handoff de sucesso e permite que lanes independentes prossigam.
+O limite de `loop_limit` conta somente retornos confirmados entre papéis na mesma fronteira (por exemplo, DEV → Code Review → DEV ou QA → DEV → QA). São permitidos três retornos; somente a tentativa de um quarto retorno atinge `loop_limit`. Um resultado `blocked` que mantém o card no papel/estado atual não é retorno e não incrementa o contador. Repetições internas do mesmo papel para testar, inspecionar, corrigir ou obter evidência também não incrementam esse contador e não podem, por si, gerar bloqueio humano. Essas tentativas continuam sujeitas ao timeout e ao watchdog de progresso da execução; se uma ferramenta falhar, o especialista tenta uma alternativa segura, sem inventar evidência. Se a verificação continuar indisponível, registra impedimento técnico localizado, mantém o card sem handoff de sucesso e permite que lanes independentes prossigam.
 
 ## Autonomia obrigatória
 
@@ -35,7 +35,7 @@ Após `APROVADO PARA PRD` válido, a autorização operacional cobre documentaç
 - `business_rule`: duas ou mais interpretações materiais permanecem possíveis após investigação;
 - `screen_approval`: evidência visual vigente aguarda aprovação;
 - `production_approval`: entrega validada aguarda autorização para integração/release;
-- `loop_limit`: o mesmo retorno atingiu o limite canônico;
+- `loop_limit`: a quarta tentativa de retorno confirmado na mesma fronteira e escopo foi alcançada;
 - `structural_scope`: a solução exige ampliar o escopo ou alterar contrato, classe/fundação transversal ou arquitetura aprovada além do card;
 - `systemic_risk`: há risco plausível de perda de dados, quebra sistêmica, segurança ou regressão ampla que não pode ser contido no escopo;
 - `external_authorization`: falta credencial, permissão ou autorização para uma ação externa necessária.

@@ -150,10 +150,13 @@ function blockedReason(card, state, { ignoredLockRunId } = {}) {
   // a próxima etapa zera o contador daquela fronteira, por isso um contador
   // histórico de outra etapa nunca pode bloquear o estado atual.
   const activeLoop = card.signals?.active_loop;
-  if (activeLoop?.state === state && Number(activeLoop.count) >= 3) return "LOOP_LIMIT_REACHED";
+  // The budget allows three confirmed returns; block the fourth one. A role
+  // can still complete successfully after three returns, so the planner must
+  // not stop the lane merely because the previous return count equals three.
+  if (activeLoop?.state === state && Number(activeLoop.count) > 3) return "LOOP_LIMIT_REACHED";
   // Compatibilidade para snapshots anteriores à v0.3: só interpreta o campo
   // antigo quando ele declara explicitamente o estado corrente.
-  if (!activeLoop && card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
+  if (!activeLoop && card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) > 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
   if (state === "ready_for_release" && card.signals?.production_approval_valid !== true) {
     return "PRODUCTION_APPROVAL_REQUIRED";

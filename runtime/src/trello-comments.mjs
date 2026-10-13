@@ -417,19 +417,32 @@ function technicalProgress(comments, enteredAt, state) {
   });
   const review = reviews.at(-1);
   const reviewApproved = review ? positiveVerdict(String(review.text ?? "")) : false;
-  const reviewRejected = review ? /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(review.text ?? "")) : false;
-  // O contador pertence à fronteira DEV → Review, não ao card inteiro. Uma
-  // aprovação de Review encerra a fronteira e zera o próximo ciclo antes do QA.
+  const reviewRejected = review ? /^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|RETURN)\b.*$/imu.test(String(review.text ?? "")) : false;
+  // O contador pertence à fronteira DEV → Review, não a uma tentativa de DEV.
+  // Só um handoff de retorno explícito consome ciclo; BLOCKED técnico permanece
+  // na mesma função. Um PASS de Review encerra a fronteira antes do QA.
   let reviewReturnCount = 0;
-  for (const item of reviews) {
-    if (positiveVerdict(String(item.text ?? ""))) reviewReturnCount = 0;
-    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(String(item.text ?? ""))) reviewReturnCount += 1;
+  for (const item of boundaryComments) {
+    const text = String(item.text ?? "");
+    if (!roleIs(text, "pipeline-code-review")) continue;
+    if (positiveVerdict(text)) {
+      reviewReturnCount = 0;
+      continue;
+    }
+    const status = /^(?:VERDICT|STATUS):\s*([^\r\n]*)/imu.exec(text)?.[1] ?? "";
+    const from = structuredField(text, "STATE_FROM")?.toLowerCase();
+    const to = structuredField(text, "STATE_TO")?.toLowerCase();
+    const events = structuredField(text, "(?:EVENT|EVENTS)")?.toLowerCase() ?? "";
+    if (/\b(?:FAIL|REJECTED|CHANGES_REQUIRED|RETURN)\b/iu.test(status) &&
+      from === "in_development" && to === "in_development" && events.includes("role_handoff")) {
+      reviewReturnCount += 1;
+    }
   }
   return {
     implementation_complete: !reviewRejected,
     review_approved: reviewApproved,
     implementation_evidence_ref: devPass.ref,
-    active_loop: { edge: "dev_review", state: "in_development", count: reviewRejected ? reviewReturnCount : 0 },
+    active_loop: { edge: "dev_review", state: "in_development", count: reviewApproved ? 0 : reviewReturnCount },
     ...(review ? {
       review_evidence_ref: review.ref,
       ...(structuredField(String(review.text ?? ""), "RUN_ID") ? { review_run_id: structuredField(String(review.text ?? ""), "RUN_ID") } : {})
@@ -437,20 +450,32 @@ function technicalProgress(comments, enteredAt, state) {
   };
 }
 
-function qaLoopProgress(comments, enteredAt, state) {
+function qaLoopProgress(comments, _enteredAt, state) {
   if (state !== "ready_for_validation") return {};
-  const verdicts = chronological(after(comments, enteredAt)).filter((comment) => {
+  const history = chronological(comments);
+  const latestPass = history.filter((comment) => {
     const text = String(comment.text ?? "");
-    return roleIs(text, "pipeline-qa") && /^(?:VERDICT|STATUS):.*\b(?:PASS|APPROVED|COMPLETED|FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text);
+    return roleIs(text, "pipeline-qa") && positiveVerdict(text);
+  }).at(-1);
+  // A same-role technical BLOCKED result is not a QA → DEV return and must
+  // not spend the cross-role loop budget. Count only an explicit QA handoff
+  // that sends the card back to development, retaining earlier returns across
+  // the intervening DEV/Review state entries until QA passes.
+  const verdicts = history.filter((comment) => {
+    if (latestPass && String(comment.date ?? "") <= String(latestPass.date ?? "")) return false;
+    const text = String(comment.text ?? "");
+    const status = /^(?:VERDICT|STATUS):\s*([^\r\n]*)/imu.exec(text)?.[1] ?? "";
+    const from = structuredField(text, "STATE_FROM")?.toLowerCase();
+    const to = structuredField(text, "STATE_TO")?.toLowerCase();
+    const events = structuredField(text, "(?:EVENT|EVENTS)")?.toLowerCase() ?? "";
+    const actualReturn = /\b(?:FAIL|REJECTED|CHANGES_REQUIRED|RETURN)\b/iu.test(status) &&
+      from === "ready_for_validation" && to === "in_development" &&
+      events.includes("role_handoff") && events.includes("transition");
+    return roleIs(text, "pipeline-qa") && actualReturn;
   });
   let returnCount = 0;
-  let rejected = false;
-  for (const verdict of verdicts) {
-    const text = String(verdict.text ?? "");
-    if (positiveVerdict(text)) { returnCount = 0; rejected = false; }
-    else if (/^(?:VERDICT|STATUS):.*\b(?:FAIL|REJECTED|CHANGES_REQUIRED|BLOCKED|RETURN)\b.*$/imu.test(text)) { returnCount += 1; rejected = true; }
-  }
-  return { active_loop: { edge: "qa_dev", state: "ready_for_validation", count: rejected ? returnCount : 0 } };
+  for (const _verdict of verdicts) returnCount += 1;
+  return { active_loop: { edge: "qa_dev", state: "ready_for_validation", count: returnCount } };
 }
 
 function pendingTransition(comments, state) {

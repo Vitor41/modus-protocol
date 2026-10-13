@@ -14,6 +14,8 @@ Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 4. compare `RUN_ID`, card, papel/evento, fatos essenciais e UTF-8;
 5. somente depois considere a escrita concluída.
 
+Reduza ruído sem remover evidência: quando lock e cápsula forem criados/atualizados no mesmo checkpoint, publique um único recibo com `EVENTS: lock, capsule` e hash da cápsula local. O cabeçalho `CODEX LOCK` mantém a reconciliação do lock compatível. Da mesma forma, um único recibo pode combinar handoff e transição quando ambos ocorrerem juntos. Não publique comentários narrativos ou novos recibos apenas para repetir progresso já confirmado; mantenha detalhes e tentativas internas nos artefatos locais. Comentários humanos, decisões, bloqueios reais e mudanças de papel/estado permanecem preservados.
+
 Falha na publicação gera `TRACKER_COMMENT_WRITE_FAILED`. Falha, ausência ou divergência na releitura gera `TRACKER_COMMENT_READBACK_FAILED`. Em ambos os casos, não mova o card e não presuma sucesso.
 
 Quando a publicação já devolveu `comment_ref`, uma falha posterior não autoriza publicar de novo. Execute uma única `read` nessa referência; a resposta renovada fornece `written_at`, `read_at`, hash e confirmação. Se card, conteúdo, `RUN_ID` e eventos coincidirem, reconstrua o recibo e prossiga. O gate aceita diferença causal de relógio de até cinco segundos entre Trello e host e registra `clock_skew_reconciled`; diferença maior permanece inválida.

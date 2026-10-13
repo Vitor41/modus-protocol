@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.15` |
-| Versão do Kernel | `0.3.15` |
+| Versão pública | `0.3.16` |
+| Versão do Kernel | `0.3.16` |
 | Estado | Publicada |
 | Data | 2026-10-13 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
@@ -295,7 +295,7 @@ Loops previstos:
 - `DEV ↔ Code Review`;
 - `DEV ↔ QA`.
 
-Somente um retorno confirmado entre papéis cria evidência e incrementa o ciclo daquela fronteira. Iterações internas do mesmo papel — testes, renderização/inspeção, correções e nova verificação — não contam como retorno e não podem disparar `loop_limit`; são governadas pelo timeout e watchdog de progresso da execução. No terceiro retorno entre papéis na mesma fronteira e escopo, o card recebe `Aguardando resposta humana`. Não existe quarto retorno automático nessa fronteira. Se uma ferramenta de verificação ficar indisponível, o especialista tenta alternativa segura; sem evidência suficiente não há handoff de sucesso, mas o impedimento técnico é localizado e lanes independentes continuam.
+Somente um retorno confirmado entre papéis cria evidência e incrementa o ciclo daquela fronteira. São permitidos três retornos confirmados; a quarta tentativa de retorno na mesma fronteira e escopo recebe `Aguardando resposta humana`. Um handoff `blocked` que mantém papel/estado e iterações internas de teste, renderização/inspeção, correções e nova verificação não contam como retorno e não podem disparar `loop_limit`; são governadas pelo timeout e watchdog de progresso da execução. Se uma ferramenta de verificação ficar indisponível, o especialista tenta alternativa segura; sem evidência suficiente não há handoff de sucesso, mas o impedimento técnico é localizado e lanes independentes continuam.
 
 O bloqueio possui escopo explícito: `card` para uma pendência isolada, `delivery_group` para membros com dependência determinante e `dependency_group` para um grupo que aguarda outro grupo. Um Delivery Group pode ser `optimization`, quando compartilha esforço mas seus cards continuam independentes, ou `dependency`, quando um bloqueio deve paralisar todos os membros. Os demais cards e grupos independentes continuam elegíveis.
 
@@ -443,6 +443,8 @@ Cada etapa ou ciclo produz um resumo incremental com:
 Na retomada, o capsule reduz releitura, mas não substitui evidências necessárias.
 
 O capsule completo permanece no projeto. O tracker recebe somente um recibo mínimo e determinístico com `RUN_ID`, papel, estados, evento e hash SHA-256 do artefato local; ele nunca recebe descrição, histórico, prompt, caminhos ou narrativa interna. O gate usa o artefato local e o recibo torna sua versão auditável sem ampliar a superfície de divulgação.
+
+Para reduzir ruído no histórico, lock e cápsula devem compartilhar um único recibo (`EVENTS: lock, capsule`) quando forem escritos no mesmo checkpoint; handoff e transição também podem compartilhar um recibo. Tentativas e progresso interno ficam nos artefatos locais, não em comentários narrativos repetidos. O histórico do tracker continua preservando decisões humanas, bloqueios reais e mudanças de papel/estado.
 
 ### 14.3 Eficiência operacional
 

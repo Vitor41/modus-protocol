@@ -687,13 +687,15 @@ test("limite de loop considera apenas a fronteira ativa e é zerado após avanç
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
     const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
-      { ref: "qa-reset", key: "FX-350", title: "QA após review aprovado", list_ref: adapter.tracker.states.ready_for_validation, position: 1, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
-      { ref: "dev-loop", key: "FX-351", title: "Quarto retorno DEV Review", list_ref: adapter.tracker.states.in_development, position: 2, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } }
+      { ref: "dev-loop-allowed", key: "FX-351", title: "Terceiro retorno já consumido", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: true, review_approved: false, active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
+      { ref: "qa-reset", key: "FX-350", title: "QA após review aprovado", list_ref: adapter.tracker.states.ready_for_validation, position: 2, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
+      { ref: "dev-loop-blocked", key: "FX-352", title: "Quarto retorno DEV Review", list_ref: adapter.tracker.states.in_development, position: 3, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 4 } } }
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.work_slots[0].key, "FX-350");
     assert.equal(result.work_slots[0].skill, "pipeline-qa");
-    assert.ok(result.blocked.some((item) => item.key === "FX-351" && item.reason === "LOOP_LIMIT_REACHED"));
+    assert.ok(result.deferred.some((item) => item.key === "FX-351" && item.reason === "LANE_CAPACITY"));
+    assert.ok(result.blocked.some((item) => item.key === "FX-352" && item.reason === "LOOP_LIMIT_REACHED"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -997,7 +999,7 @@ test("planner não cria quarto ciclo automático", async () => {
           key: "FX-005",
           list_ref: adapter.tracker.states.in_development,
           position: 1,
-          loop_counts: { dev_qa: 3 },
+          loop_counts: { dev_qa: 4 },
           loop_state: "in_development"
         }
       ])

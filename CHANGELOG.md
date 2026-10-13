@@ -6,6 +6,15 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.16] - 2026-10-13
+
+### Corrigido
+
+- Loop limits agora contam somente retornos confirmados entre papéis: três são permitidos e somente a quarta tentativa bloqueia; `blocked` técnico e trabalho interno não consomem ciclos.
+- Snapshot mantém o orçamento QA→DEV entre ciclos de correção e não perde retornos anteriores ao entrar novamente em QA; Review bloqueado tecnicamente não devolve indevidamente o card ao DEV.
+- Evals cobrem bloqueios técnicos sem retorno, histórico de retornos QA entre entradas na lane e o limite exato da quarta tentativa.
+- Recibos do tracker combinam lock+cápsula e handoff+transição quando ocorrem no mesmo checkpoint, reduzindo comentários sem retirar evidência de estado ou decisões humanas.
+
 ## [0.3.15] - 2026-10-13
 
 ### Corrigido
