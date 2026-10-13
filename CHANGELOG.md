@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.22] - 2026-10-13
+
+### Corrigido
+
+- Handoff técnico terminal bloqueado agora isola somente o card no RUN atual, libera o WIP técnico e permite continuar trabalho independente ou encerrar honestamente quando não houver mais slots; gates humanos permanecem separados.
+
 ## [0.3.21] - 2026-10-13
 
 ### Melhorado

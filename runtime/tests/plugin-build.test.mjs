@@ -148,7 +148,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.21");
+  assert.equal(status.active.runtime_version, "0.3.22");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

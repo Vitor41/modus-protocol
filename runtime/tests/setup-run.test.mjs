@@ -595,6 +595,52 @@ test("gate humano técnico com escopo de card libera o próximo DEV", async () =
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("handoff técnico terminal bloqueado isola o card no RUN atual e libera trabalho independente", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20261013-ABCDEF12";
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "qa-blocked",
+        key: "FX-227",
+        title: "QA local sem ambiente inicializável",
+        list_ref: adapter.tracker.states.ready_for_validation,
+        position: 1,
+        lock: { run_id: runId, status: "blocked", role: "pipeline-qa", state: "ready_for_validation" }
+      },
+      { ref: "next-dev", key: "FX-228", title: "Entrega independente", list_ref: adapter.tracker.states.ready_for_development, position: 2 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: runId });
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, runId);
+    assert.equal(result.work_slots[0].key, "FX-228");
+    assert.ok(result.blocked.some((item) => item.key === "FX-227" && item.reason === "TERMINAL_ROLE_BLOCK" && item.block_scope === "card"));
+    assert.ok(!result.deferred.some((item) => item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("handoff técnico terminal sem trabalho independente fecha o plano do mesmo RUN", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20261013-ABCDEF12";
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "qa-blocked",
+        key: "FX-227",
+        title: "QA local sem ambiente inicializável",
+        list_ref: adapter.tracker.states.ready_for_validation,
+        position: 1,
+        lock: { run_id: runId, status: "blocked", role: "pipeline-qa", state: "ready_for_validation" }
+      }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: runId });
+    assert.equal(result.status, "EMPTY");
+    assert.equal(result.run_id, runId);
+    assert.deepEqual(result.work_slots, []);
+    assert.ok(result.blocked.some((item) => item.reason === "TERMINAL_ROLE_BLOCK"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("lock ativo externo prevalece sobre gate humano técnico e preserva WIP", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {

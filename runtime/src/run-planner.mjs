@@ -146,6 +146,12 @@ function blockedReason(card, state, { ignoredLockRunId } = {}) {
   if (card.signals?.awaiting_human === true && !gateResolved && HUMAN_GATE_KINDS.has(card.signals?.human_gate_kind)) {
     return `HUMAN_GATE_${card.signals.human_gate_kind.toUpperCase()}`;
   }
+  // Um handoff técnico terminal bloqueado encerra o papel neste RUN_ID. Não
+  // relance a mesma lane sem nova execução, mas também não transforme a falha
+  // técnica localizada em gate humano nem mantenha o WIP ocupado.
+  if (card.lock?.status === "blocked" && card.lock.run_id === ignoredLockRunId && (!card.lock.state || card.lock.state === state)) {
+    return "TERMINAL_ROLE_BLOCK";
+  }
   // Cada fronteira de retorno possui orçamento próprio. Um avanço aprovado para
   // a próxima etapa zera o contador daquela fronteira, por isso um contador
   // histórico de outra etapa nunca pode bloquear o estado atual.
@@ -548,7 +554,7 @@ export function planRun(input = {}) {
       .filter((card) =>
         technicalInFlightStates.has(card.state) &&
         card.block_scope === "card" &&
-        (card.reason?.startsWith("HUMAN_GATE_") || card.reason === "LOOP_LIMIT_REACHED")
+        (card.reason?.startsWith("HUMAN_GATE_") || card.reason === "LOOP_LIMIT_REACHED" || card.reason === "TERMINAL_ROLE_BLOCK")
       )
       .map((card) => card.card_ref)
   );
