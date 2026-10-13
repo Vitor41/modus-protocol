@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.20] - 2026-10-13
+
+### Melhorado
+
+- Retentativas técnicas da mesma lane reutilizam o lock e mantêm tentativas intermediárias no diário local; o Trello recebe o resultado consolidado, gates humanos e mudanças reais de papel/estado, reduzindo comentários sem ocultar decisões ou transições.
+
 ## [0.3.19] - 2026-10-13
 
 ### Corrigido

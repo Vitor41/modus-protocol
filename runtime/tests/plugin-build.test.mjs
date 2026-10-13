@@ -133,7 +133,14 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.19");
+  assert.equal(status.active.runtime_version, "0.3.20");
+});
+
+test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {
+  const skill = await readFile(join(built.targetRoot, "skills", "pipeline-run", "references", "tracker-comment-protocol.md"), "utf8");
+  assert.match(skill, /unidade de publicação é a \*\*lane do mesmo card, papel, estado e RUN_ID\*\*/u);
+  assert.match(skill, /não publique outro lock ou cápsula só porque um agente foi relançado/u);
+  assert.match(skill, /Publique imediatamente quando houver decisão humana, mudança de estado ou troca efetiva de papel/u);
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

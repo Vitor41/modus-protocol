@@ -6,7 +6,7 @@ Use este protocolo em toda execução live. O comentário é evidência operacio
 
 Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-tracker-receipt` para os eventos operacionais, `write-readback` somente para mensagens humanas deliberadamente curtas e `read` para reconciliação. A chamada deve nascer em shell com rede autorizada/elevada; `network: restricted` ou `approval_policy: never` sem capacidade de escalar é falha local do launcher, não indisponibilidade do Trello. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais, com espera curta entre elas. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
 
-Para cada evento obrigatório declarado em `tracker.comments.required_events`:
+Quando um checkpoint do tracker exigir eventos declarados em `tracker.comments.required_events`:
 
 1. mantenha o artefato completo local e publique um recibo mínimo novo no card correto;
 2. capture a referência retornada pela escrita e os providers efetivamente usados;
@@ -14,7 +14,14 @@ Para cada evento obrigatório declarado em `tracker.comments.required_events`:
 4. compare `RUN_ID`, card, papel/evento, fatos essenciais e UTF-8;
 5. somente depois considere a escrita concluída.
 
-Reduza ruído sem remover evidência: quando lock e cápsula forem criados/atualizados no mesmo checkpoint, publique um único recibo com `EVENTS: lock, capsule` e hash da cápsula local. O cabeçalho `CODEX LOCK` mantém a reconciliação do lock compatível. Da mesma forma, um único recibo pode combinar handoff e transição quando ambos ocorrerem juntos. Não publique comentários narrativos ou novos recibos apenas para repetir progresso já confirmado; mantenha detalhes e tentativas internas nos artefatos locais. Comentários humanos, decisões, bloqueios reais e mudanças de papel/estado permanecem preservados.
+Reduza ruído sem remover evidência. A unidade de publicação é a **lane do mesmo card, papel, estado e RUN_ID**, não cada processo/agente lançado:
+
+- Publique um recibo `lock, capsule` no primeiro lançamento da lane. Em retentativas técnicas do mesmo papel, reutilize esse lock enquanto ele continuar pertencendo ao mesmo RUN_ID/card/estado; não publique outro lock ou cápsula só porque um agente foi relançado.
+- Registre tentativas, progresso e cápsulas intermediárias no diário/artefatos locais do RUN. Depois da recuperação, inclua o hash da cápsula consolidada mais recente no próximo recibo obrigatório.
+- Publique imediatamente quando houver decisão humana, mudança de estado ou troca efetiva de papel. Ao combinar handoff e transição, use um único recibo.
+- Se uma tentativa terminar tecnicamente bloqueada, mas ainda houver recuperação segura dentro do orçamento, mantenha o handoff no diário local e continue a lane sem comentário de bloqueio no Trello. Se a lane esgotar as recuperações, publique um único recibo terminal de handoff+bloqueio com o resultado consolidado.
+
+Uma retentativa não é, por si só, novo checkpoint do tracker. A redução não pode ocultar uma aprovação humana, um bloqueio que já exige decisão, uma troca de papel/estado, nem a conclusão terminal de uma lane. O cabeçalho `CODEX LOCK` mantém a reconciliação do lock compatível. Comentários humanos, decisões e mudanças de papel/estado permanecem preservados.
 
 Falha na publicação gera `TRACKER_COMMENT_WRITE_FAILED`. Falha, ausência ou divergência na releitura gera `TRACKER_COMMENT_READBACK_FAILED`. Em ambos os casos, não mova o card e não presuma sucesso.
 

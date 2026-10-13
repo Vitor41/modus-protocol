@@ -444,7 +444,7 @@ Na retomada, o capsule reduz releitura, mas não substitui evidências necessár
 
 O capsule completo permanece no projeto. O tracker recebe somente um recibo mínimo e determinístico com `RUN_ID`, papel, estados, evento e hash SHA-256 do artefato local; ele nunca recebe descrição, histórico, prompt, caminhos ou narrativa interna. O gate usa o artefato local e o recibo torna sua versão auditável sem ampliar a superfície de divulgação.
 
-Para reduzir ruído no histórico, lock e cápsula devem compartilhar um único recibo (`EVENTS: lock, capsule`) quando forem escritos no mesmo checkpoint; handoff e transição também podem compartilhar um recibo. Tentativas e progresso interno ficam nos artefatos locais, não em comentários narrativos repetidos. O histórico do tracker continua preservando decisões humanas, bloqueios reais e mudanças de papel/estado.
+Para reduzir ruído no histórico, a unidade de publicação é a lane por card/papel/estado/RUN_ID, não cada agente relançado. O primeiro lançamento publica lock+cápsula; retentativas técnicas reutilizam o lock e registram evidências intermediárias no diário local. O tracker recebe imediatamente decisões humanas, transições/trocas reais de papel e resultados terminais consolidados; handoff e transição compartilham um recibo quando simultâneos. A política não pode ocultar mudança de estado, aprovação ou bloqueio que exija decisão humana.
 
 ### 14.3 Eficiência operacional
 
