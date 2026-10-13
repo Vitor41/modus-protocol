@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.15] - 2026-10-13
+
+### Corrigido
+
+- Review aprovado agora libera diretamente a transição operacional para `PRONTO PARA VALIDAÇÃO`, preservando o RUN_ID e o handoff de Review; o planner deixa de relançar DEV em um passo incompatível com o role-gate.
+
 ## [0.3.14] - 2026-10-13
 
 ### Corrigido

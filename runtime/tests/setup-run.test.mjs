@@ -535,6 +535,30 @@ test("review devolvido vai ao DEV enquanto handoff pendente é reconciliado sem 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("Review aprovado reconcilia diretamente para QA sem relançar DEV", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "reviewed", key: "FX-230", title: "Review aprovado", list_ref: adapter.tracker.states.in_development, position: 1, signals: {
+        implementation_complete: true,
+        review_approved: true,
+        implementation_evidence_ref: "dev-handoff",
+        review_evidence_ref: "review-handoff",
+        review_run_id: "RUN-20261013-AABBCCDD"
+      } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.skill, "pipeline-run");
+    assert.equal(result.selected.execution_kind, "operational");
+    assert.equal(result.selected.action, "reconcile-transition");
+    assert.equal(result.selected.transition_evidence_ref, "review-handoff");
+    assert.equal(result.selected.transition_run_id, "RUN-20261013-AABBCCDD");
+    assert.equal(result.selected.transition_role, "pipeline-code-review");
+    assert.equal(result.selected.target_state, "ready_for_validation");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("gate humano de release libera o próximo DEV sem paralisar PO e UX", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {

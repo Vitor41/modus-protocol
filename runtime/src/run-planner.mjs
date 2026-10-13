@@ -89,6 +89,18 @@ function routeCard(state, signals = {}) {
       target_state: signals.pending_transition_to
     };
   }
+  if (state === "in_development" && signals.review_approved === true && signals.review_evidence_ref) {
+    return {
+      skill: "pipeline-run",
+      action: "reconcile-transition",
+      profile: "RAPIDO",
+      execution_kind: "operational",
+      transition_evidence_ref: signals.review_evidence_ref,
+      transition_run_id: signals.review_run_id,
+      transition_role: "pipeline-code-review",
+      target_state: "ready_for_validation"
+    };
+  }
   if (state === "refinement") return { skill: "pipeline-po", action: "refine", profile: "PROFUNDO" };
   if (state === "ux_ui") {
     return {

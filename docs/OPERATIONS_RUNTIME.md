@@ -106,6 +106,8 @@ O integrador deriva sinais da lista atual e dos eventos válidos nessa fase. Par
 
 Um handoff concluído que declara transição mas permanece na lista de origem materializa `pending_transition`. O planner emite um slot operacional que relê o comentário e retoma somente gate e movimento, sem consumir outro agente de papel. O gate aceita até cinco segundos de diferença de relógio entre o timestamp do Trello e o do host; a confirmação causal e o hash continuam obrigatórios. Review `changes_required` e QA `rejected` são retornos automáticos ao DEV, não bloqueios.
 
+Quando o Review aprovado já foi lido, mas o movimento ainda não foi materializado, o snapshot preserva o `RUN_ID` e a referência daquele handoff. O planner encaminha diretamente para reconciliação operacional de `in_development` para `ready_for_validation`; não lança DEV apenas para repetir um handoff de transição incompatível com o role-gate.
+
 ## Limites atuais
 
 - O runtime possui cliente Trello determinístico, mas lê credenciais somente do provider externo declarado no adapter e nunca as incorpora ao núcleo.

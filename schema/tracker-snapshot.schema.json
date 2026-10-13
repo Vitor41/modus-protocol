@@ -94,6 +94,7 @@
         "implementation_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
         "review_approved": { "type": "boolean" },
         "review_evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "review_run_id": { "$ref": "#/$defs/nonEmptyString" },
         "qa_approved": { "type": "boolean" },
         "active_loop": {
           "type": "object",

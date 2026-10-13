@@ -430,7 +430,10 @@ function technicalProgress(comments, enteredAt, state) {
     review_approved: reviewApproved,
     implementation_evidence_ref: devPass.ref,
     active_loop: { edge: "dev_review", state: "in_development", count: reviewRejected ? reviewReturnCount : 0 },
-    ...(review ? { review_evidence_ref: review.ref } : {})
+    ...(review ? {
+      review_evidence_ref: review.ref,
+      ...(structuredField(String(review.text ?? ""), "RUN_ID") ? { review_run_id: structuredField(String(review.text ?? ""), "RUN_ID") } : {})
+    } : {})
   };
 }
 
