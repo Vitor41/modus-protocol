@@ -322,26 +322,26 @@ test("launcher mantém falha quando handoff tem mais de um delimitador excedente
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("launcher rejeita antes do spawn um prompt que aponta para handoff diferente", async () => {
+test("launcher canonicaliza antes do spawn uma referência única de handoff", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-handoff-path-"));
-  const manifestPath = join(root, "manifest.json");
-  await writeFile(join(root, "prompt.txt"), "Escreva o resultado em .pipeline/tmp/run-dev-handoff.json.");
-  await writeFile(join(root, "request.json"), JSON.stringify(request));
-  await writeFile(manifestPath, JSON.stringify({ jobs: [{ lane: "po", role: "pipeline-po", promptFile: "prompt.txt", executionRequest: "request.json", handoff: ".pipeline/tmp/run-dev-r2-handoff.json" }] }));
+  const promptPath = join(root, "prompt.txt");
+  await writeFile(promptPath, "Escreva o resultado em .pipeline/tmp/run-dev-handoff.json.");
   try {
-    await assert.rejects(() => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => { throw new Error("não deveria iniciar"); } }), /handoff divergente/u);
+    const prompt = prepareRolePrompt({ projectRoot: root, promptFile: promptPath, handoffPath: join(root, ".pipeline", "tmp", "run-review-handoff.json") });
+    assert.match(prompt, /run-review-handoff\.json/u);
+    assert.doesNotMatch(prompt, /run-dev-handoff\.json/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("prompt de recuperação é regenerado para o handoff exclusivo do job", async () => {
+test("launcher bloqueia prompt com referências de handoff ambíguas", async () => {
   const root = await mkdtemp(join(tmpdir(), "role-launcher-recovery-prompt-"));
   const promptPath = join(root, "prompt.txt");
-  const expected = join(root, ".pipeline", "tmp", "run-dev-r2-handoff.json");
-  await writeFile(promptPath, "Use .pipeline/tmp/run-dev-handoff.json como handoff.");
+  const expected = join(root, ".pipeline", "tmp", "run-review-handoff.json");
+  await writeFile(promptPath, "Leia .pipeline/tmp/run-dev-handoff.json e escreva em .pipeline/tmp/run-review-old-handoff.json.");
+  await writeFile(join(root, "request.json"), JSON.stringify(request));
+  await writeFile(join(root, "manifest.json"), JSON.stringify({ jobs: [{ lane: "technical", role: "pipeline-code-review", promptFile: "prompt.txt", executionRequest: "request.json", handoff: ".pipeline/tmp/run-review-handoff.json" }] }));
   try {
-    const prompt = prepareRolePrompt({ projectRoot: root, promptFile: promptPath, handoffPath: expected, recovery: true });
-    assert.match(prompt, /run-dev-r2-handoff\.json/u);
-    assert.doesNotMatch(prompt, /run-dev-handoff\.json/u);
+    await assert.rejects(() => launchRoles({ projectRoot: root, manifest: "manifest.json" }, { spawn: () => { throw new Error("não deveria iniciar"); } }), /handoff divergente/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

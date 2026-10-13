@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.14] - 2026-10-13
+
+### Corrigido
+
+- O launcher canonicaliza uma referência única de handoff em prompts desatualizados conforme o destino do manifest. Prompts com referências múltiplas e ambíguas continuam bloqueados antes do spawn.
+
 ## [0.3.13] - 2026-10-13
 
 ### Corrigido

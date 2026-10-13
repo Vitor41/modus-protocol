@@ -214,7 +214,10 @@ export function prepareRolePrompt({ projectRoot, promptFile, handoffPath, recove
   const expected = resolve(handoffPath);
   const references = promptHandoffReferences(prompt, projectRoot);
   const mismatches = references.filter((reference) => reference.absolute !== expected);
-  if (mismatches.length && recovery) {
+  // A single handoff path in a role prompt is its output target. Rebind that
+  // unique target to the manifest, even on the first attempt; multiple paths
+  // are ambiguous (they may include inputs) and must still fail closed.
+  if (references.length === 1 && mismatches.length === 1) {
     const canonical = relative(projectRoot, expected).replaceAll("\\", "/");
     for (const mismatch of mismatches) prompt = prompt.replaceAll(mismatch.raw, canonical);
   }

@@ -51,7 +51,7 @@ Identidades locais:
 
 - marketplace: `unified-development-pipeline-local`;
 - plugin: `unified-development-pipeline`;
-- versão atual: `0.3.13`.
+- versão atual: `0.3.14`.
 
 Instalação inicial:
 
