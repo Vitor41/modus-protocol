@@ -66,6 +66,21 @@ test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async (
   assert.match(skill, /solicite acesso externo elevado/u);
 });
 
+test("DEV não conta verificações internas como retorno de loop entre papéis", async () => {
+  const policy = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"), "utf8");
+  const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
+  const deliveryLoop = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "references", "delivery-loop.md"), "utf8");
+  const evals = await readFile(join(REPOSITORY_DIR, "docs", "EVALS.md"), "utf8");
+  assert.match(policy, /retornos confirmados entre papéis/u);
+  assert.match(policy, /Repetições internas do mesmo papel.*não incrementam/u);
+  assert.match(dev, /nunca devem ser classificadas como `loop_limit`/u);
+  assert.match(dev, /não faça handoff de sucesso/u);
+  assert.match(deliveryLoop, /não consome o contador de `loop_limit`/u);
+  assert.match(evals, /EVAL-DEV-INTERNAL-ITERATION-001/u);
+  const packagedDeliveryLoop = await readFile(join(built.targetRoot, "skills", "pipeline-dev", "references", "delivery-loop.md"), "utf8");
+  assert.equal(hash(Buffer.from(packagedDeliveryLoop)), hash(Buffer.from(deliveryLoop)));
+});
+
 test("Skills do pipeline limitam releases em lote e exigem checkpoints recuperáveis", async () => {
   const run = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
   const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
@@ -118,7 +133,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.10");
+  assert.equal(status.active.runtime_version, "0.3.11");
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {

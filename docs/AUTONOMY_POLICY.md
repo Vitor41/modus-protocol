@@ -6,6 +6,8 @@ Esta é a fonte canônica para decidir quando o Modus Protocol resolve, retorna 
 
 Problema técnico dentro do escopo aprovado é trabalho da equipe, não gate humano. O especialista investiga, corrige, comprova e continua o loop. Um handoff inválido, teste falho, conflito corrigível, evidência incompleta, estado obsoleto ou indisponibilidade transitória nunca se torna decisão humana apenas porque impediu um gate na primeira tentativa.
 
+O limite de `loop_limit` conta somente retornos confirmados entre papéis na mesma fronteira (por exemplo, DEV → Code Review → DEV ou QA → DEV → QA). Repetições internas do mesmo papel para testar, inspecionar, corrigir ou obter evidência não incrementam esse contador e não podem, por si, gerar bloqueio humano. Essas tentativas continuam sujeitas ao timeout e ao watchdog de progresso da execução; se uma ferramenta falhar, o especialista tenta uma alternativa segura, sem inventar evidência. Se a verificação continuar indisponível, registra impedimento técnico localizado, mantém o card sem handoff de sucesso e permite que lanes independentes prossigam.
+
 ## Autonomia obrigatória
 
 Resolva sem solicitar ajuda humana:

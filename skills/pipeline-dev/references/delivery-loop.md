@@ -20,6 +20,8 @@ Para cada fatia:
 
 Prefira reutilizar limites e componentes existentes. Extraia abstração apenas quando duplicação ou fronteira real justificar.
 
+Repetir esse ciclo dentro do mesmo papel DEV é trabalho interno, não retorno entre papéis: não consome o contador de `loop_limit` e não cria gate humano. Se uma capacidade de inspeção falhar, tente ferramenta ou método local equivalente e preserve evidência observável; não alegue aprovação sem ela. Se a capacidade permanecer indisponível após recuperação segura, deixe o resultado técnico pendente para o ORCHESTRATOR, sem handoff de sucesso, e siga o timeout/watchdog aplicável.
+
 ## 4. Verificação afetada
 
 Mapeie critério → código → teste/inspeção → evidência. Valide os canais afetados, não uma lista fixa. Mudança de banco exige integridade e reversibilidade; mudança visual exige renderização; regra de autorização exige cenários permitidos e negados.

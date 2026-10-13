@@ -26,6 +26,7 @@ Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/
 ## Implementar e verificar
 
 - Trabalhe em uma fatia vertical por vez e mantenha responsabilidade pela integração.
+- Iterações de teste, inspeção e correção dentro desta execução do DEV não são retornos de loop e nunca devem ser classificadas como `loop_limit`. Continue resolvendo dentro do escopo aprovado até comprovar os critérios ou atingir o timeout/watchdog aplicável. Se uma ferramenta de verificação falhar, tente uma alternativa segura e equivalente; nunca fabrique evidência. Se a evidência ainda não puder ser obtida, registre impedimento técnico localizado, não faça handoff de sucesso nem solicite decisão humana por esse motivo, e deixe o ORCHESTRATOR prosseguir com lanes independentes.
 - Prefira testes em interfaces públicas e um loop rápido durante a edição.
 - Execute validações proporcionais em UI, API, banco, segurança, build, lint ou tipos conforme o impacto.
 - Para mudança visual, inspecione a interface renderizada nos estados e viewports aplicáveis; teste de unidade isolado não comprova UX.

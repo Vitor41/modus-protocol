@@ -6,6 +6,14 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.11] - 2026-10-12
+
+### Corrigido
+
+- `loop_limit` passa a ser explicitamente restrito a retornos entre papéis; testes, inspeções e correções internas do DEV não consomem ciclos nem geram gate humano.
+- A Skill DEV exige recuperação alternativa para evidência indisponível, proíbe handoff de sucesso sem comprovação e mantém impedimentos técnicos localizados sem parar lanes independentes.
+- Evals cobrem iterações internas e falha de ferramenta de verificação no mesmo papel.
+
 ## [0.3.10] - 2026-10-01
 
 ### Corrigido

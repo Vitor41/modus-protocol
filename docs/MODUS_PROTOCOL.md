@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.3.10` |
-| Versão do Kernel | `0.3.10` |
+| Versão pública | `0.3.11` |
+| Versão do Kernel | `0.3.11` |
 | Estado | Publicada |
-| Data | 2026-10-01 |
+| Data | 2026-10-12 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -292,9 +292,10 @@ Loops previstos:
 
 - `PO ↔ UX/UI`;
 - `PO ↔ DEV`;
+- `DEV ↔ Code Review`;
 - `DEV ↔ QA`.
 
-Cada retorno cria evidência nova e incrementa o ciclo. No terceiro retorno do mesmo loop e escopo, o card recebe `Aguardando resposta humana`. Não existe quarto ciclo automático.
+Somente um retorno confirmado entre papéis cria evidência e incrementa o ciclo daquela fronteira. Iterações internas do mesmo papel — testes, renderização/inspeção, correções e nova verificação — não contam como retorno e não podem disparar `loop_limit`; são governadas pelo timeout e watchdog de progresso da execução. No terceiro retorno entre papéis na mesma fronteira e escopo, o card recebe `Aguardando resposta humana`. Não existe quarto retorno automático nessa fronteira. Se uma ferramenta de verificação ficar indisponível, o especialista tenta alternativa segura; sem evidência suficiente não há handoff de sucesso, mas o impedimento técnico é localizado e lanes independentes continuam.
 
 O bloqueio possui escopo explícito: `card` para uma pendência isolada, `delivery_group` para membros com dependência determinante e `dependency_group` para um grupo que aguarda outro grupo. Um Delivery Group pode ser `optimization`, quando compartilha esforço mas seus cards continuam independentes, ou `dependency`, quando um bloqueio deve paralisar todos os membros. Os demais cards e grupos independentes continuam elegíveis.
 
