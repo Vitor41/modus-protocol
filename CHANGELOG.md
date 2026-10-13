@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.21] - 2026-10-13
+
+### Melhorado
+
+- QA agora tem procedimento explícito para iniciar e encerrar com segurança aplicações locais, validar backend e interface autenticada em navegador real e criar identidade/massa somente em banco comprovadamente não produtivo.
+- O contrato do adapter documenta perfil local de QA, portas, healthcheck, identidade e limites de banco sem acoplar regras de projeto ao núcleo.
+
 ## [0.3.20] - 2026-10-13
 
 ### Melhorado

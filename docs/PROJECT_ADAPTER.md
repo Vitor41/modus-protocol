@@ -144,11 +144,13 @@ O contrato de QA inclui:
 - identidades e prefixos reservados para dados de teste;
 - isolamento e limpeza de massa;
 - navegadores, resoluções ou ambientes suportados;
+- perfis `environments` locais de QA: comando de início declarado em `commands`, healthcheck, política de desligamento somente do processo rastreado, estratégia e portas permitidas;
+- origem da identidade de teste e limites de acesso ao banco de QA, quando a aplicação exigir autenticação;
 - canais de evidência aceitos;
 - comandos de regressão e smoke;
 - restrições para dados sensíveis.
 
-Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
+O QA usa primeiro uma identidade local existente. Criação de conta ou gravação de dados de teste só é permitida quando o adapter/runbook identificar inequivocamente ambiente não produtivo, operação autorizada e privilégios mínimos; a limpeza é limitada aos dados QA da própria execução. Sem essa prova, não se escreve no banco. Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
 
 ### 3.10 Segurança e permissões
 

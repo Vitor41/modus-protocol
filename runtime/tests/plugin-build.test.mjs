@@ -66,6 +66,21 @@ test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async (
   assert.match(skill, /solicite acesso externo elevado/u);
 });
 
+test("QA documenta execução local segura e evidência real de frontend/backend", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "SKILL.md"), "utf8");
+  const localValidation = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
+  const adapterContract = await readFile(join(REPOSITORY_DIR, "docs", "PROJECT_ADAPTER.md"), "utf8");
+  for (const requiredInstruction of ["references/local-application-validation.md", "backend e frontend"]) {
+    assert.ok(skill.includes(requiredInstruction), requiredInstruction);
+  }
+  for (const requiredInstruction of ["portas declaradas", "não produtivo", "usuário", "navegador", "dados reais", "processo filho"]) {
+    assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
+  }
+  assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
+  const packagedReference = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
+  assert.equal(packagedReference, localValidation);
+});
+
 test("DEV não conta verificações internas como retorno de loop entre papéis", async () => {
   const policy = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"), "utf8");
   const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
@@ -133,7 +148,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.20");
+  assert.equal(status.active.runtime_version, "0.3.21");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

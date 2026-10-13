@@ -18,12 +18,14 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock 
 3. Leia `references/qa-matrix.md` antes de desenhar cenários.
 4. Crie matriz critério × cenário × evidência × resultado, incluindo limites negativos e regressão proporcionais ao risco.
 5. Use dados com prefixo reservado e limpe apenas massa pertencente ao QA.
+6. Para critérios de interface, siga `references/local-application-validation.md`; não substitua observação real no navegador por HTML/ASGI quando o critério exige comportamento visual ou interação.
 
 ## Executar e concluir
 
 - Observe saídas reais; não marque cenário como aprovado por inferência.
 - Consolide todos os defeitos independentes antes de devolver ao DEV, evitando ciclos por descoberta serial evitável.
-- Não altere código, banco de produto ou critérios para fazer o teste passar.
+- Não altere código nem dados que não pertençam à massa QA isolada; não altere critérios para fazer o teste passar.
+- Faça validação backend e frontend segundo os critérios aplicáveis; para ambiente autenticado/local, siga `references/local-application-validation.md` e o adapter do projeto.
 - `approved`: todos os cenários aplicáveis passam e o card pode ir a `ready_for_release`.
 - `rejected`: ao menos um cenário falha; retorne ao DEV em `in_development` com evidência reproduzível.
 - `blocked`: depois da recuperação proporcional, ambiente ou precondição externa ainda impede conclusão; permaneça no estado e não invente resultado. Use `requires_human: true` somente com `blocker.kind: external_authorization` ou `systemic_risk`; demais impedimentos técnicos são localizados e não encerram outras lanes.
