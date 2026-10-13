@@ -65,6 +65,8 @@ Leia `references/execution-protocol.md`, `references/tracker-comment-protocol.md
 - Não descreva uma configuração solicitada como efetiva sem evidência do lançamento explícito.
 - Não substitua comentário obrigatório por resumo no chat, descrição do card ou movimento de coluna.
 - Respeite os orçamentos de recuperação do plano. Esgotá-los isola a falha técnica; não cria autorização para fallback, integração alternativa ou repetição cega de escrita.
+- `role_launch_attempts` limita somente falhas de lançamento sem job terminal/handoff consumível. Um handoff terminal `blocked` é resultado do especialista, não falha de lançamento: registre-o, atualize o plano/contexto, classifique corretamente `initial` versus `return` e continue o mesmo `RUN_ID` enquanto houver trabalho elegível e dentro do timeout/watchdog. Não encerre apenas porque houve duas tentativas DEV; encerre quando o `run-close-gate` confirmar que não há trabalho elegível ou houver gate humano real.
+- Antes de lançar qualquer papel, valide que os arquivos de prompt/request/manifest/handoff declarados no job existem e que o request corresponde ao slot planejado; se houver divergência, corrija o material local e relance sem escrever no tracker.
 
 ## Responder
 

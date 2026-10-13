@@ -136,6 +136,25 @@ test("DEV inicial parte da fila real e correção permanece em desenvolvimento",
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
 });
 
+test("retentativa após bloqueio antes de implementar continua sendo DEV inicial", async () => {
+  const blockedInitial = await fixture("valid-dev.json");
+  blockedInitial.status = "blocked";
+  blockedInitial.state = { from: "ready_for_development", to: "ready_for_development" };
+  blockedInitial.blocker = {
+    reason: "Ambiente de teste local indisponível; especialista tentará método equivalente.",
+    requires_human: false,
+    kind: "technical",
+    scope: "card",
+    return_to: "pipeline-dev"
+  };
+  assert.equal((await validateObject(blockedInitial)).status, "PASS");
+
+  const wronglyClassified = structuredClone(blockedInitial);
+  wronglyClassified.iteration_kind = "return";
+  const result = await validateObject(wronglyClassified);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
+});
+
 test("DEV não pode incluir autoaprovação de review", async () => {
   const handoff = await fixture("valid-dev.json");
   handoff.deliverable.review_approved = true;

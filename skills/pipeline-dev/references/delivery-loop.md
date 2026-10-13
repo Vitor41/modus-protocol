@@ -20,7 +20,11 @@ Para cada fatia:
 
 Prefira reutilizar limites e componentes existentes. Extraia abstração apenas quando duplicação ou fronteira real justificar.
 
+Para testes de aplicação ASGI, se `TestClient` não puder importar por falta de `httpx`, use o cliente ASGI mínimo já disponível no projeto ou uma alternativa equivalente sem adicionar dependência. Verifique a rota/fluxo necessário com fixture isolada. Uma resposta HTTP comprova apenas o alcance funcional observado; não a substitua por alegação de inspeção visual.
+
 Repetir esse ciclo dentro do mesmo papel DEV é trabalho interno, não retorno entre papéis: não consome o contador de `loop_limit` e não cria gate humano. Se uma capacidade de inspeção falhar, tente ferramenta ou método local equivalente e preserve evidência observável; não alegue aprovação sem ela. Se a capacidade permanecer indisponível após recuperação segura, deixe o resultado técnico pendente para o ORCHESTRATOR, sem handoff de sucesso, e siga o timeout/watchdog aplicável.
+
+Uma nova tentativa do DEV após falha bloqueada antes da implementação permanece `iteration_kind: initial` quando o card ainda está em `ready_for_development`; `return` significa retorno real de um papel posterior para correção em `in_development`.
 
 ## 4. Verificação afetada
 

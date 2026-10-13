@@ -6,6 +6,16 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.12] - 2026-10-13
+
+### Corrigido
+
+- DEV distingue uma nova tentativa após bloqueio pré-implementação (`initial`) de um retorno real para correção (`return`), evitando divergência entre handoff e coluna do card.
+- O orçamento de tentativas do launcher aplica-se somente a falhas de lançamento sem handoff terminal; handoffs `blocked` exigem replanejamento e continuidade no mesmo `RUN_ID` enquanto houver trabalho e dentro do watchdog.
+- DEV recupera testes ASGI sem dependências opcionais usando alternativa mínima documentada, sem instalar dependências ou confundir resposta HTTP com inspeção visual.
+- `pipeline-run` valida os caminhos de prompt/request/manifest/handoff do job antes de lançá-lo; documentação do recibo evita parsing ambíguo de listas no PowerShell.
+- Evals cobrem retomada inicial e recuperação de ambiente de teste observadas na supervisão FP.
+
 ## [0.3.11] - 2026-10-12
 
 ### Corrigido

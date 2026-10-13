@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.3.11` |
+| Versão | `0.3.12` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -180,6 +180,8 @@ O executor não atribui sozinho sua nota final. O judge trabalha sobre artefatos
 | `EVAL-WIP-CONTINUITY-001` | Um card recém-desbloqueado volta a competir por posição com outro que acabou de concluir DEV na mesma lane. | Fixture + replay Financial Product | O handoff técnico já produzido continua para Code Review antes da retomada; uma execução ativa ou lock compatível do `continueRunId`, mesmo sem `active_execution`, também não é preemptado nem recriado. |
 | `EVAL-EMPTY-CONTRACT-001` | O plano não tem slots porque restam apenas gates humanos ou WIP inválido. | Fixture | Todo plano `EMPTY` inclui `run_id` e `work_slots: []`, permitindo materializar o recibo e executar o run-close-gate sem adaptação manual. |
 | `EVAL-DEV-ENTRY-001` | Um DEV inicial é lançado a partir de `ready_for_development`, enquanto uma correção começa em `in_development`. | Fixture + replay FP | O gate aceita a origem real de cada iteração e rejeita estado reescrito pelo orquestrador. |
+| `EVAL-DEV-INITIAL-RETRY-001` | DEV termina bloqueado antes da implementação e o card continua em `ready_for_development`. | Fixture + replay FP | A nova tentativa continua `initial`; o gate rejeita classificação `return` com estado de desenvolvimento inexistente. |
+| `EVAL-DEV-ENV-RECOVERY-001` | Adapter usa porta dinâmica e `TestClient` não existe por dependência opcional ausente. | Fixture + replay FP | DEV usa porta explícita livre, healthcheck e cliente ASGI mínimo sem adicionar dependências; evidência HTTP não é confundida com inspeção visual. |
 | `EVAL-LAUNCHER-PARTIAL-001` | Duas lanes são lançadas; uma conclui e a outra falha antes do handoff. | Fixture + replay FP | O ledger termina com `active_jobs: 0`, retorna `PARTIAL`, preserva o job concluído e marca somente a lane falha para recuperação. |
 | `EVAL-LAUNCHER-DIAGNOSTIC-001` | Papel emite erros repetidos sem iniciar item de trabalho; tentativa R2 cita handoff R1. | Fixture | O launcher encerra em `no_progress` após três erros, preserva evento/buffers sanitizados e rejeita ou regenera o caminho de handoff antes do spawn. |
 | `EVAL-CLOSE-RECOVERY-001` | Uma tentativa falha sem handoff e outra tentativa do mesmo papel conclui exatamente o mesmo escopo. | Fixture | O recibo preserva ambas; `superseded_by` só resolve a tentativa falha se referenciar evidência única de job `completed` com o mesmo papel e `scope_ref`. Substituta ausente, falha, papel/escopo diferente ou evidência duplicada mantém o fechamento bloqueado. |

@@ -30,6 +30,8 @@ Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/
 - Prefira testes em interfaces públicas e um loop rápido durante a edição.
 - Execute validações proporcionais em UI, API, banco, segurança, build, lint ou tipos conforme o impacto.
 - Para mudança visual, inspecione a interface renderizada nos estados e viewports aplicáveis; teste de unidade isolado não comprova UX.
+- Se o adapter declarar ambiente local com placeholders como `{port}` mas o runtime os entregar literalmente, não trate isso como falha do card: confirme o comando expandido e use uma porta livre explícita com healthcheck. Não dependa de configuração `environments.*` que o launcher não consome.
+- Se `TestClient` não estiver disponível por falta de dependência opcional (`httpx`), não instale dependências apenas para contornar o teste; use o cliente ASGI mínimo documentado pelo projeto ou outra verificação local equivalente, sem alterar dependências. Diferencie evidência HTTP/funcional de inspeção visual real; se renderização continuar indisponível, não invente evidência nem transforme isso sozinho em gate humano.
 - Revise o diff completo, procurando comportamento ausente, escopo extra, regressão e complexidade desnecessária.
 - Execute regressão completa uma vez ao final quando aplicável.
 - Não esconda falha como `not_applicable`; justifique somente quando a capacidade realmente não se aplica.
@@ -37,7 +39,7 @@ Leia `references/delivery-loop.md` antes da primeira edição. Leia `references/
 
 ## Entregar
 
-Na implementação inicial, o handoff representa a transição `ready_for_development → in_development`; em correções técnicas, permanece `in_development → in_development`. O card permanece em `in_development` até Code Review independente. Produza `schema/role-handoff.schema.json` com `role: pipeline-dev`, checkpoint, mudanças, testes, validações, especializações, diff revisado e riscos. Valide com `../../runtime/src/role-gate.mjs`.
+Na implementação inicial, o handoff representa a transição `ready_for_development → in_development`; em correções técnicas, permanece `in_development → in_development`. Se uma primeira tentativa DEV terminou bloqueada antes da implementação e o card ainda está em `ready_for_development`, uma nova tentativa continua sendo `initial`, não `return`; só use `return` quando houver devolução real de um papel posterior ou estado `in_development`. O card permanece em `in_development` até Code Review independente. Produza `schema/role-handoff.schema.json` com `role: pipeline-dev`, checkpoint, mudanças, testes, validações, especializações, diff revisado e riscos. Valide com `../../runtime/src/role-gate.mjs`.
 
 Não inclua `review_approved` ou `qa_approved`, não mova diretamente para validação e não declare sucesso de uma ferramenta cuja saída não foi observada.
 

@@ -26,6 +26,8 @@ Se um snapshot posterior encontrar `STATUS: completed`, `STATE_FROM`, `STATE_TO`
 
 O conteúdo completo de cápsulas, handoffs, bloqueios e transições é interno ao projeto. Para cada evento, use `write-tracker-receipt` com `--artifact-file` local e campos canônicos. O runtime calcula o hash local e constrói o único payload externo permitido: cabeçalho, `RECEIPT_VERSION`, `RUN_ID`, `ROLE`, `STATUS`, `EVENTS`, estados, próximo papel quando aplicável e `LOCAL_ARTIFACT_SHA256`.
 
+No PowerShell, passe a lista de eventos como um único argumento entre aspas, por exemplo `--events 'role_handoff,blocker'`; alternativamente use `--event 'role_handoff'` em chamadas separadas. Antes de repetir após erro de parsing, confirme que a primeira chamada não gravou recibo, para evitar duplicidade.
+
 O recibo não pode conter descrição do card, comentários, anexos, dados de negócio, caminhos locais, prompts, logs, texto de evidência, stack trace ou credenciais. O gate semântico lê o artefato local; o tracker apenas atesta a versão por hash e a sequência de estados. Isso reduz a superfície de divulgação e permite a revisão automática avaliar uma escrita pequena e determinística.
 
 ### Encerramento excepcional de lock

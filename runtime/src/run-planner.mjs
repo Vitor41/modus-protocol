@@ -43,6 +43,7 @@ const RECOVERY_POLICY = {
   mode: "specialist-autonomy-v0.3",
   tracker_read_attempts: 3,
   role_launch_attempts: 2,
+  role_launch_attempts_scope: "launch failures without terminal job or consumable handoff; terminal specialist handoffs do not consume this budget",
   handoff_repair_attempts: 1,
   technical_failures_require_human: false,
   continue_independent_lanes: true,
