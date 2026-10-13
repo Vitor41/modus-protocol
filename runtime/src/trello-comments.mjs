@@ -148,9 +148,21 @@ async function verifyActiveLockForRelease(fetchImpl, credentials, adapter, cardR
   }
   const actions = await getJson(fetchImpl, credentials, `/cards/${encodeURIComponent(cardRef)}/actions`, { filter: "commentCard,updateCard", limit: 1000 }, "a releitura do lock atual");
   const comments = actions.filter((item) => item.type === "commentCard" || item.data?.text).map(publicComment);
-  const lock = lockState(comments, stateEntryDate(actions, card.idList));
+  const stateEnteredAt = stateEntryDate(actions, card.idList);
+  const lock = lockState(comments, stateEnteredAt);
+  const phaseComments = chronological(after(comments, stateEnteredAt));
+  const latestLockComment = phaseComments
+    .filter((comment) => /^CODEX LOCK(?:\s|\u2014|-|$)/iu.test(String(comment.text ?? "").trim()))
+    .at(-1);
+  const lockRole = structuredField(String(latestLockComment?.text ?? ""), "ROLE")?.toLowerCase();
+  const terminalBlocked = Boolean(latestLockComment)
+    && structuredField(String(latestLockComment.text), "STATUS")?.toLowerCase() === "active"
+    && phaseComments.some((comment) => String(comment.date) > String(latestLockComment.date)
+      && structuredField(String(comment.text ?? ""), "RUN_ID") === runId
+      && (!lockRole || structuredField(String(comment.text ?? ""), "ROLE")?.toLowerCase() === lockRole)
+      && /^STATUS:\s*BLOCKED\b/imu.test(String(comment.text ?? "")));
   const explicitlyReleasable = lock?.status === "active"
-    || (lock?.status === "blocked" && lock.lock_status === "active" && lock.terminal_status === "blocked");
+    || (lock?.status === "blocked" && lock?.run_id === runId && terminalBlocked);
   if (!explicitlyReleasable || lock.run_id !== runId || (lock.state && lock.state !== state)) {
     throw new Error("O RUN_ID indicado não corresponde a um lock ativo ou terminal bloqueado elegível deste card e estado.");
   }
@@ -337,8 +349,6 @@ function lockState(comments, enteredAt) {
   return {
     run_id: runId,
     status,
-    lock_status: rawStatus,
-    terminal_status: rawStatus === "active" && status !== "active" ? status : undefined,
     ...(structuredField(text, "ROLE") ? { role: structuredField(text, "ROLE").toLowerCase() } : {}),
     ...(structuredField(text, "STATE") ? { state: structuredField(text, "STATE").toLowerCase() } : {}),
     ...(updatedAt ? { updated_at: updatedAt } : {})

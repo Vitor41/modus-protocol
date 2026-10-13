@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.19] - 2026-10-13
+
+### Corrigido
+
+- Evidência interna de lock terminal bloqueado deixa de vazar para o snapshot público; a liberação verifica a trilha terminal somente no guard de escrita, preservando o schema estrito do planner.
+
 ## [0.3.18] - 2026-10-13
 
 ### Corrigido
