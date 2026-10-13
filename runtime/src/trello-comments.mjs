@@ -159,7 +159,10 @@ async function verifyLockReleaseComment(fetchImpl, credentials, cardRef, runId, 
   const authorization = actions.find((item) => item.id === authorizationRef);
   const currentMember = await getJson(fetchImpl, credentials, "/members/me", { fields: "id" }, "a identificação da conta Trello autorizadora");
   const expectedText = `AUTORIZO LIBERAR LOCK: ${runId}`;
-  if (!authorization || authorization.type !== "commentCard" || authorization.data?.card?.id !== cardRef || String(authorization.data?.text ?? "").trim() !== expectedText) {
+  const rawText = String(authorization?.data?.text ?? "").trim();
+  const markdownInlineCode = /^`([^`]+)`$/u.exec(rawText)?.[1]?.trim();
+  const normalizedText = markdownInlineCode ?? rawText;
+  if (!authorization || authorization.type !== "commentCard" || authorization.data?.card?.id !== cardRef || normalizedText !== expectedText) {
     throw new Error("O comentário de autorização precisa pertencer ao card e declarar exatamente o RUN_ID do lock.");
   }
   if (!lock.updated_at || String(authorization.date) <= String(lock.updated_at)) throw new Error("O comentário de autorização precisa ser posterior ao lock ativo.");

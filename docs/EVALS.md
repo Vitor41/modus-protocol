@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | `0.3.16` |
+| Versão | `0.3.17` |
 | Estado | Contratos, piloto funcional, dois cutovers técnicos e rollback isolado validados |
 | Primeiro conjunto real | Projeto Piloto A |
 
@@ -206,6 +206,7 @@ O replay autorizado de `PILOT-A-065` a `PILOT-A-068` acrescentou evidência real
 | `EVAL-QA-001` | Aprovado | QA independente aprovou 54 testes focais e 224 testes completos sobre commit fixado. |
 | `EVAL-LOOP-001` | Aprovado | Três retornos permitidos; quarto retorno bloqueado até decisão humana explícita, sem contar handoffs `blocked` nem iterações internas. |
 | `EVAL-COMMENT-NOISE-001` | Aprovado | Recibo `lock, capsule` preserva a leitura do lock e hash da cápsula em uma única escrita/readback; comentários narrativos repetidos não são exigidos. |
+| `EVAL-LOCK-MARKUP-001` | Aprovado | A autorização de lock exata é aceita com ou sem um único par de crases Markdown, mantendo validação de autoria, card e temporalidade; texto adicional continua rejeitado. |
 | `EVAL-CONTEXT-001` | Parcial | Cápsula e delta foram reutilizados; tokens e tempo por papel não foram expostos pela plataforma. |
 | `EVAL-EXECUTION-001` | Aprovado | Planner resolve perfil em modelo/esforço; gate rejeita herança, não observável, divergência e fallback. |
 | `EVAL-CUTOVER-001` | Aprovado | Roteamento exclusivo e adapter correto comprovados em execução controlada. |

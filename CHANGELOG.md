@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.17] - 2026-10-13
+
+### Corrigido
+
+- A liberação de lock aceita a autorização exata envolta por um único par de crases Markdown, mantendo validação de texto, card, autoria e data sem flexibilizar conteúdo adicional.
+
 ## [0.3.16] - 2026-10-13
 
 ### Corrigido

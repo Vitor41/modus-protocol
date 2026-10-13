@@ -194,7 +194,7 @@ test("encerra lock somente com autorização explícita e autoria Trello confirm
         if (parsed.pathname === "/1/cards/card-1" && options.method !== "POST") return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1", idList: "release" }));
         if (parsed.pathname === "/1/cards/card-1/actions") return new Response(JSON.stringify([
           { id: "active-lock", type: "commentCard", date: "2026-10-01T11:00:00Z", idMemberCreator: "agent", data: { card: { id: "card-1" }, text: `CODEX LOCK\nRUN_ID: ${runId}\nSTATE: ready_for_release\nROLE: pipeline-dev\nSTATUS: active` } },
-          { id: "aabbccddeeff001122334455", type: "commentCard", date: "2026-10-01T11:01:00Z", idMemberCreator: "human-member", data: { card: { id: "card-1" }, text: `AUTORIZO LIBERAR LOCK: ${runId}` } }
+          { id: "aabbccddeeff001122334455", type: "commentCard", date: "2026-10-01T11:01:00Z", idMemberCreator: "human-member", data: { card: { id: "card-1" }, text: `\`AUTORIZO LIBERAR LOCK: ${runId}\`` } }
         ]));
         if (parsed.pathname.endsWith("/members/me")) return new Response(JSON.stringify({ id: "human-member" }));
         if (parsed.pathname.endsWith("/actions/comments") && options.method === "POST") {
@@ -245,6 +245,37 @@ test("recusa autorização de liberação criada por outra conta Trello", async 
         return new Response(JSON.stringify({}));
       }
     }), /não foi publicado pela conta Trello autenticada/u);
+    assert.equal(writes, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recusa texto adicional mesmo quando a autorização está em crases Markdown", async () => {
+  const root = await projectFixture();
+  const adapterPath = join(root, ".pipeline", "project.adapter.yaml");
+  const adapter = YAML.parse(await readFile(adapterPath, "utf8"));
+  adapter.tracker.board_ref = "board-1";
+  await writeFile(adapterPath, YAML.stringify(adapter), "utf8");
+  const artifactPath = join(root, ".pipeline", "tmp", "lock-release.json");
+  const runId = "RUN-20261001-ABCDEF12";
+  await writeFile(artifactPath, JSON.stringify({ run_id: runId }), "utf8");
+  let writes = 0;
+  try {
+    await assert.rejects(executeTrelloComment({
+      action: "write-tracker-receipt", projectRoot: root, cardRef: "card-1", artifactPath,
+      runId, role: "orchestrator", status: "released", events: "lock", state: "ready_for_release",
+      authorizationSource: "trello-comment", authorizationRef: "aabbccddeeff001122334455",
+      fetchImpl: async (url, options = {}) => {
+        const parsed = new URL(url);
+        if (parsed.pathname === "/1/cards/card-1" && options.method !== "POST") return new Response(JSON.stringify({ id: "card-1", idBoard: "board-1", idList: "release" }));
+        if (parsed.pathname === "/1/cards/card-1/actions") return new Response(JSON.stringify([
+          { id: "active-lock", type: "commentCard", date: "2026-10-01T11:00:00Z", idMemberCreator: "agent", data: { card: { id: "card-1" }, text: `CODEX LOCK\nRUN_ID: ${runId}\nSTATE: ready_for_release\nROLE: pipeline-dev\nSTATUS: active` } },
+          { id: "aabbccddeeff001122334455", type: "commentCard", date: "2026-10-01T11:01:00Z", idMemberCreator: "human-member", data: { card: { id: "card-1" }, text: `\`AUTORIZO LIBERAR LOCK: ${runId}\` por favor` } }
+        ]));
+        if (parsed.pathname.endsWith("/members/me")) return new Response(JSON.stringify({ id: "human-member" }));
+        if (options.method === "POST") writes += 1;
+        return new Response(JSON.stringify({}));
+      }
+    }), /declarar exatamente/u);
     assert.equal(writes, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
