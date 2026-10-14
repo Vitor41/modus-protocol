@@ -4,7 +4,7 @@ O runtime do Modus fornece as duas rotas; não dependa de extensão/provider de 
 
 ## Executor local autorizado
 
-As duas rotas iniciam um processo de navegador e abrem conexões HTTP/WebSocket de loopback. O comando herda o sandbox ativo do Codex; trocar Playwright por CDP dentro do mesmo sandbox não remove uma restrição de rede/processo. Use um executor local autorizado e mantenha um único processo `qa-browser --action serve` ativo durante a validação: iniciar cada ação em um comando novo pode encerrar o navegador filho junto com o processo anterior.
+As duas rotas iniciam um processo de navegador e abrem conexões HTTP/WebSocket de loopback. O comando herda o sandbox ativo do Codex; trocar Playwright por CDP dentro do mesmo sandbox não remove uma restrição de rede/processo. Use um executor local autorizado e mantenha um único processo `qa-browser --action serve` ativo durante a validação: iniciar cada ação em um comando novo pode encerrar o navegador filho junto com o processo anterior. Playwright e CDP oferecem as mesmas ações: `preflight`, `navigate`, `inspect`, `screenshot`, `click`, `fill`, `upload`, `press` e `viewport`.
 
 - Rode o preflight pela execução local autorizada do Codex. Se a ferramenta de shell expuser `sandbox_permissions`, solicite `require_escalated` somente para o comando `pipeline.ps1 qa-browser`, com justificativa de acesso ao app em loopback e ao perfil temporário do RUN. Se o sandbox padrão devolver `EPERM`, `EACCES`, `ERR_NETWORK_ACCESS_DENIED`, timeout de `connectOverCDP`, `fetch failed` ou `unsettled top-level await`, reconcilie o servidor/perfil e repita o mesmo comando uma vez por essa rota local autorizada. Não amplie permissões do projeto nem use a sessão pessoal.
 - Use a rota CDP somente depois que o preflight Playwright falhar também na execução local autorizada. Execute a contingência pelo mesmo executor local autorizado. Se esse executor ou a elevação não estiver disponível, registre a capability ausente como limitação do executor; não declare que o browser ou a aplicação estão indisponíveis.
@@ -20,12 +20,13 @@ Inicie uma sessão persistente no terminal local autorizado e mantenha-a aberta.
 ../../runtime/pipeline.ps1 qa-browser --action serve --route playwright --project-root <raiz> --run-id <RUN_ID>
 ```
 
-Envie um objeto JSON por linha ao mesmo terminal; leia uma resposta JSON por linha. Não inicie um novo `pipeline.ps1` para cada ação:
+Envie um objeto JSON por linha ao mesmo terminal; leia uma resposta JSON por linha. Não inicie um novo `pipeline.ps1` para cada ação. Para upload, primeiro grave somente conteúdo sintético dentro de `.pipeline/tmp/qa-browser/<RUN_ID>/playwright/fixtures/`; o campo `filePath` é relativo a `fixtures`, e caminhos absolutos, traversal, symlinks ou arquivos fora do RUN são recusados:
 
 ```powershell
 {"id":"preflight","action":"preflight","url":"http://127.0.0.1:8001/<rota>","output":"preflight.png"}
 {"id":"read","action":"inspect"}
 {"id":"login","action":"fill","selector":"input[name=password]","valueEnv":"MODUS_QA_PASSWORD"}
+{"id":"import","action":"upload","selector":"input[type=file]","filePath":"fixture.csv"}
 {"id":"finish","action":"click","selector":"button[type=submit]"}
 {"id":"close","action":"shutdown"}
 ```
@@ -42,7 +43,7 @@ Se Playwright estiver indisponível ou seu preflight falhar por limitação demo
 ../../runtime/pipeline.ps1 qa-browser --action serve --route cdp --project-root <raiz> --run-id <RUN_ID>
 ```
 
-A contingência recebe as mesmas linhas JSON da sessão persistente e fornece `preflight`, `inspect`, `click`, `fill`, `press`, `viewport`, screenshots e `shutdown`. O controlador CDP permite somente teclas de navegação comuns; se um fluxo depender de recurso não coberto por essa interface, tente conclui-lo por Playwright depois de recuperar sua falha ou registre a capability concreta indisponível. Não migre para o Chrome pessoal.
+A contingência recebe as mesmas linhas JSON da sessão persistente, inclusive `upload`, e fornece `preflight`, `inspect`, `click`, `fill`, `press`, `viewport`, screenshots e `shutdown`. O controlador CDP permite somente teclas de navegação comuns; se um fluxo depender de recurso não coberto por essa interface, tente conclui-lo por Playwright depois de recuperar sua falha ou registre a capability concreta indisponível. Não migre para o Chrome pessoal.
 
 ## Encerramento e failover
 
@@ -54,6 +55,6 @@ A contingência recebe as mesmas linhas JSON da sessão persistente e fornece `p
 {"action":"shutdown"}
 ```
 
-- `shutdown`/`stop` encerra somente o processo Chrome criado pela rota (validando PID e diretório de perfil), apaga perfil, cookies e estado da sessão e preserva screenshots para o handoff. Se o processo já não for o processo associado ao perfil esperado, não o encerre.
+- `shutdown`/`stop` encerra somente o processo Chrome criado pela rota (validando PID e diretório de perfil), apaga perfil, cookies, estado da sessão e fixtures temporárias, e preserva screenshots para o handoff. Capturas usam nomes únicos quando `output` não é informado; não sobrescreva evidência de outra ação. Se o processo já não for o processo associado ao perfil esperado, não o encerre.
 - Um erro deve indicar rota, ação e capability que faltou. Só depois de falha concreta de ambas as rotas classifique o QA como `blocked` técnico localizado; isso não é decisão humana nem bloqueia cards independentes.
 - Registre rota, browser, viewport, URL local sem parâmetros secretos, critérios observados, screenshots e limpeza no handoff. Nunca registre cookies, credenciais, parâmetros sensíveis ou dados pessoais.

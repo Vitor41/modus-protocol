@@ -104,6 +104,23 @@ test("QA pode concluir sem limpeza quando nenhuma massa persistente foi criada",
   assert.equal(result.status, "PASS", JSON.stringify(result.diagnostics));
 });
 
+test("QA pode reter trilhas de auditoria imutáveis com evidência e limpar os demais dados", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.cleanup = {
+    status: "completed",
+    created_refs: ["qa-user-1", "qa-audit-9", "qa-transaction-2"],
+    deleted_refs: ["qa-user-1", "qa-transaction-2"],
+    retained_refs: ["qa-audit-9"],
+    evidence_ref: "cleanup-verification.txt"
+  };
+  assert.equal((await validateObject(handoff)).status, "PASS");
+
+  handoff.deliverable.cleanup.retained_refs = ["unrelated-audit"];
+  assert.ok((await validateObject(handoff)).diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+  handoff.deliverable.cleanup.retained_refs = ["qa-user-1"];
+  assert.ok((await validateObject(handoff)).diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+});
+
 test("UX preserva proveniência ao reutilizar mock aprovado de outro RUN_ID", async () => {
   const handoff = await fixture("valid-ux.json");
   handoff.iteration_kind = "return";

@@ -24,6 +24,7 @@ const DEFAULT_CHROME_PATHS = process.platform === "win32"
   : process.platform === "darwin"
     ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"]
     : ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/microsoft-edge"];
+let screenshotSequence = 0;
 
 function parseArguments(argv) {
   const options = {};
@@ -74,7 +75,33 @@ function browserWorkspace(projectRoot, runId, route) {
   const root = resolve(projectRoot);
   const workspaceRoot = resolve(root, ".pipeline", "tmp", "qa-browser", runId);
   const routeRoot = resolveWithin(workspaceRoot, route);
-  return { workspaceRoot, routeRoot, profilePath: join(routeRoot, "profile"), statePath: join(routeRoot, "session.json"), route };
+  return { workspaceRoot, routeRoot, profilePath: join(routeRoot, "profile"), statePath: join(routeRoot, "session.json"), fixturesPath: join(routeRoot, "fixtures"), route };
+}
+
+async function resolveFixtureFile(paths, value) {
+  if (typeof value !== "string" || !value.trim() || isAbsolute(value) || value.includes("\0")) {
+    throw new Error("--file-path deve apontar para um arquivo sintético relativo ao diretório fixtures desta rota.");
+  }
+  const parts = value.split(/[\\/]+/u);
+  if (parts.some((part) => !part || part === "." || part === "..")) throw new Error("O arquivo de upload precisa permanecer dentro de fixtures do RUN_ID.");
+  await mkdir(paths.fixturesPath, { recursive: true });
+  const physicalFixtures = await realpath(paths.fixturesPath);
+  const expectedFixtures = resolve(paths.fixturesPath);
+  if (physicalFixtures !== expectedFixtures) throw new Error("O diretório fixtures não pode ser link simbólico ou sair da rota isolada.");
+  let current = paths.fixturesPath;
+  for (const part of parts) {
+    current = join(current, part);
+    const info = await lstat(current);
+    if (info.isSymbolicLink()) throw new Error("Arquivos de fixture QA não podem usar links simbólicos.");
+  }
+  const info = await lstat(current);
+  if (!info.isFile()) throw new Error("O upload QA precisa apontar para um arquivo regular sintético.");
+  const physicalFile = await realpath(current);
+  const rel = relative(physicalFixtures, physicalFile);
+  if (!rel || rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rel)) {
+    throw new Error("O arquivo de upload saiu do diretório fixtures isolado; operação recusada.");
+  }
+  return physicalFile;
 }
 
 async function readState(paths, route, runId) {
@@ -101,14 +128,15 @@ async function saveState(paths, state) {
 }
 
 async function writeScreenshot(paths, name, bytes) {
-  const safeName = `${basename(name || "evidence.png", extname(name || "evidence.png"))}.png`;
+  const requestedName = name || `evidence-${Date.now()}-${++screenshotSequence}.png`;
+  const safeName = `${basename(requestedName, extname(requestedName))}.png`;
   if (safeName === ".png") throw new Error("Nome de evidência inválido.");
   const output = resolveWithin(paths.routeRoot, safeName);
   try {
     const existing = await lstat(output);
     if (existing.isSymbolicLink()) throw new Error("O arquivo de evidência não pode ser um link simbólico.");
   } catch (error) { if (error.code !== "ENOENT") throw error; }
-  await writeFile(output, bytes, { flag: "w" });
+  await writeFile(output, bytes, { flag: "wx" });
   return output;
 }
 
@@ -191,6 +219,9 @@ async function playwrightAction(options, paths, endpoint, state) {
     else if (options.action === "fill") {
       const value = inputValue(options);
       await page.locator(requireOption(options, "selector")).fill(value);
+    } else if (options.action === "upload") {
+      const filePath = await resolveFixtureFile(paths, requireOption(options, "filePath"));
+      await page.locator(requireOption(options, "selector")).setInputFiles(filePath);
     } else if (options.action === "press") await page.locator(requireOption(options, "selector")).press(requireOption(options, "key"));
     else if (options.action === "viewport") await page.setViewportSize({ width: integer(options.width, "width"), height: integer(options.height, "height") });
     else throw new Error(`Ação Playwright não suportada: ${options.action}`);
@@ -408,6 +439,13 @@ async function cdpAction(options, paths, executable) {
       const value = JSON.stringify(inputValue(options));
       const result = await cdpEvaluate(client, `(() => { const e=document.querySelector(${selector}); if(!e) return 'not_found'; e.focus(); const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value')?.set; if(setter) setter.call(e,${value}); else e.textContent=${value}; e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); return 'filled'; })()`, sessionId);
       if (result !== "filled") throw new Error("Seletor não encontrado no documento.");
+    } else if (options.action === "upload") {
+      const selector = requireOption(options, "selector");
+      const filePath = await resolveFixtureFile(paths, requireOption(options, "filePath"));
+      const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true }, sessionId);
+      const { nodeId } = await client.send("DOM.querySelector", { nodeId: root.nodeId, selector }, sessionId);
+      if (!nodeId) throw new Error("Seletor do campo de arquivo não encontrado no documento.");
+      await client.send("DOM.setFileInputFiles", { files: [filePath], nodeId }, sessionId);
     } else if (options.action === "press") {
       const key = requireOption(options, "key");
       const allowed = new Set(["Enter", "Tab", "Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Backspace", "Delete", "Space"]);
@@ -466,15 +504,16 @@ async function stopBrowser(paths, route, state) {
     if (!browserClosed) throw new Error("O navegador QA ainda está ativo; o runtime preservou o perfil para não apagar arquivos em uso.");
   }
   await rm(paths.profilePath, { recursive: true, force: true });
+  await rm(paths.fixturesPath, { recursive: true, force: true });
   await rm(paths.statePath, { force: true });
-  if (existsSync(paths.profilePath) || existsSync(paths.statePath)) throw new Error("O perfil QA ainda contém arquivos em uso; o runtime não registrou a limpeza como concluída.");
+  if (existsSync(paths.profilePath) || existsSync(paths.fixturesPath) || existsSync(paths.statePath)) throw new Error("O perfil QA ou as fixtures ainda contêm arquivos em uso; o runtime não registrou a limpeza como concluída.");
   return { status: "PASS", action: "stop", route, profile_removed: true, process_tree_stopped: Boolean(state?.pid), evidence_preserved: true };
 }
 
 export async function runQaBrowser(input) {
   const action = requireOption(input, "action");
   const route = requireOption(input, "route");
-  if (!["preflight", "navigate", "inspect", "screenshot", "click", "fill", "press", "viewport", "stop"].includes(action)) throw new Error(`Ação não suportada: ${action}`);
+  if (!["preflight", "navigate", "inspect", "screenshot", "click", "fill", "upload", "press", "viewport", "stop"].includes(action)) throw new Error(`Ação não suportada: ${action}`);
   if (!["playwright", "cdp"].includes(route)) throw new Error("--route deve ser playwright ou cdp.");
   const projectRoot = resolve(requireOption(input, "projectRoot"));
   const runId = requireOption(input, "runId");
@@ -556,7 +595,7 @@ const invokedDirectly = process.argv[1] && basename(process.argv[1]) === "qa-bro
 if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
-    if (options.help) process.stdout.write("Uso: pipeline.ps1 qa-browser --action <preflight|navigate|inspect|screenshot|click|fill|press|viewport|stop|serve> --route <playwright|cdp> --project-root <raiz> --run-id <RUN_ID> [opções]\nQuando action=serve, envie um objeto JSON por linha pela entrada padrão; use {\"action\":\"shutdown\"} para encerrar.\n");
+    if (options.help) process.stdout.write("Uso: pipeline.ps1 qa-browser --action <preflight|navigate|inspect|screenshot|click|fill|upload|press|viewport|stop|serve> --route <playwright|cdp> --project-root <raiz> --run-id <RUN_ID> [opções]\nUpload aceita apenas arquivo sintético relativo a .pipeline/tmp/qa-browser/<RUN_ID>/<rota>/fixtures/.\nQuando action=serve, envie um objeto JSON por linha pela entrada padrão; use {\"action\":\"shutdown\"} para encerrar.\n");
     else if (options.action === "serve") await serveQaBrowserSession(options);
     else {
       const result = await runQaBrowser(options);

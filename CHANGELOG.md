@@ -6,6 +6,18 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.30] - 2026-10-14
+
+### Adicionado
+
+- QA pode enviar fixtures sintéticas para campos de arquivo por Playwright ou CDP, em sessões persistentes e com confinamento ao diretório isolado do RUN.
+- Handoff QA diferencia dados removidos de trilhas de auditoria imutáveis retidas, sem exigir bypass de constraints do sistema.
+
+### Corrigido
+
+- Screenshots gerados sem nome explícito recebem nomes únicos e não sobrescrevem evidências de ações anteriores.
+- Shutdown remove fixtures temporárias junto ao perfil e estado do navegador, preservando as capturas para o handoff.
+
 ## [0.3.29] - 2026-10-14
 
 ### Corrigido

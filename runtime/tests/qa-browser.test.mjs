@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -20,7 +20,7 @@ async function fixtureServer() {
   const server = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     response.end(`<!doctype html><html><head><title>QA browser fixture</title></head><body>
-      <main><label for="qa-name">Nome QA</label><input id="qa-name" name="name">
+      <main><label for="qa-name">Nome QA</label><input id="qa-name" name="name"><input id="qa-file" type="file" onchange="document.querySelector('#file-result').textContent=this.files[0]?.name||''"><output id="file-result"></output>
       <button id="continue" onclick="document.querySelector('h1').textContent='Fluxo concluído: '+document.querySelector('#qa-name').value">Continuar</button>
       <h1>Início do fluxo</h1></main></body></html>`);
   });
@@ -44,6 +44,10 @@ for (const route of ["playwright", "cdp"]) {
     const { server, url } = await fixtureServer();
     const passwordEnv = `MODUS_QA_TEST_VALUE_${route.toUpperCase()}`;
     process.env[passwordEnv] = "Identidade QA Sintética";
+    const fixturePath = join(projectRoot, ".pipeline", "tmp", "qa-browser", RUN_ID, route, "fixtures", "synthetic.csv");
+    await mkdir(join(projectRoot, ".pipeline", "tmp", "qa-browser", RUN_ID, route, "fixtures"), { recursive: true });
+    await writeFile(fixturePath, "data\nfixture-sintetica\n", "utf8");
+    let browserStopped = false;
     t.after(async () => {
       delete process.env[passwordEnv];
       await new Promise((resolveClose) => server.close(resolveClose));
@@ -62,6 +66,9 @@ for (const route of ["playwright", "cdp"]) {
 
       const fill = await runQaBrowser({ action: "fill", route, projectRoot, runId: RUN_ID, selector: "#qa-name", valueEnv: passwordEnv });
       assert.equal(fill.status, "PASS");
+      const upload = await runQaBrowser({ action: "upload", route, projectRoot, runId: RUN_ID, selector: "#qa-file", filePath: "synthetic.csv" });
+      assert.equal(upload.status, "PASS");
+      assert.match(upload.body_text, /synthetic\.csv/u);
       const clicked = await runQaBrowser({ action: "click", route, projectRoot, runId: RUN_ID, selector: "#continue" });
       assert.equal(clicked.status, "PASS");
       const after = await runQaBrowser({ action: "inspect", route, projectRoot, runId: RUN_ID });
@@ -71,11 +78,14 @@ for (const route of ["playwright", "cdp"]) {
       assert.equal(mobile.status, "PASS");
       assert.ok(await readFile(mobile.screenshot));
       const stopped = await runQaBrowser({ action: "stop", route, projectRoot, runId: RUN_ID });
+      browserStopped = true;
       assert.equal(stopped.profile_removed, true);
       assert.equal(stopped.evidence_preserved, true);
       assert.ok(await readFile(mobile.screenshot));
+      assert.equal(await readFile(fixturePath).then(() => false, () => true), true, "fixtures temporárias são removidas no shutdown");
+      assert.notEqual(preflight.screenshot, fill.screenshot, "cada ação preserva evidência em arquivo distinto");
     } finally {
-      await runQaBrowser({ action: "stop", route, projectRoot, runId: RUN_ID });
+      if (!browserStopped) await runQaBrowser({ action: "stop", route, projectRoot, runId: RUN_ID });
     }
   });
 
@@ -92,6 +102,9 @@ for (const route of ["playwright", "cdp"]) {
     child.stderr.setEncoding("utf8").on("data", (chunk) => stderr.push(chunk));
     let sequence = 0;
     let sessionClosed = false;
+    const fixturesPath = join(projectRoot, ".pipeline", "tmp", "qa-browser", RUN_ID, route, "fixtures");
+    await mkdir(fixturesPath, { recursive: true });
+    await writeFile(join(fixturesPath, "session.csv"), "data\nsessao\n", "utf8");
     const send = async (request) => {
       const id = `session-${++sequence}`;
       child.stdin.write(`${JSON.stringify({ ...request, id })}\n`);
@@ -117,6 +130,9 @@ for (const route of ["playwright", "cdp"]) {
     assert.ok((await readFile(preflight.screenshot)).subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])));
     assert.equal((await send({ action: "inspect" })).status, "PASS");
     assert.equal((await send({ action: "fill", selector: "#qa-name", value: "Sessão persistente" })).status, "PASS");
+    const upload = await send({ action: "upload", selector: "#qa-file", filePath: "session.csv" });
+    assert.equal(upload.status, "PASS");
+    assert.match(upload.body_text, /session\.csv/u);
     assert.equal((await send({ action: "click", selector: "#continue" })).status, "PASS");
     const after = await send({ action: "inspect" });
     assert.match(after.body_text, /Fluxo concluído: Sessão persistente/u);
@@ -127,5 +143,6 @@ for (const route of ["playwright", "cdp"]) {
     child.stdin.end();
     const exitCode = child.exitCode ?? await new Promise((resolveExit) => child.once("exit", resolveExit));
     assert.equal(exitCode, 0, stderr.join(""));
+    assert.equal(await readFile(join(fixturesPath, "session.csv")).then(() => true, () => false), false, "fixtures temporárias são removidas ao encerrar a sessão");
   });
 }

@@ -500,16 +500,17 @@
             "status": { "enum": ["not_required", "completed"] },
             "created_refs": { "$ref": "#/$defs/stringArray" },
             "deleted_refs": { "$ref": "#/$defs/stringArray" },
+            "retained_refs": { "$ref": "#/$defs/stringArray" },
             "evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
           },
           "allOf": [
             {
               "if": { "properties": { "status": { "const": "not_required" } }, "required": ["status"] },
-              "then": { "properties": { "created_refs": { "maxItems": 0 }, "deleted_refs": { "maxItems": 0 } } }
+              "then": { "properties": { "created_refs": { "maxItems": 0 }, "deleted_refs": { "maxItems": 0 }, "retained_refs": { "maxItems": 0 } } }
             },
             {
               "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
-              "then": { "required": ["evidence_ref"], "properties": { "created_refs": { "minItems": 1 }, "deleted_refs": { "minItems": 1 } } }
+              "then": { "required": ["evidence_ref"], "properties": { "created_refs": { "minItems": 1 } } }
             }
           ]
         }
