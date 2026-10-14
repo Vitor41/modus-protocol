@@ -64,6 +64,8 @@ test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async (
   assert.match(skill, /sempre abrir exatamente um subagente ORCHESTRATOR/u);
   assert.match(skill, /Nunca execute a fila no chat chamador/u);
   assert.match(skill, /solicite acesso externo elevado/u);
+  assert.match(skill, /Nunca publique um bloqueio como se fosse saída do papel/u);
+  assert.match(skill, /o plano deve classificar esse card como `TERMINAL_ROLE_BLOCK`/u);
 });
 
 test("QA documenta execução local segura e evidência real de frontend/backend", async () => {
@@ -154,7 +156,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.25");
+  assert.equal(status.active.runtime_version, "0.3.26");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

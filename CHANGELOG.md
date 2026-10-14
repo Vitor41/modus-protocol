@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.26] - 2026-10-14
+
+### Corrigido
+
+- Bloqueio técnico de QA exige handoff terminal do próprio especialista, validação `role-gate`, recibo confirmado e replanejamento com `TERMINAL_ROLE_BLOCK`; um recibo genérico do ORCHESTRATOR não pode fingir conclusão do papel nem deixar o mesmo QA elegível sem reconciliação.
+
 ## [0.3.25] - 2026-10-14
 
 ### Melhorado
