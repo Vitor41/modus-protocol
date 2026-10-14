@@ -80,7 +80,7 @@ test("QA documenta execução local segura e evidência real de frontend/backend
     assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
   }
   assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
-  for (const requiredInstruction of ["Principal: Playwright em perfil persistente isolado", "Contingência: Chrome QA isolado via CDP", "O preflight é sequencial", "Nunca controle as duas rotas em paralelo", "sessão pessoal"]) {
+  for (const requiredInstruction of ["Principal: Playwright em perfil persistente isolado", "Contingência: Chrome QA isolado via CDP", "O preflight é sequencial", "Nunca controle as duas rotas em paralelo", "sessão pessoal", "session_id", "TTY"] ) {
     assert.ok(browserRouting.includes(requiredInstruction), requiredInstruction);
   }
   const packagedReference = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
@@ -156,7 +156,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.30");
+  assert.equal(status.active.runtime_version, "0.3.31");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

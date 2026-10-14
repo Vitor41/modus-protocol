@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.31] - 2026-10-14
+
+### Corrigido
+
+- Skill QA agora exige TTY persistente com `session_id` e handshake antes de avaliar navegador, e orienta elevação local restrita quando o projeto exigir escrita temporária/loopback.
+
 ## [0.3.30] - 2026-10-14
 
 ### Adicionado
