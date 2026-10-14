@@ -69,6 +69,7 @@ test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async (
 test("QA documenta execução local segura e evidência real de frontend/backend", async () => {
   const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "SKILL.md"), "utf8");
   const localValidation = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
+  const browserRouting = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "references", "browser-routing.md"), "utf8");
   const adapterContract = await readFile(join(REPOSITORY_DIR, "docs", "PROJECT_ADAPTER.md"), "utf8");
   for (const requiredInstruction of ["references/local-application-validation.md", "backend e frontend"]) {
     assert.ok(skill.includes(requiredInstruction), requiredInstruction);
@@ -77,8 +78,13 @@ test("QA documenta execução local segura e evidência real de frontend/backend
     assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
   }
   assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
+  for (const requiredInstruction of ["Rota principal: navegador automatizado isolado", "Contingência: perfil QA dedicado no Chrome", "preflight sequencial", "Nunca execute ambas em paralelo", "perfil pessoal"]) {
+    assert.ok(browserRouting.includes(requiredInstruction), requiredInstruction);
+  }
   const packagedReference = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
   assert.equal(packagedReference, localValidation);
+  const packagedBrowserRouting = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "browser-routing.md"), "utf8");
+  assert.equal(packagedBrowserRouting, browserRouting);
 });
 
 test("DEV não conta verificações internas como retorno de loop entre papéis", async () => {
@@ -148,7 +154,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.24");
+  assert.equal(status.active.runtime_version, "0.3.25");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

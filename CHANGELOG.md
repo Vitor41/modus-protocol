@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.25] - 2026-10-14
+
+### Melhorado
+
+- QA de interface local agora tem duas rotas documentadas e ordenadas: automação em navegador/contexto isolado como principal e perfil QA dedicado do Chrome como contingência, com preflight, failover sequencial, reconciliação de efeitos parciais e limpeza própria.
+- Adapter explicita as capacidades e o isolamento necessários às rotas, sem exigir alterações em projetos consumidores ou reutilizar sessão pessoal.
+
 ## [0.3.24] - 2026-10-14
 
 ### Melhorado
