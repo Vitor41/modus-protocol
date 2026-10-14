@@ -6,6 +6,17 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.23] - 2026-10-13
+
+### Melhorado
+
+- QA tem autorização explícita para criar contas e massa sintética no banco local de testes declarado pelo adapter, sem aprovações repetidas por fixture; handoff agora exige recibo de limpeza completo antes de comentário ou transição.
+- Diagnóstico de inicialização Windows exige preservar a etapa, API, exceção e código Win32 da preparação do Job Object, evitando bloqueios genéricos sem causa acionável.
+
+### Melhorado
+
+- QA pode criar contas e massa sintética no banco de testes local autorizado sem aprovações repetidas; o handoff agora exige recibo de limpeza confirmado antes de comentário ou transição do card.
+
 ## [0.3.22] - 2026-10-13
 
 ### Corrigido

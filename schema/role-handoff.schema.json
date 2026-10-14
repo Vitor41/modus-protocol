@@ -484,14 +484,35 @@
     "qaDeliverable": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixed_commit_ref", "environment", "verdict", "criteria_matrix", "regression_summary"],
+      "required": ["fixed_commit_ref", "environment", "verdict", "criteria_matrix", "regression_summary", "cleanup"],
       "properties": {
         "fixed_commit_ref": { "$ref": "#/$defs/nonEmptyString" },
         "environment": { "$ref": "#/$defs/nonEmptyString" },
         "verdict": { "enum": ["approved", "rejected", "blocked"] },
         "criteria_matrix": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/matrixRow" } },
         "regression_summary": { "$ref": "#/$defs/nonEmptyString" },
-        "test_data_refs": { "$ref": "#/$defs/stringArray" }
+        "test_data_refs": { "$ref": "#/$defs/stringArray" },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "created_refs", "deleted_refs"],
+          "properties": {
+            "status": { "enum": ["not_required", "completed"] },
+            "created_refs": { "$ref": "#/$defs/stringArray" },
+            "deleted_refs": { "$ref": "#/$defs/stringArray" },
+            "evidence_ref": { "$ref": "#/$defs/nonEmptyString" }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "status": { "const": "not_required" } }, "required": ["status"] },
+              "then": { "properties": { "created_refs": { "maxItems": 0 }, "deleted_refs": { "maxItems": 0 } } }
+            },
+            {
+              "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+              "then": { "required": ["evidence_ref"], "properties": { "created_refs": { "minItems": 1 }, "deleted_refs": { "minItems": 1 } } }
+            }
+          ]
+        }
       }
     }
   }

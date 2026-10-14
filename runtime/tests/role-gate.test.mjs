@@ -82,6 +82,28 @@ test("UX frontend exige mock anexado e relido no RUN_ID atual", async () => {
   assert.ok(wrongRun.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
 });
 
+test("QA não pode concluir sem recibo explícito de limpeza da massa", async () => {
+  const handoff = await fixture("valid-qa.json");
+  delete handoff.deliverable.cleanup;
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+});
+
+test("QA não pode aprovar enquanto houver massa criada sem remoção confirmada", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.cleanup.deleted_refs = ["another-record"];
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+});
+
+test("QA pode concluir sem limpeza quando nenhuma massa persistente foi criada", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.test_data_refs = [];
+  handoff.deliverable.cleanup = { status: "not_required", created_refs: [], deleted_refs: [] };
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "PASS", JSON.stringify(result.diagnostics));
+});
+
 test("UX preserva proveniência ao reutilizar mock aprovado de outro RUN_ID", async () => {
   const handoff = await fixture("valid-ux.json");
   handoff.iteration_kind = "return";

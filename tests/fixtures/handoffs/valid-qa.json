@@ -29,6 +29,12 @@
       { "criterion_id": "AC-1", "scenario": "Viewport móvel", "evidence_ref": "qa-ui-1", "result": "passed" }
     ],
     "regression_summary": "Suíte completa e smoke da área passaram.",
-    "test_data_refs": ["QA_FX-105_20260828"]
+    "test_data_refs": ["QA_FX-105_20260828"],
+    "cleanup": {
+      "status": "completed",
+      "created_refs": ["QA_FX-105_20260828"],
+      "deleted_refs": ["QA_FX-105_20260828"],
+      "evidence_ref": "cleanup-check-1"
+    }
   }
 }

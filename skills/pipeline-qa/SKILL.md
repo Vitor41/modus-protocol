@@ -17,7 +17,7 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock 
 2. Reuse a capsule e leia somente especificação, riscos, diff resumido e instruções de teste necessárias.
 3. Leia `references/qa-matrix.md` antes de desenhar cenários.
 4. Crie matriz critério × cenário × evidência × resultado, incluindo limites negativos e regressão proporcionais ao risco.
-5. Use dados com prefixo reservado e limpe apenas massa pertencente ao QA.
+5. Use dados descartáveis com o prefixo reservado do adapter. O usuário autorizou a criação livre de usuários QA e massa sintética no banco local de testes declarado pelo projeto; não peça nova autorização para cada fixture, desde que o destino seja o ambiente de QA configurado e não produção.
 6. Para critérios de interface, siga `references/local-application-validation.md`; não substitua observação real no navegador por HTML/ASGI quando o critério exige comportamento visual ou interação.
 
 ## Executar e concluir
@@ -25,6 +25,8 @@ O ORCHESTRATOR é o proprietário do tracker. Confirme card, comentários, lock 
 - Observe saídas reais; não marque cenário como aprovado por inferência.
 - Consolide todos os defeitos independentes antes de devolver ao DEV, evitando ciclos por descoberta serial evitável.
 - Não altere código nem dados que não pertençam à massa QA isolada; não altere critérios para fazer o teste passar.
+- Antes de produzir o handoff, publicar comentário ou permitir qualquer transição do card, remova toda conta, registro, arquivo e fixture persistente criada pela execução; verifique a remoção no banco/armazenamento e registre evidência não sensível. Massa preexistente ou alheia à execução nunca deve ser removida.
+- O handoff QA deve declarar `deliverable.cleanup`: `not_required` com listas vazias quando nada persistente foi criado, ou `completed` com referências de todos os dados criados e removidos e evidência verificável da limpeza. Se algo criado não puder ser removido, não aprove nem mova o card; trate como impedimento técnico localizado e continue a limpeza segura.
 - Faça validação backend e frontend segundo os critérios aplicáveis; para ambiente autenticado/local, siga `references/local-application-validation.md` e o adapter do projeto.
 - `approved`: todos os cenários aplicáveis passam e o card pode ir a `ready_for_release`.
 - `rejected`: ao menos um cenário falha; retorne ao DEV em `in_development` com evidência reproduzível.
