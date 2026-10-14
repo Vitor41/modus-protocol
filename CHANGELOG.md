@@ -6,6 +6,20 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.29] - 2026-10-14
+
+### Corrigido
+
+- QA mantém navegador e sessão autenticada vivos em um controlador de processo persistente, com protocolo JSON-lines, evitando que ações em comandos separados percam o Chrome iniciado pelo preflight.
+- Validação de navegador agora cobre o launcher CLI real e a continuidade entre ações para Playwright e CDP.
+
+## [0.3.28] - 2026-10-14
+
+### Corrigido
+
+- QA distingue falhas de sandbox/local-executor de falhas do navegador e exige execução local autorizada antes de acionar a rota CDP de contingência.
+- O cliente CDP usa timeout explícito e mantém timers de comando ativos, evitando encerramento sem diagnóstico (`unsettled top-level await`) durante falhas de loopback.
+
 ## [0.3.27] - 2026-10-14
 
 ### Adicionado

@@ -156,7 +156,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.27");
+  assert.equal(status.active.runtime_version, "0.3.29");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {
@@ -229,7 +229,8 @@ test("artefato empacota o runtime executável de navegador do QA", async () => {
   assert.match(browser, /RUN_ID_PATTERN/u);
   const result = spawnSync(NODE, [join(built.targetRoot, "runtime", "src", "qa-browser.mjs"), "--help"], { cwd: REPOSITORY_DIR, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /preflight\|navigate\|inspect/u);
+  assert.match(result.stdout, /preflight\|navigate\|inspect.*serve/u);
+  assert.match(browser, /serveQaBrowserSession/u);
   const runtimePackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "package.json"), "utf8"));
   const playwrightPackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "package.json"), "utf8"));
   const playwrightLicense = await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "LICENSE"), "utf8");

@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright-core";
@@ -122,7 +123,13 @@ function publicPageInfo(url, title, readyState, bodyText) {
 }
 
 async function playwrightAction(options, paths, endpoint, state) {
-  const browser = await chromium.connectOverCDP(endpoint, { timeout: 10000 });
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(endpoint, { timeout: 10000 });
+  } catch (error) {
+    const detail = String(error?.message ?? error).replace(/wss?:\/\/[^\s)]+/gu, "<endpoint CDP local>");
+    throw new Error(`Playwright não conectou ao Chrome QA via CDP: ${detail}. Confirme que este comando está usando execução local autorizada para loopback.`);
+  }
   try {
     const context = browser.contexts()[0];
     if (!context) throw new Error("O Chrome QA não expôs o contexto isolado esperado.");
@@ -215,20 +222,67 @@ function inputValue(options) {
   throw new Error("Informe --value-env <VARIAVEL>; o runtime não lê nem imprime credenciais automaticamente.");
 }
 
+function localCdpEndpoint(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Chrome QA retornou um endpoint CDP inválido.");
+  }
+  if (url.protocol !== "ws:" || !LOCAL_HOSTS.has(url.hostname.toLowerCase())) {
+    throw new Error("Chrome QA retornou um endpoint CDP fora do loopback local; conexão recusada.");
+  }
+  // Chrome may publish localhost even when its debugging socket is bound to IPv4.
+  // Pin the client connection to the same loopback family used by our HTTP probe.
+  url.hostname = "127.0.0.1";
+  return url.href;
+}
+
 function cdpClient(webSocketUrl) {
-  const socket = new WebSocket(webSocketUrl);
+  const socket = new WebSocket(localCdpEndpoint(webSocketUrl));
   const pending = new Map();
   let nextId = 0;
   const events = [];
+  let openedState = false;
+  let openTimer;
+  const rejectPending = (message) => {
+    for (const [id, request] of pending) {
+      clearTimeout(request.timer);
+      pending.delete(id);
+      request.reject(new Error(message));
+    }
+  };
   const opened = new Promise((resolveOpen, rejectOpen) => {
-    socket.addEventListener("open", resolveOpen, { once: true });
-    socket.addEventListener("error", () => rejectOpen(new Error("Não foi possível conectar ao Chrome QA local via CDP.")), { once: true });
+    const fail = (message) => {
+      if (openedState) return;
+      openedState = true;
+      clearTimeout(openTimer);
+      rejectOpen(new Error(message));
+    };
+    openTimer = setTimeout(() => {
+      fail("Timeout de 5s ao abrir o WebSocket CDP local; verifique se o executor autorizou loopback para este comando.");
+      socket.close();
+    }, 5000);
+    socket.addEventListener("open", () => {
+      openedState = true;
+      clearTimeout(openTimer);
+      resolveOpen();
+    }, { once: true });
+    socket.addEventListener("error", () => {
+      fail("Falha ao abrir o WebSocket CDP local; verifique a permissão de loopback do executor.");
+      rejectPending("O transporte CDP local falhou durante uma operação.");
+    });
+    socket.addEventListener("close", () => {
+      fail("O Chrome QA fechou o WebSocket CDP antes de aceitar comandos.");
+      rejectPending("O Chrome QA fechou a conexão CDP durante uma operação.");
+    });
   });
   socket.addEventListener("message", (event) => {
     let message;
     try { message = JSON.parse(String(event.data)); } catch { return; }
     if (message.id && pending.has(message.id)) {
-      const { resolve: resolveCall, reject: rejectCall } = pending.get(message.id);
+      const { resolve: resolveCall, reject: rejectCall, timer } = pending.get(message.id);
+      clearTimeout(timer);
       pending.delete(message.id);
       if (message.error) rejectCall(new Error(`CDP ${message.error.code}: ${message.error.message}`));
       else resolveCall(message.result ?? {});
@@ -241,12 +295,18 @@ function cdpClient(webSocketUrl) {
       await opened;
       const id = ++nextId;
       const result = new Promise((resolveCall, rejectCall) => {
-        pending.set(id, { resolve: resolveCall, reject: rejectCall });
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           if (pending.delete(id)) rejectCall(new Error(`Timeout no comando CDP ${method}.`));
-        }, 10000).unref?.();
+        }, 10000);
+        pending.set(id, { resolve: resolveCall, reject: rejectCall, timer });
+        try {
+          socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+        } catch (error) {
+          clearTimeout(timer);
+          pending.delete(id);
+          rejectCall(new Error(`Falha ao enviar comando CDP ${method}: ${error.message}`));
+        }
       });
-      socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
       return result;
     },
     close() { socket.close(); }
@@ -294,7 +354,7 @@ async function getCdpState(options, paths, executable) {
   try {
     const response = await fetch(`http://127.0.0.1:${state.port}/json/version`, { signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error("Chrome QA local não respondeu ao endpoint CDP.");
-    return { state, endpoint: (await response.json()).webSocketDebuggerUrl };
+    return { state, endpoint: localCdpEndpoint((await response.json()).webSocketDebuggerUrl) };
   } catch (error) {
     throw new Error(`Chrome QA isolado está indisponível; reconcilie e encerre o processo próprio antes de novo preflight: ${error.message}`);
   }
@@ -325,7 +385,7 @@ async function cdpAction(options, paths, executable) {
   const { state } = await getCdpState(options, paths, executable);
   const response = await fetch(`http://127.0.0.1:${state.port}/json/version`, { signal: AbortSignal.timeout(3000) });
   if (!response.ok) throw new Error("Chrome QA local não respondeu ao endpoint CDP.");
-  const client = cdpClient((await response.json()).webSocketDebuggerUrl);
+  const client = cdpClient(localCdpEndpoint((await response.json()).webSocketDebuggerUrl));
   try {
     await client.ready();
     const { sessionId } = await cdpTarget(client);
@@ -444,11 +504,60 @@ export async function runQaBrowser(input) {
   return cdpAction(input, paths, executable);
 }
 
+export async function serveQaBrowserSession(sessionOptions, input = process.stdin, output = process.stdout) {
+  const route = requireOption(sessionOptions, "route");
+  if (!["playwright", "cdp"].includes(route)) throw new Error("--route deve ser playwright ou cdp.");
+  const projectRoot = resolve(requireOption(sessionOptions, "projectRoot"));
+  const runId = requireOption(sessionOptions, "runId");
+  if (!RUN_ID_PATTERN.test(runId)) throw new Error("--run-id inválido.");
+
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  let stopped = false;
+  let stopPromise;
+  const stop = async () => {
+    if (stopPromise) return stopPromise;
+    stopped = true;
+    stopPromise = runQaBrowser({ action: "stop", route, projectRoot, runId }).catch((error) => ({
+      status: "FAIL",
+      action: "stop",
+      route,
+      diagnostic: { message: error.message }
+    }));
+    return stopPromise;
+  };
+  const write = (payload) => output.write(`${JSON.stringify(payload)}\n`);
+
+  for await (const line of lines) {
+    if (!line.trim()) continue;
+    let request;
+    try {
+      request = JSON.parse(line);
+      if (!request || typeof request !== "object" || Array.isArray(request)) throw new Error("Cada linha precisa ser um objeto JSON.");
+      if (request.route !== undefined && request.route !== route) throw new Error("A rota não pode mudar durante uma sessão do navegador.");
+      if (request.projectRoot !== undefined && resolve(request.projectRoot) !== projectRoot) throw new Error("A raiz do projeto não pode mudar durante uma sessão do navegador.");
+      if (request.runId !== undefined && request.runId !== runId) throw new Error("O RUN_ID não pode mudar durante uma sessão do navegador.");
+      if (request.action === "shutdown") {
+        const result = await stop();
+        write({ id: request.id ?? null, status: result.status, action: "shutdown", route, cleanup: result });
+        break;
+      }
+      if (stopped) throw new Error("A sessão do navegador já foi encerrada.");
+      const result = await runQaBrowser({ ...sessionOptions, ...request, route, projectRoot, runId });
+      if (request.action === "stop") stopped = true;
+      write({ id: request.id ?? null, ...result });
+    } catch (error) {
+      write({ id: request?.id ?? null, status: "FAIL", action: request?.action ?? null, route, diagnostic: { message: error.message } });
+    }
+  }
+  if (!stopped) await stop();
+}
+
 const invokedDirectly = process.argv[1] && basename(process.argv[1]) === "qa-browser.mjs" && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2));
-    if (options.help) process.stdout.write("Uso: pipeline.ps1 qa-browser --action <preflight|navigate|inspect|screenshot|click|fill|press|viewport|stop> --route <playwright|cdp> --project-root <raiz> --run-id <RUN_ID> [opções]\n");
+    if (options.help) process.stdout.write("Uso: pipeline.ps1 qa-browser --action <preflight|navigate|inspect|screenshot|click|fill|press|viewport|stop|serve> --route <playwright|cdp> --project-root <raiz> --run-id <RUN_ID> [opções]\nQuando action=serve, envie um objeto JSON por linha pela entrada padrão; use {\"action\":\"shutdown\"} para encerrar.\n");
+    else if (options.action === "serve") await serveQaBrowserSession(options);
     else {
       const result = await runQaBrowser(options);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

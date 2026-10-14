@@ -3,7 +3,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
-import { pathToFileURL } from "node:url";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
 const browserEntry = process.env.MODUS_QA_BROWSER_ENTRY
@@ -75,5 +77,55 @@ for (const route of ["playwright", "cdp"]) {
     } finally {
       await runQaBrowser({ action: "stop", route, projectRoot, runId: RUN_ID });
     }
+  });
+
+  test(`qa-browser sessão persistente ${route}: navegador continua disponível entre comandos do processo CLI`, { skip: !runBrowserTests }, async (t) => {
+    const projectRoot = await mkdtemp(join(tmpdir(), `modus-qa-browser-session-${route}-`));
+    const { server, url } = await fixtureServer();
+    const child = spawn(process.execPath, [fileURLToPath(browserEntry), "--action", "serve", "--route", route, "--project-root", projectRoot, "--run-id", RUN_ID], {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true
+    });
+    const responses = createInterface({ input: child.stdout, crlfDelay: Infinity });
+    const responseIterator = responses[Symbol.asyncIterator]();
+    const stderr = [];
+    child.stderr.setEncoding("utf8").on("data", (chunk) => stderr.push(chunk));
+    let sequence = 0;
+    let sessionClosed = false;
+    const send = async (request) => {
+      const id = `session-${++sequence}`;
+      child.stdin.write(`${JSON.stringify({ ...request, id })}\n`);
+      const next = await responseIterator.next();
+      assert.equal(next.done, false, `Sessão CLI encerrou antes da resposta: ${stderr.join("")}`);
+      const response = JSON.parse(next.value);
+      assert.equal(response.id, id);
+      return response;
+    };
+    t.after(async () => {
+      if (!sessionClosed && child.exitCode === null && !child.killed) {
+        try { await send({ action: "shutdown" }); } catch {}
+        child.stdin.end();
+        if (child.exitCode === null) await new Promise((resolveExit) => child.once("exit", resolveExit));
+      }
+      responses.close();
+      await new Promise((resolveClose) => server.close(resolveClose));
+      await rm(projectRoot, { recursive: true, force: true });
+    });
+
+    const preflight = await send({ action: "preflight", url, output: "session-preflight.png" });
+    assert.equal(preflight.status, "PASS");
+    assert.ok((await readFile(preflight.screenshot)).subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])));
+    assert.equal((await send({ action: "inspect" })).status, "PASS");
+    assert.equal((await send({ action: "fill", selector: "#qa-name", value: "Sessão persistente" })).status, "PASS");
+    assert.equal((await send({ action: "click", selector: "#continue" })).status, "PASS");
+    const after = await send({ action: "inspect" });
+    assert.match(after.body_text, /Fluxo concluído: Sessão persistente/u);
+    const shutdown = await send({ action: "shutdown" });
+    assert.equal(shutdown.action, "shutdown");
+    assert.equal(shutdown.cleanup.profile_removed, true);
+    sessionClosed = true;
+    child.stdin.end();
+    const exitCode = child.exitCode ?? await new Promise((resolveExit) => child.once("exit", resolveExit));
+    assert.equal(exitCode, 0, stderr.join(""));
   });
 }
