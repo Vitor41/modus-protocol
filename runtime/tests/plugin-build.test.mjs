@@ -80,7 +80,7 @@ test("QA documenta execução local segura e evidência real de frontend/backend
     assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
   }
   assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
-  for (const requiredInstruction of ["Rota principal: navegador automatizado isolado", "Contingência: perfil QA dedicado no Chrome", "preflight sequencial", "Nunca execute ambas em paralelo", "perfil pessoal"]) {
+  for (const requiredInstruction of ["Principal: Playwright em perfil persistente isolado", "Contingência: Chrome QA isolado via CDP", "O preflight é sequencial", "Nunca controle as duas rotas em paralelo", "sessão pessoal"]) {
     assert.ok(browserRouting.includes(requiredInstruction), requiredInstruction);
   }
   const packagedReference = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
@@ -156,7 +156,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.26");
+  assert.equal(status.active.runtime_version, "0.3.27");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {
@@ -220,6 +220,22 @@ test("artefato inclui executor oficial de comandos do adapter", async () => {
   const runner = await readFile(join(built.targetRoot, "runtime", "src", "command-runner.mjs"), "utf8");
   assert.match(runner, /pipeline-command/);
   assert.match(runner, /project-runtime/);
+});
+
+test("artefato empacota o runtime executável de navegador do QA", async () => {
+  const browser = await readFile(join(built.targetRoot, "runtime", "src", "qa-browser.mjs"), "utf8");
+  assert.match(browser, /playwright-core/u);
+  assert.match(browser, /Target\.attachToTarget/u);
+  assert.match(browser, /RUN_ID_PATTERN/u);
+  const result = spawnSync(NODE, [join(built.targetRoot, "runtime", "src", "qa-browser.mjs"), "--help"], { cwd: REPOSITORY_DIR, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /preflight\|navigate\|inspect/u);
+  const runtimePackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "package.json"), "utf8"));
+  const playwrightPackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "package.json"), "utf8"));
+  const playwrightLicense = await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "LICENSE"), "utf8");
+  assert.equal(runtimePackage.dependencies["playwright-core"], "1.63.0");
+  assert.equal(playwrightPackage.version, "1.63.0");
+  assert.match(playwrightLicense, /Apache License/u);
 });
 
 test("manifest, runtime e build-info compartilham a mesma versão", async () => {

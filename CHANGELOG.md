@@ -6,6 +6,16 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.27] - 2026-10-14
+
+### Adicionado
+
+- QA recebe um runtime de navegador local executável: Playwright Core isolado como rota principal e Chrome QA em perfil próprio via CDP como contingência, com preflight, inspeção, ações, viewport, screenshots e limpeza confinada ao `RUN_ID`.
+
+### Corrigido
+
+- A contingência de navegador não depende mais de extensão/provider de Chrome que não estava disponível aos subagentes; URLs externas, credenciais em URL e caminhos fora do projeto são recusados.
+
 ## [0.3.26] - 2026-10-14
 
 ### Corrigido

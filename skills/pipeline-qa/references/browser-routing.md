@@ -1,25 +1,45 @@
-# Rotas de navegador para QA local
+# Rotas executáveis de navegador para QA local
 
-Use duas rotas ordenadas para comprovar interface integrada. O adapter do projeto pode restringir as opções, mas não pode transformar uma rota não disponível em evidência presumida.
+O runtime do Modus fornece as duas rotas; não dependa de extensão/provider de browser exposto ao subagente. Ambas usam navegador real, perfil exclusivo do `RUN_ID`, dados de autenticação próprios do QA e só aceitam navegação `http(s)` para `localhost`, `127.0.0.1` ou `::1`.
 
-## Rota principal: navegador automatizado isolado
+## Principal: Playwright em perfil persistente isolado
 
-1. Verifique se o adapter declara o comando/dependência já disponível para Playwright ou automação equivalente e se o navegador pode abrir a origem local do servidor rastreado. Não instale pacotes, baixe browsers nem altere o projeto consumidor para habilitar a rota.
-2. Inicie um contexto/perfil efêmero exclusivo do `RUN_ID` (ou um `user-data-dir` temporário dedicado), sem cookies, extensões ou armazenamento do usuário. Restrinja a navegação à origem local declarada e autentique somente com a identidade QA da execução.
-3. Faça o preflight antes de testar: confirme processo e revisão do servidor, URL/porta, renderização de uma página autenticada e captura de screenshot. Se o preflight passar, use esta rota para os critérios visuais e de interação.
-4. Ao terminar ou falhar, feche somente o contexto/browser e processos filhos iniciados por esta execução; remova perfil temporário e dados de teste próprios após confirmar limpeza. Guarde evidências não sensíveis referenciadas por critério.
+O runtime usa a dependência pinada `playwright-core` e o Chrome/Edge instalado no host. Ele mantém um processo de navegador próprio, iniciado com perfil em `.pipeline/tmp/qa-browser/<RUN_ID>/playwright/profile`, e reconecta o Playwright entre operações; a página, cookies e armazenamento de sessão permanecem vivos até `stop` e nunca são compartilhados com o usuário.
 
-## Contingência: perfil QA dedicado no Chrome
+Faça primeiro o preflight contra a URL local rastreada:
 
-Use somente se a rota principal não estiver instalada/disponível ou falhar no preflight por uma limitação demonstrável do executor. A contingência exige uma integração de navegador suportada pelo runtime e um perfil do Chrome dedicado exclusivamente a QA, separado do perfil pessoal do usuário. Um tab novo no Chrome pessoal não é isolamento.
+```powershell
+../../runtime/pipeline.ps1 qa-browser --action preflight --route playwright --project-root <raiz> --run-id <RUN_ID> --url http://127.0.0.1:8001/<rota> --output preflight.png
+```
 
-1. Confirme que o provider/extensão de controle está visível para o agente QA, que o perfil é o perfil QA dedicado e que a origem local abre. Não presuma que uma sessão do Chrome visível ao usuário também esteja visível ao subagente.
-2. Use uma aba dedicada dentro desse perfil, autentique com a conta QA e valide os mesmos critérios/evidências requeridos na rota principal.
-3. Não migre cookies/sessão do perfil pessoal, não controle abas pessoais e não use navegação no perfil pessoal como atalho. Feche somente a aba QA criada pela execução; preserve o perfil dedicado, salvo se ele também for temporário e de propriedade do run.
+`PASS` confirma que o navegador iniciou, carregou a página local, encontrou `body` visível e gravou screenshot. Em seguida use `inspect` para ler título, texto e controles reais; `click`, `fill`, `press` e `viewport` executam interação; cada ação retorna screenshot e estado observado. Para campos secretos, passe o nome de uma variável de ambiente com `--value-env`, nunca o valor como argumento ou comentário. Exemplo:
 
-## Failover e conclusão
+```powershell
+../../runtime/pipeline.ps1 qa-browser --action fill --route playwright --project-root <raiz> --run-id <RUN_ID> --selector "input[name=password]" --value-env MODUS_QA_PASSWORD
+```
 
-- Faça preflight sequencial: principal primeiro; contingência somente após registrar a capacidade ausente ou falha concreta da principal. Nunca execute ambas em paralelo contra a mesma conta ou dados.
-- Se uma rota falhar depois de abrir a aplicação ou alterar estado, reconcilie primeiro: identifique a aba/processo/contexto e os dados QA criados, feche apenas recursos próprios, limpe os dados persistidos e confirme readback antes de iniciar a contingência. Não repita ações sem saber se a primeira tentativa teve efeito.
-- Se a contingência também falhar, emita `blocked` técnico localizado com rota tentada, capability exata indisponível, preflight observado e recuperação tentada. Não peça decisão humana para uma falha técnica recuperável, não declare aprovação visual e não bloqueie cards/lane independentes.
-- Registre no handoff qual rota foi usada, resultado dos preflights, browser/viewport, evidência por critério e limpeza. Credenciais, cookies, tokens e dados pessoais não entram em screenshots, logs ou handoffs.
+Não use `inspect` como substituto de interação quando o critério exigir um fluxo. O QA interpreta visualmente as capturas pela ferramenta de imagem disponível no host e relaciona cada arquivo ao critério. O runtime não declara aprovação por conta própria.
+
+## Contingência: Chrome QA isolado via CDP
+
+Se Playwright estiver indisponível ou seu preflight falhar por limitação demonstrável, reconcilie primeiro servidor, perfil e dados que a rota principal possa ter alterado. Depois rode o mesmo `qa-browser` com `--route cdp`. O runtime inicia Chrome/Edge headless com perfil dedicado e porta CDP efêmera em loopback; não requer provider de browser, extensão nem sessão pessoal. O perfil fica em `.pipeline/tmp/qa-browser/<RUN_ID>/cdp/profile`.
+
+```powershell
+../../runtime/pipeline.ps1 qa-browser --action preflight --route cdp --project-root <raiz> --run-id <RUN_ID> --url http://127.0.0.1:8001/<rota> --output preflight-cdp.png
+```
+
+A contingência fornece `inspect`, `click`, `fill`, `press`, `viewport` e screenshots pelas mesmas opções. O controlador CDP permite somente teclas de navegação comuns; se um fluxo depender de recurso não coberto por essa interface, tente conclui-lo por Playwright depois de recuperar sua falha ou registre a capability concreta indisponível. Não migre para o Chrome pessoal.
+
+## Encerramento e failover
+
+- O preflight é sequencial: Playwright primeiro; CDP apenas se necessário. Nunca controle as duas rotas em paralelo.
+- Após ação com possível efeito persistente, reconcilie o estado da aplicação antes de repetir a ação ou trocar de rota.
+- Ao concluir, encerre e remova o perfil da rota utilizada:
+
+```powershell
+../../runtime/pipeline.ps1 qa-browser --action stop --route playwright --project-root <raiz> --run-id <RUN_ID>
+```
+
+- `stop` encerra somente o processo Chrome criado pela rota (validando PID e diretório de perfil), apaga perfil, cookies e estado da sessão e preserva screenshots para o handoff. Se o processo já não for o processo associado ao perfil esperado, não o encerre.
+- Um erro deve indicar rota, ação e capability que faltou. Só depois de falha concreta de ambas as rotas classifique o QA como `blocked` técnico localizado; isso não é decisão humana nem bloqueia cards independentes.
+- Registre rota, browser, viewport, URL local sem parâmetros secretos, critérios observados, screenshots e limpeza no handoff. Nunca registre cookies, credenciais, parâmetros sensíveis ou dados pessoais.

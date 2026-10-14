@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,7 +22,7 @@ const EXPECTED_SKILLS = [
   "pipeline-setup",
   "pipeline-ux-ui"
 ];
-const RUNTIME_ENTRIES = ["version-status.mjs", "doctor.mjs", "setup.mjs", "run-planner.mjs", "role-launcher.mjs", "role-gate.mjs", "transition-gate.mjs", "run-close-gate.mjs", "trello-comments.mjs", "command-runner.mjs"];
+const RUNTIME_ENTRIES = ["version-status.mjs", "doctor.mjs", "setup.mjs", "run-planner.mjs", "role-launcher.mjs", "role-gate.mjs", "transition-gate.mjs", "run-close-gate.mjs", "trello-comments.mjs", "command-runner.mjs", "qa-browser.mjs"];
 const SCHEMAS = [
   "project-adapter.schema.json",
   "tracker-snapshot.schema.json",
@@ -68,6 +68,7 @@ export async function buildPlugin() {
   await rm(TARGET_ROOT, { recursive: true, force: true });
   await mkdir(join(TARGET_ROOT, ".codex-plugin"), { recursive: true });
   await mkdir(join(TARGET_ROOT, "runtime", "src"), { recursive: true });
+  await mkdir(join(TARGET_ROOT, "runtime", "node_modules"), { recursive: true });
   await mkdir(join(TARGET_ROOT, "schema"), { recursive: true });
   await mkdir(join(TARGET_ROOT, "docs"), { recursive: true });
   await cp(join(REPOSITORY_DIR, "skills"), join(TARGET_ROOT, "skills"), { recursive: true });
@@ -83,13 +84,18 @@ export async function buildPlugin() {
         version: runtimePackage.version,
         private: true,
         type: "module",
-        engines: runtimePackage.engines
+        engines: runtimePackage.engines,
+        dependencies: { "playwright-core": runtimePackage.dependencies["playwright-core"] }
       },
       null,
       2
     )}\n`,
     "utf8"
   );
+
+  const playwrightEntry = fileURLToPath(import.meta.resolve("playwright-core"));
+  const playwrightRoot = await realpath(dirname(playwrightEntry));
+  await cp(playwrightRoot, join(TARGET_ROOT, "runtime", "node_modules", "playwright-core"), { recursive: true });
 
   for (const schema of SCHEMAS) {
     await cp(join(REPOSITORY_DIR, "schema", schema), join(TARGET_ROOT, "schema", schema));
@@ -102,6 +108,7 @@ export async function buildPlugin() {
       entryPoints: [join(RUNTIME_DIR, "src", entry)],
       outfile: join(TARGET_ROOT, "runtime", "src", entry),
       bundle: true,
+      external: ["playwright-core", "chromium-bidi/*"],
       platform: "node",
       target: "node20",
       format: "esm",
