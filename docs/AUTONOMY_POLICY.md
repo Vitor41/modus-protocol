@@ -19,6 +19,7 @@ Resolva sem solicitar ajuda humana:
 - achado de Code Review ou QA dentro do escopo aprovado;
 - bug de implementação, refatoração local, conflito de Git ou ajuste de migração compatível necessário para entregar o card;
 - ambiente local recuperável por comandos já autorizados no adapter.
+- setup completo de QA em ambiente local/não produtivo declarado: iniciar a aplicação, criar e autenticar a própria conta QA, atribuir perfis locais, gerar massa sintética e executar os fluxos previstos sem autorização humana por operação; o escopo fica restrito aos dados dessa conta e exige limpeza verificada antes do handoff.
 - anexar, substituir, reler ou remover evidência produzida pela esteira no card correto;
 - baixar anexo relevante do card para um arquivo novo e contido no projeto pelo launcher canônico, inclusive PDF enviado pelo usuário, para inspeção, teste ou evidência.
 

@@ -150,7 +150,7 @@ O contrato de QA inclui:
 - comandos de regressão e smoke;
 - restrições para dados sensíveis.
 
-O QA usa primeiro uma identidade local existente. Criação de conta ou gravação de dados de teste só é permitida quando o adapter/runbook identificar inequivocamente ambiente não produtivo, operação autorizada e privilégios mínimos; a limpeza é limitada aos dados QA da própria execução. Sem essa prova, não se escreve no banco. Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
+O QA tem autonomia operacional completa dentro do perfil local/não produtivo declarado pelo adapter: pode iniciar a aplicação, criar a própria identidade QA, atribuir os perfis locais necessários, preparar massa sintética e executar todos os fluxos pertinentes da aplicação sem pedir autorização por ação ou fixture. Essa autorização cobre somente dados fictícios pertencentes à identidade QA da execução, não produção, nem contas/registros de terceiros. Antes da primeira escrita, confirme a identidade do destino uma vez; se for produção ou permanecer indeterminada, não escreva e recupere/configure o perfil local de QA. A sessão do navegador deve ser isolada e autenticada como QA, nunca a sessão pessoal compartilhada do usuário. Antes do handoff, remova e verifique toda massa persistente criada pelo próprio QA. Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
 
 ### 3.10 Segurança e permissões
 

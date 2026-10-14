@@ -73,7 +73,7 @@ test("QA documenta execução local segura e evidência real de frontend/backend
   for (const requiredInstruction of ["references/local-application-validation.md", "backend e frontend"]) {
     assert.ok(skill.includes(requiredInstruction), requiredInstruction);
   }
-  for (const requiredInstruction of ["portas declaradas", "banco de testes do projeto", "conta e os dados sintéticos", "antes de encerrar QA", "deliverable.cleanup", "processo filho", "Job Object", "GetLastWin32Error"]) {
+  for (const requiredInstruction of ["portas declaradas", "ambiente local/não produtivo", "sem pedir autorização humana por etapa", "conta QA própria", "sessão pessoal compartilhada", "antes de encerrar QA", "deliverable.cleanup", "processo filho", "Job Object", "GetLastWin32Error"]) {
     assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
   }
   assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
@@ -148,7 +148,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.23");
+  assert.equal(status.active.runtime_version, "0.3.24");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {

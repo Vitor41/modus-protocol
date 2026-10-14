@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.24] - 2026-10-14
+
+### Melhorado
+
+- QA em ambiente local/não produtivo agora tem autonomia explícita para criar e usar a própria conta, conceder perfis locais, preparar massa sintética e percorrer fluxos completos sem autorizações humanas por ação; o escopo fica isolado por usuário e exige limpeza verificada.
+- Validação autenticada de interface exige navegador/perfil isolado da sessão pessoal compartilhada, mantendo a prova visual real sem expor dados de outras contas.
+
 ## [0.3.23] - 2026-10-13
 
 ### Melhorado
