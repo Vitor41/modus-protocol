@@ -6,6 +6,12 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.33] - 2026-10-15
+
+### Corrigido
+
+- Release agora exige consultar as instruções específicas do projeto e aplicar, antes de concluir o checkpoint de documentação, o bump de versão e todo registro funcional local declarado (com alvo local verificado, ferramenta aprovada e readback); ausência dessa evidência impede handoff concluído sem converter falha operacional em gate humano.
+
 ## [0.3.32] - 2026-10-15
 
 ### Corrigido

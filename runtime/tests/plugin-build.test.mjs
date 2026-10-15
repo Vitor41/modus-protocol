@@ -119,6 +119,10 @@ test("Skills do pipeline limitam releases em lote e exigem checkpoints recuperá
   assert.match(dev, /release_queue\.progress_file/u);
   assert.match(dev, /Esse comentário é a autorização humana suficiente/u);
   assert.match(dev, /nunca solicite que o usuário o repita/u);
+  assert.match(dev, /instruções locais de release apontadas por `AGENTS\.md` e pelo adapter/u);
+  assert.match(dev, /registro local da versão funcional/u);
+  assert.match(dev, /ferramenta\/comando aprovado pelo projeto/u);
+  assert.match(dev, /checkpoint `documentation` só está completo quando release notes e todo registro local de versão exigido estiverem verificados/u);
   for (const checkpoint of ["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]) {
     assert.ok(dev.includes(`\`${checkpoint}\``), checkpoint);
   }
@@ -162,7 +166,7 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.3.32");
+  assert.equal(status.active.runtime_version, "0.3.33");
 });
 
 test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {
