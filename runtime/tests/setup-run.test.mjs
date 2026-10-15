@@ -152,14 +152,14 @@ test("planner prioriza QA de trabalho em andamento sobre novo refinamento", asyn
     assert.equal(result.status, "READY");
     assert.equal(result.selected.key, "FX-002");
     assert.equal(result.selected.skill, "pipeline-qa");
-    assert.equal(result.selected.continuation_policy.mode, "drain-independent-work-v0.2");
+    assert.equal(result.selected.continuation_policy.mode, "drain-independent-work-v0.3");
     assert.equal(result.selected.continuation_policy.continue_after_role_handoff, true);
     assert.equal(result.selected.continuation_policy.preserve_run_id, true);
     assert.equal(result.selected.profile, "EQUILIBRADO");
     assert.deepEqual(result.selected.execution_request, {
-      mapping_version: "gpt-5.6-2026-08-28",
+      mapping_version: "modus-model-map-0.3.7",
       profile: "EQUILIBRADO",
-      model: "gpt-5.6-terra",
+      model: "gpt-6-luna",
       reasoning_effort: "medium",
       agent_mode: "independent",
       configuration_source: "kernel-profile-map",
@@ -186,8 +186,8 @@ test("planner preserva lote coeso definido pelo PO", async () => {
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH, mode: "shadow", now: new Date("2026-08-29T00:00:00Z"), uuid: "11111111-2222-3333-4444-555555555555" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
-    assert.equal(result.selected.unit_policy, "cohesive-delivery-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.3");
+    assert.equal(result.selected.unit_policy, "cohesive-delivery-v0.3");
     assert.deepEqual(result.selected.capsule_seed.cards, ["FX-101", "FX-102"]);
     assert.equal(result.selected.lock_proposals.length, 2);
     assert.equal(result.deferred.length, 0);
@@ -237,8 +237,8 @@ test("PO recebe toda a fila elegível de refinamento na mesma execução", async
     ]));
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
     assert.equal(result.status, "READY");
-    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.2");
-    assert.equal(result.selected.unit_policy, "refinement-queue-v0.2");
+    assert.equal(result.batch_policy, "upstream-concurrency-technical-wip1-v0.3");
+    assert.equal(result.selected.unit_policy, "refinement-queue-v0.3");
     assert.equal(result.selected.refinement_queue.scope, "all-eligible-refinement-cards");
     assert.deepEqual(result.selected.refinement_queue.cards.map((card) => card.card_ref), ["r1", "r2", "r3"]);
     assert.deepEqual(result.selected.continuation_policy.defer_on.slice(0, 3), ["human_decision", "screen_approval", "production_approval"]);
@@ -338,7 +338,7 @@ test("planner agenda PO, UX e uma única faixa técnica na mesma execução", as
     assert.ok(result.deferred.some((item) => item.key === "FX-222" && item.reason === "TECHNICAL_WIP_LIMIT"));
     assert.deepEqual(result.schedule.capacities, { po: 1, ux_ui: 1, technical: 1 });
     assert.equal(result.schedule.agent_completion_barrier, "terminal-handoff-before-replan");
-    assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.2");
+    assert.equal(result.recovery_policy.mode, "specialist-autonomy-v0.3");
     assert.equal(result.recovery_policy.technical_failures_require_human, false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -535,6 +535,30 @@ test("review devolvido vai ao DEV enquanto handoff pendente é reconciliado sem 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("Review aprovado reconcilia diretamente para QA sem relançar DEV", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "reviewed", key: "FX-230", title: "Review aprovado", list_ref: adapter.tracker.states.in_development, position: 1, signals: {
+        implementation_complete: true,
+        review_approved: true,
+        implementation_evidence_ref: "dev-handoff",
+        review_evidence_ref: "review-handoff",
+        review_run_id: "RUN-20261013-AABBCCDD"
+      } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "shadow" });
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected.skill, "pipeline-run");
+    assert.equal(result.selected.execution_kind, "operational");
+    assert.equal(result.selected.action, "reconcile-transition");
+    assert.equal(result.selected.transition_evidence_ref, "review-handoff");
+    assert.equal(result.selected.transition_run_id, "RUN-20261013-AABBCCDD");
+    assert.equal(result.selected.transition_role, "pipeline-code-review");
+    assert.equal(result.selected.target_state, "ready_for_validation");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("gate humano de release libera o próximo DEV sem paralisar PO e UX", async () => {
   const { root, adapter, adapterPath } = await createConsumerProject();
   try {
@@ -568,6 +592,52 @@ test("gate humano técnico com escopo de card libera o próximo DEV", async () =
     assert.ok(result.blocked.some((item) => item.key === "FX-227" && item.reason === "HUMAN_GATE_LOOP_LIMIT" && item.block_scope === "card"));
     assert.ok(result.deferred.some((item) => item.key === "FX-229" && item.reason === "LANE_CAPACITY"));
     assert.ok(!result.deferred.some((item) => item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("handoff técnico terminal bloqueado isola o card no RUN atual e libera trabalho independente", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20261013-ABCDEF12";
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "qa-blocked",
+        key: "FX-227",
+        title: "QA local sem ambiente inicializável",
+        list_ref: adapter.tracker.states.ready_for_validation,
+        position: 1,
+        lock: { run_id: runId, status: "blocked", role: "pipeline-qa", state: "ready_for_validation" }
+      },
+      { ref: "next-dev", key: "FX-228", title: "Entrega independente", list_ref: adapter.tracker.states.ready_for_development, position: 2 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: runId });
+    assert.equal(result.status, "READY");
+    assert.equal(result.run_id, runId);
+    assert.equal(result.work_slots[0].key, "FX-228");
+    assert.ok(result.blocked.some((item) => item.key === "FX-227" && item.reason === "TERMINAL_ROLE_BLOCK" && item.block_scope === "card"));
+    assert.ok(!result.deferred.some((item) => item.reason === "TECHNICAL_WIP_LIMIT"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("handoff técnico terminal sem trabalho independente fecha o plano do mesmo RUN", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const runId = "RUN-20261013-ABCDEF12";
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      {
+        ref: "qa-blocked",
+        key: "FX-227",
+        title: "QA local sem ambiente inicializável",
+        list_ref: adapter.tracker.states.ready_for_validation,
+        position: 1,
+        lock: { run_id: runId, status: "blocked", role: "pipeline-qa", state: "ready_for_validation" }
+      }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live", continueRunId: runId });
+    assert.equal(result.status, "EMPTY");
+    assert.equal(result.run_id, runId);
+    assert.deepEqual(result.work_slots, []);
+    assert.ok(result.blocked.some((item) => item.reason === "TERMINAL_ROLE_BLOCK"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -621,6 +691,57 @@ test("release aprovada recupera prioridade técnica antes de novo desenvolviment
     assert.equal(result.work_slots[0].key, "FX-230");
     assert.equal(result.work_slots[0].action, "prepare-release");
     assert.ok(result.deferred.some((item) => item.key === "FX-231" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("releases aprovadas são integradas em uma única fila serial quando a lane técnica está livre", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "release-one", key: "FX-330", title: "Integrar primeiro", list_ref: adapter.tracker.states.ready_for_release, position: 1, signals: { production_approval_valid: true } },
+      { ref: "release-two", key: "FX-331", title: "Integrar segundo", list_ref: adapter.tracker.states.ready_for_release, position: 2, signals: { production_approval_valid: true } },
+      { ref: "next-dev", key: "FX-332", title: "Novo desenvolvimento", list_ref: adapter.tracker.states.ready_for_development, position: 3 }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    const release = result.work_slots.find((slot) => slot.lane === "technical");
+    assert.equal(release.unit_policy, "release-integration-batch-v0.3");
+    assert.equal(release.release_queue.strategy, "single-serial-git-integration");
+    assert.deepEqual(release.release_queue.cards.map((card) => card.key), ["FX-330", "FX-331"]);
+    assert.equal(release.release_queue.run_id, result.run_id);
+    assert.equal(release.release_queue.progress_file, `.pipeline/tmp/${result.run_id}-release-progress.json`);
+    assert.equal(release.release_queue.execution_budget.max_active_ms, 3 * 60 * 60 * 1000);
+    assert.equal(release.release_queue.execution_budget.no_progress_ms, 30 * 60 * 1000);
+    assert.ok(result.deferred.some((item) => item.key === "FX-332" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("release aprovada não interrompe DEV, Review ou QA em andamento", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "review", key: "FX-340", title: "Review atual", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: true } },
+      { ref: "release", key: "FX-341", title: "Release aprovada", list_ref: adapter.tracker.states.ready_for_release, position: 2, signals: { production_approval_valid: true } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.work_slots[0].key, "FX-340");
+    assert.equal(result.work_slots[0].skill, "pipeline-code-review");
+    assert.ok(result.deferred.some((item) => item.key === "FX-341" && item.reason === "LANE_CAPACITY"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("limite de loop considera apenas a fronteira ativa e é zerado após avanço", async () => {
+  const { root, adapter, adapterPath } = await createConsumerProject();
+  try {
+    const snapshotPath = await writeSnapshot(root, trackerSnapshot(adapter, [
+      { ref: "dev-loop-allowed", key: "FX-351", title: "Terceiro retorno já consumido", list_ref: adapter.tracker.states.in_development, position: 1, signals: { implementation_complete: true, review_approved: false, active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
+      { ref: "qa-reset", key: "FX-350", title: "QA após review aprovado", list_ref: adapter.tracker.states.ready_for_validation, position: 2, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 3 } } },
+      { ref: "dev-loop-blocked", key: "FX-352", title: "Quarto retorno DEV Review", list_ref: adapter.tracker.states.in_development, position: 3, signals: { active_loop: { edge: "dev_review", state: "in_development", count: 4 } } }
+    ]));
+    const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, mode: "live" });
+    assert.equal(result.work_slots[0].key, "FX-350");
+    assert.equal(result.work_slots[0].skill, "pipeline-qa");
+    assert.ok(result.deferred.some((item) => item.key === "FX-351" && item.reason === "LANE_CAPACITY"));
+    assert.ok(result.blocked.some((item) => item.key === "FX-352" && item.reason === "LOOP_LIMIT_REACHED"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -748,7 +869,7 @@ test("planner encaminha implementação concluída para code review sem mover co
     );
     const result = planRun({ projectRoot: root, adapterPath, trackerSnapshotPath: snapshotPath, schemaPath: SCHEMA_PATH });
     assert.equal(result.selected.skill, "pipeline-code-review");
-    assert.equal(result.selected.execution_request.model, "gpt-5.6-sol");
+    assert.equal(result.selected.execution_request.model, "gpt-6.1-sol");
     assert.equal(result.selected.execution_request.reasoning_effort, "high");
     assert.equal(result.selected.execution_request.agent_mode, "independent");
     assert.equal(result.selected.state, "in_development");
@@ -924,7 +1045,7 @@ test("planner não cria quarto ciclo automático", async () => {
           key: "FX-005",
           list_ref: adapter.tracker.states.in_development,
           position: 1,
-          loop_counts: { dev_qa: 3 },
+          loop_counts: { dev_qa: 4 },
           loop_state: "in_development"
         }
       ])

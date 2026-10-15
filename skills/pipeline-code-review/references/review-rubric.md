@@ -7,6 +7,7 @@
 - não existe comportamento novo fora do escopo;
 - regras confirmadas não foram substituídas por suposição;
 - UX/UI aprovada foi preservada quando aplicável.
+- a matriz de requisito e referências do PO foi respeitada; componente, token ou fluxo novo só existe com justificativa verificável de não reuso.
 
 ## STANDARDS
 
@@ -16,6 +17,7 @@
 - compatibilidade histórica e migrações;
 - erros observáveis sem vazamento sensível;
 - arquitetura e dependências existentes reutilizadas;
+- para frontend, estrutura, estados, tokens, acessibilidade e composição são coerentes com o design system e com a referência visual aprovada;
 - testes nos limites públicos relevantes;
 - complexidade proporcional ao problema.
 

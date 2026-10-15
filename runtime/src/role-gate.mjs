@@ -205,6 +205,18 @@ function validateTransition(handoff, diagnostics) {
     if (deliverable?.verdict === "rejected" && !results.includes("failed")) {
       diagnostic(diagnostics, "QA_REJECTION_WITHOUT_FAILURE", "deliverable.criteria_matrix", "Reprovação de QA exige cenário falho.");
     }
+    const cleanup = deliverable?.cleanup;
+    if (cleanup?.status === "completed") {
+      const created = new Set(cleanup.created_refs ?? []);
+      const deleted = new Set(cleanup.deleted_refs ?? []);
+      const retained = new Set(cleanup.retained_refs ?? []);
+      const undisposed = [...created].filter((ref) => !deleted.has(ref) && !retained.has(ref));
+      const uncreatedDisposition = [...deleted, ...retained].filter((ref) => !created.has(ref));
+      const doubleDisposition = [...retained].filter((ref) => deleted.has(ref));
+      if (undisposed.length > 0 || uncreatedDisposition.length > 0 || doubleDisposition.length > 0) {
+        diagnostic(diagnostics, "QA_CLEANUP_INCOMPLETE", "deliverable.cleanup", `Recibo de limpeza inconsistente; sem destino: ${undisposed.join(", ")}; destino sem criação correspondente: ${uncreatedDisposition.join(", ")}; destino duplicado: ${doubleDisposition.join(", ")}.`);
+      }
+    }
     const expected = deliverable?.verdict === "approved" && status === "completed" ? "ready_for_release" : "in_development";
     if (state.to !== expected) {
       diagnostic(diagnostics, "QA_TRANSITION_INVALID", "state.to", `QA deveria terminar em ${expected}.`);

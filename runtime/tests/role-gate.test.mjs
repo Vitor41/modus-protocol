@@ -82,6 +82,45 @@ test("UX frontend exige mock anexado e relido no RUN_ID atual", async () => {
   assert.ok(wrongRun.diagnostics.some((item) => item.code === "UX_VISUAL_ATTACHMENT_MISSING"));
 });
 
+test("QA não pode concluir sem recibo explícito de limpeza da massa", async () => {
+  const handoff = await fixture("valid-qa.json");
+  delete handoff.deliverable.cleanup;
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_HANDOFF_SCHEMA_INVALID"));
+});
+
+test("QA não pode aprovar enquanto houver massa criada sem remoção confirmada", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.cleanup.deleted_refs = ["another-record"];
+  const result = await validateObject(handoff);
+  assert.ok(result.diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+});
+
+test("QA pode concluir sem limpeza quando nenhuma massa persistente foi criada", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.test_data_refs = [];
+  handoff.deliverable.cleanup = { status: "not_required", created_refs: [], deleted_refs: [] };
+  const result = await validateObject(handoff);
+  assert.equal(result.status, "PASS", JSON.stringify(result.diagnostics));
+});
+
+test("QA pode reter trilhas de auditoria imutáveis com evidência e limpar os demais dados", async () => {
+  const handoff = await fixture("valid-qa.json");
+  handoff.deliverable.cleanup = {
+    status: "completed",
+    created_refs: ["qa-user-1", "qa-audit-9", "qa-transaction-2"],
+    deleted_refs: ["qa-user-1", "qa-transaction-2"],
+    retained_refs: ["qa-audit-9"],
+    evidence_ref: "cleanup-verification.txt"
+  };
+  assert.equal((await validateObject(handoff)).status, "PASS");
+
+  handoff.deliverable.cleanup.retained_refs = ["unrelated-audit"];
+  assert.ok((await validateObject(handoff)).diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+  handoff.deliverable.cleanup.retained_refs = ["qa-user-1"];
+  assert.ok((await validateObject(handoff)).diagnostics.some((item) => item.code === "QA_CLEANUP_INCOMPLETE"));
+});
+
 test("UX preserva proveniência ao reutilizar mock aprovado de outro RUN_ID", async () => {
   const handoff = await fixture("valid-ux.json");
   handoff.iteration_kind = "return";
@@ -133,6 +172,25 @@ test("DEV inicial parte da fila real e correção permanece em desenvolvimento",
   const stale = structuredClone(initial);
   stale.state.from = "in_development";
   const result = await validateObject(stale);
+  assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
+});
+
+test("retentativa após bloqueio antes de implementar continua sendo DEV inicial", async () => {
+  const blockedInitial = await fixture("valid-dev.json");
+  blockedInitial.status = "blocked";
+  blockedInitial.state = { from: "ready_for_development", to: "ready_for_development" };
+  blockedInitial.blocker = {
+    reason: "Ambiente de teste local indisponível; especialista tentará método equivalente.",
+    requires_human: false,
+    kind: "technical",
+    scope: "card",
+    return_to: "pipeline-dev"
+  };
+  assert.equal((await validateObject(blockedInitial)).status, "PASS");
+
+  const wronglyClassified = structuredClone(blockedInitial);
+  wronglyClassified.iteration_kind = "return";
+  const result = await validateObject(wronglyClassified);
   assert.ok(result.diagnostics.some((item) => item.code === "ROLE_SOURCE_STATE_INVALID"));
 });
 
@@ -312,7 +370,7 @@ test("bloqueio humano exige categoria grande ou gate canônico", async () => {
 
 test("handoff rejeita modelo diferente do perfil solicitado", async () => {
   const handoff = await fixture("valid-review.json");
-  handoff.execution.request.model = "gpt-5.6-terra";
+  handoff.execution.request.model = "gpt-6-luna";
   const result = await validateObject(handoff);
   assert.ok(result.diagnostics.some((item) => item.code === "EXECUTION_REQUEST_MAPPING_MISMATCH"));
 });

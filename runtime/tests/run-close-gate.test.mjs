@@ -14,7 +14,7 @@ async function validate(overrides = {}) {
     jobs: [{ evidence_ref: "agent:review-1", role: "pipeline-code-review", status: "completed" }],
     last_job_event_at: "2026-09-08T14:00:00Z",
     final_snapshot_observed_at: "2026-09-08T14:00:01Z",
-    final_plan: { status: "EMPTY", work_slots: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } },
+    final_plan: { status: "EMPTY", work_slots: [], deferred: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } },
     ...overrides
   };
   const path = join(root, "receipt.json");
@@ -36,8 +36,44 @@ test("agente de review em andamento obriga o orquestrador a esperar", async () =
   assert.ok(result.actions.includes("wait-active-jobs"));
 });
 
+test("tentativa falha pode ser fechada quando uma tentativa concluída substitui o mesmo papel e escopo", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:release-r2" },
+    { evidence_ref: "agent:release-r2", role: "pipeline-dev", status: "completed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "PASS");
+  assert.equal(result.authorization, "FINAL_RESPONSE_GRANTED");
+});
+
+test("tentativa falha sem substituta comprovada continua impedindo encerramento", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:release-r2" },
+    { evidence_ref: "agent:release-r2", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOBS_UNRESOLVED"));
+});
+
+test("tentativa de papel ou escopo diferente não substitui job falho", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:release-r1", role: "pipeline-dev", status: "failed", scope_ref: "release-batch:NKT016,NKT018,NKT017", superseded_by: "agent:qa" },
+    { evidence_ref: "agent:qa", role: "pipeline-qa", status: "completed", scope_ref: "release-batch:NKT016,NKT018,NKT017" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOBS_UNRESOLVED"));
+});
+
+test("referências de tentativa duplicadas são rejeitadas", async () => {
+  const result = await validate({ jobs: [
+    { evidence_ref: "agent:duplicate", role: "pipeline-dev", status: "completed" },
+    { evidence_ref: "agent:duplicate", role: "pipeline-dev", status: "completed" }
+  ] });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_JOB_EVIDENCE_DUPLICATE"));
+});
+
 test("plano com QA elegível impede encerramento prematuro", async () => {
-  const result = await validate({ final_plan: { status: "READY", work_slots: [{ role: "pipeline-qa" }], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } } });
+  const result = await validate({ final_plan: { status: "READY", work_slots: [{ role: "pipeline-qa" }], deferred: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } } });
   assert.equal(result.status, "FAIL");
   assert.ok(result.actions.includes("dispatch-and-continue"));
 });
@@ -49,7 +85,13 @@ test("snapshot anterior ao resultado do agente exige nova leitura", async () => 
 });
 
 test("contagem sem reconciliação do conteúdo dos comentários impede encerramento", async () => {
-  const result = await validate({ final_plan: { status: "EMPTY", work_slots: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: false } } });
+  const result = await validate({ final_plan: { status: "EMPTY", work_slots: [], deferred: [], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: false } } });
   assert.equal(result.status, "FAIL");
   assert.ok(result.diagnostics.some((item) => item.code === "RUN_FINAL_COMMENT_CONTENT_STALE"));
+});
+
+test("trabalho apenas adiado por capacidade impede encerramento", async () => {
+  const result = await validate({ final_plan: { status: "EMPTY", work_slots: [], deferred: [{ key: "FX-400", reason: "TECHNICAL_WIP_LIMIT" }], guarantees: { all_actionable_cards_refreshed: true, comment_content_reconciled: true } } });
+  assert.equal(result.status, "FAIL");
+  assert.ok(result.diagnostics.some((item) => item.code === "RUN_DEFERRED_WORK_REQUIRES_REPLAN"));
 });

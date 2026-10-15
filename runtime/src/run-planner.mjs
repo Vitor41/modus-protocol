@@ -40,9 +40,10 @@ const HUMAN_GATE_KINDS = new Set([
   "external_authorization"
 ]);
 const RECOVERY_POLICY = {
-  mode: "specialist-autonomy-v0.2",
+  mode: "specialist-autonomy-v0.3",
   tracker_read_attempts: 3,
   role_launch_attempts: 2,
+  role_launch_attempts_scope: "launch failures without terminal job or consumable handoff; terminal specialist handoffs do not consume this budget",
   handoff_repair_attempts: 1,
   technical_failures_require_human: false,
   continue_independent_lanes: true,
@@ -86,6 +87,18 @@ function routeCard(state, signals = {}) {
       transition_run_id: signals.pending_transition_run_id,
       transition_role: signals.pending_transition_role,
       target_state: signals.pending_transition_to
+    };
+  }
+  if (state === "in_development" && signals.review_approved === true && signals.review_evidence_ref) {
+    return {
+      skill: "pipeline-run",
+      action: "reconcile-transition",
+      profile: "RAPIDO",
+      execution_kind: "operational",
+      transition_evidence_ref: signals.review_evidence_ref,
+      transition_run_id: signals.review_run_id,
+      transition_role: "pipeline-code-review",
+      target_state: "ready_for_validation"
     };
   }
   if (state === "refinement") return { skill: "pipeline-po", action: "refine", profile: "PROFUNDO" };
@@ -133,7 +146,23 @@ function blockedReason(card, state, { ignoredLockRunId } = {}) {
   if (card.signals?.awaiting_human === true && !gateResolved && HUMAN_GATE_KINDS.has(card.signals?.human_gate_kind)) {
     return `HUMAN_GATE_${card.signals.human_gate_kind.toUpperCase()}`;
   }
-  if (card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) >= 3)) return "LOOP_LIMIT_REACHED";
+  // Um handoff técnico terminal bloqueado encerra o papel neste RUN_ID. Não
+  // relance a mesma lane sem nova execução, mas também não transforme a falha
+  // técnica localizada em gate humano nem mantenha o WIP ocupado.
+  if (card.lock?.status === "blocked" && card.lock.run_id === ignoredLockRunId && (!card.lock.state || card.lock.state === state)) {
+    return "TERMINAL_ROLE_BLOCK";
+  }
+  // Cada fronteira de retorno possui orçamento próprio. Um avanço aprovado para
+  // a próxima etapa zera o contador daquela fronteira, por isso um contador
+  // histórico de outra etapa nunca pode bloquear o estado atual.
+  const activeLoop = card.signals?.active_loop;
+  // The budget allows three confirmed returns; block the fourth one. A role
+  // can still complete successfully after three returns, so the planner must
+  // not stop the lane merely because the previous return count equals three.
+  if (activeLoop?.state === state && Number(activeLoop.count) > 3) return "LOOP_LIMIT_REACHED";
+  // Compatibilidade para snapshots anteriores à v0.3: só interpreta o campo
+  // antigo quando ele declara explicitamente o estado corrente.
+  if (!activeLoop && card.loop_state === state && Object.values(card.loop_counts ?? {}).some((count) => Number(count) > 3)) return "LOOP_LIMIT_REACHED";
   if (state === "ideas") return "HUMAN_TRIAGE_REQUIRED";
   if (state === "ready_for_release" && card.signals?.production_approval_valid !== true) {
     return "PRODUCTION_APPROVAL_REQUIRED";
@@ -424,7 +453,7 @@ export function planRun(input = {}) {
       tool: { name: "pipeline-run-planner", version: PACKAGE.version },
       mode,
       status: "EMPTY",
-      batch_policy: "upstream-concurrency-technical-wip1-v0.2",
+      batch_policy: "upstream-concurrency-technical-wip1-v0.3",
       run_id: id,
       continuing: Boolean(continuationRunId),
       resuming: resumableCardRefs.size > 0,
@@ -440,7 +469,7 @@ export function planRun(input = {}) {
   const allByKey = new Map([...cardsByKey.values()].map((card) => [card.key, card]));
   const eligibleByKey = new Map(eligible.map((card) => [card.key, card]));
   const continuationPolicy = {
-    mode: "drain-independent-work-v0.2",
+    mode: "drain-independent-work-v0.3",
     preserve_run_id: true,
     continue_after_role_handoff: true,
     defer_on: ["human_decision", "screen_approval", "production_approval", "loop_limit", "external_lock", "gate_failure", "tool_failure"],
@@ -450,6 +479,12 @@ export function planRun(input = {}) {
     const declaredGroup = adapter.batching?.mode === "cohesive-delivery" ? seed.delivery_group : undefined;
     let batchMembers = [seed];
     if (lane === "po" && seed.execution_kind !== "operational") batchMembers = eligible.filter((card) => card.state === "refinement" && card.execution_kind !== "operational");
+    // Releases já aprovadas não ocupam WIP técnico. Quando não há DEV, Review
+    // ou QA em curso, elas são integradas em uma única operação Git serial,
+    // reduzindo commits/PRs/mensagens repetidos sem misturar trabalho técnico.
+    else if (lane === "technical" && seed.action === "prepare-release" && !technicalOccupied) {
+      batchMembers = eligible.filter((card) => card.state === "ready_for_release" && card.action === "prepare-release");
+    }
     else if (declaredGroup) {
       if (declaredGroup.defined_by !== "pipeline-po") return { error: { reason: "DELIVERY_GROUP_AUTHORITY_INVALID", delivery_group: declaredGroup.id } };
       if (declaredGroup.cards.length > adapter.batching.max_cards) return { error: { reason: "DELIVERY_GROUP_TOO_LARGE", delivery_group: declaredGroup.id } };
@@ -462,7 +497,8 @@ export function planRun(input = {}) {
     }
     const cleanMembers = batchMembers.map(({ snapshot_index, ...card }) => card);
     const resumable = batchMembers.some((card) => resumableCardRefs.has(card.card_ref));
-    const unitPolicy = seed.execution_kind === "operational" ? "operational-reconciliation-v0.2" : lane === "po" ? "refinement-queue-v0.2" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.2" : "single-card-v0.2";
+    const releaseBatch = lane === "technical" && seed.action === "prepare-release" && batchMembers.length > 0;
+    const unitPolicy = seed.execution_kind === "operational" ? "operational-reconciliation-v0.3" : lane === "po" ? "refinement-queue-v0.3" : releaseBatch ? "release-integration-batch-v0.3" : declaredGroup && batchMembers.length >= 2 ? "cohesive-delivery-v0.3" : "single-card-v0.3";
     const job = {
       lane,
       unit_policy: unitPolicy,
@@ -470,6 +506,22 @@ export function planRun(input = {}) {
       continuation_policy: continuationPolicy,
       ...(lane === "po" && seed.execution_kind !== "operational" ? {
         refinement_queue: { scope: "all-eligible-refinement-cards", cards: cleanMembers, blocked_cards: blocked.filter((card) => card.state === "refinement") }
+      } : {}),
+      ...(releaseBatch ? {
+        release_queue: {
+          scope: "all-approved-ready-for-release-cards",
+          strategy: "single-serial-git-integration",
+          run_id: id,
+          progress_file: `.pipeline/tmp/${id}-release-progress.json`,
+          execution_budget: {
+            max_active_ms: 3 * 60 * 60 * 1000,
+            no_progress_ms: 30 * 60 * 1000,
+            checkpoints: ["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]
+          },
+          cards: cleanMembers,
+          requires_per_card_readback: true
+        },
+        card_refs: batchMembers.map((card) => card.card_ref)
       } : {}),
       ...(declaredGroup ? {
         delivery_group: { id: declaredGroup.id, branch: declaredGroup.branch, mode: declaredGroup.mode, ...(declaredGroup.depends_on?.length ? { depends_on: declaredGroup.depends_on } : {}), cards: cleanMembers },
@@ -502,7 +554,7 @@ export function planRun(input = {}) {
       .filter((card) =>
         technicalInFlightStates.has(card.state) &&
         card.block_scope === "card" &&
-        (card.reason?.startsWith("HUMAN_GATE_") || card.reason === "LOOP_LIMIT_REACHED")
+        (card.reason?.startsWith("HUMAN_GATE_") || card.reason === "LOOP_LIMIT_REACHED" || card.reason === "TERMINAL_ROLE_BLOCK")
       )
       .map((card) => card.card_ref)
   );
@@ -528,7 +580,7 @@ export function planRun(input = {}) {
     const deferred = eligible.map(({ snapshot_index, ...card }) => ({ ...card, reason: card.state === "ready_for_development" && technicalOccupied ? "TECHNICAL_WIP_LIMIT" : "LANE_CAPACITY" }));
     return {
       contract_version: "0.2", tool: { name: "pipeline-run-planner", version: PACKAGE.version }, mode,
-      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.2", run_id: id,
+      status: "EMPTY", batch_policy: "upstream-concurrency-technical-wip1-v0.3", run_id: id,
       continuing: Boolean(continuationRunId), resuming: resumableCardRefs.size > 0, work_slots: [],
       doctor, blocked, deferred, recovery_policy: RECOVERY_POLICY, guarantees
     };
@@ -543,12 +595,13 @@ export function planRun(input = {}) {
     tool: { name: "pipeline-run-planner", version: PACKAGE.version },
     mode,
     status: "READY",
-    batch_policy: "upstream-concurrency-technical-wip1-v0.2",
+    batch_policy: "upstream-concurrency-technical-wip1-v0.3",
     schedule: {
-      policy: "upstream-concurrency-technical-wip1-v0.2",
+      policy: "upstream-concurrency-technical-wip1-v0.3",
       launch_strategy: "parallel-when-independent",
       capacities: { po: 1, ux_ui: 1, technical: 1 },
       technical_wip: { limit: 1, states: ["ready_for_development", "in_development", "ready_for_validation"], release_wait_frees_slot: true },
+      release_integration: { priority: "only-when-technical-lane-idle", mode: "single-serial-git-integration" },
       completion: "drain-all-eligible-work-before-stop",
       agent_completion_barrier: "terminal-handoff-before-replan"
     },

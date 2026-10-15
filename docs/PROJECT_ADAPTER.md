@@ -144,11 +144,16 @@ O contrato de QA inclui:
 - identidades e prefixos reservados para dados de teste;
 - isolamento e limpeza de massa;
 - navegadores, resoluções ou ambientes suportados;
+- rota de navegador QA principal e contingência, suas dependências já disponíveis, origem local permitida, isolamento de perfil/contexto e recursos que o runtime consegue controlar/encerrar;
+- perfis `environments` locais de QA: comando de início declarado em `commands`, healthcheck, política de desligamento somente do processo rastreado, estratégia e portas permitidas;
+- origem da identidade de teste e limites de acesso ao banco de QA, quando a aplicação exigir autenticação;
 - canais de evidência aceitos;
 - comandos de regressão e smoke;
 - restrições para dados sensíveis.
 
-Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
+O QA tem autonomia operacional completa dentro do perfil local/não produtivo declarado pelo adapter: pode iniciar a aplicação, criar a própria identidade QA, atribuir os perfis locais necessários, preparar massa sintética e executar todos os fluxos pertinentes da aplicação sem pedir autorização por ação ou fixture. Essa autorização cobre somente dados fictícios pertencentes à identidade QA da execução, não produção, nem contas/registros de terceiros. Antes da primeira escrita, confirme a identidade do destino uma vez; se for produção ou permanecer indeterminada, não escreva e recupere/configure o perfil local de QA. A sessão do navegador deve ser isolada e autenticada como QA, nunca a sessão pessoal compartilhada do usuário. Antes do handoff, remova e verifique toda massa persistente criada pelo próprio QA. Evidência deve apontar para o critério que comprova. Um resultado agregado sem relação com critérios não encerra o gate.
+
+O procedimento de preflight, failover sequencial e isolamento das rotas de navegador é canônico em `skills/pipeline-qa/references/browser-routing.md`. O runtime do Modus fornece `pipeline.ps1 qa-browser`: Playwright Core com perfil persistente isolado é a rota principal; Chrome/Edge em perfil temporário dedicado, controlado por CDP local, é a contingência. O adapter pode restringir os navegadores, viewports e origens locais aceitos, mas não precisa expor uma extensão/provider ao agente. Nenhuma rota compartilha a sessão pessoal do usuário.
 
 ### 3.10 Segurança e permissões
 

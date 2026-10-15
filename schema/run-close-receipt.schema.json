@@ -17,8 +17,19 @@
         "properties": {
           "evidence_ref": { "$ref": "#/$defs/nonEmptyString" },
           "role": { "enum": ["pipeline-po", "pipeline-ux-ui", "pipeline-dev", "pipeline-code-review", "pipeline-qa"] },
-          "status": { "enum": ["queued", "running", "completed", "isolated", "failed", "cancelled"] }
-        }
+          "status": { "enum": ["queued", "running", "completed", "isolated", "failed", "cancelled"] },
+          "scope_ref": { "$ref": "#/$defs/nonEmptyString" },
+          "superseded_by": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "allOf": [
+          {
+            "if": { "required": ["superseded_by"] },
+            "then": {
+              "required": ["scope_ref"],
+              "properties": { "status": { "enum": ["failed", "cancelled"] } }
+            }
+          }
+        ]
       }
     },
     "last_job_event_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" },
@@ -26,10 +37,11 @@
     "final_plan": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["status", "work_slots", "guarantees"],
+      "required": ["status", "work_slots", "deferred", "guarantees"],
       "properties": {
         "status": { "enum": ["READY", "EMPTY", "BLOCKED"] },
         "work_slots": { "type": "array" },
+        "deferred": { "type": "array" },
         "guarantees": {
           "type": "object",
           "required": ["all_actionable_cards_refreshed", "comment_content_reconciled"],

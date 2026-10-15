@@ -59,6 +59,75 @@ test("Skill de Code Review fixa o contrato técnico de changes_required", async 
   }
 });
 
+test("Skill de execução exige subagente ORCHESTRATOR em todo gatilho", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
+  assert.match(skill, /sempre abrir exatamente um subagente ORCHESTRATOR/u);
+  assert.match(skill, /É proibido gerar plano entre o handoff e a confirmação no tracker/u);
+  assert.match(skill, /Nunca peça novamente a aprovação que já está vigente no Trello/u);
+  assert.match(skill, /Nunca execute a fila no chat chamador/u);
+  assert.match(skill, /solicite acesso externo elevado/u);
+  assert.match(skill, /Nunca publique um bloqueio como se fosse saída do papel/u);
+  assert.match(skill, /o plano deve classificar esse card como `TERMINAL_ROLE_BLOCK`/u);
+});
+
+test("QA documenta execução local segura e evidência real de frontend/backend", async () => {
+  const skill = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "SKILL.md"), "utf8");
+  const localValidation = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
+  const browserRouting = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-qa", "references", "browser-routing.md"), "utf8");
+  const adapterContract = await readFile(join(REPOSITORY_DIR, "docs", "PROJECT_ADAPTER.md"), "utf8");
+  for (const requiredInstruction of ["references/local-application-validation.md", "backend e frontend"]) {
+    assert.ok(skill.includes(requiredInstruction), requiredInstruction);
+  }
+  for (const requiredInstruction of ["portas declaradas", "ambiente local/não produtivo", "sem pedir autorização humana por etapa", "conta QA própria", "sessão pessoal compartilhada", "antes de encerrar QA", "deliverable.cleanup", "processo filho", "Job Object", "GetLastWin32Error"]) {
+    assert.ok(localValidation.includes(requiredInstruction), requiredInstruction);
+  }
+  assert.match(adapterContract, /identidade de teste e limites de acesso ao banco/u);
+  for (const requiredInstruction of ["Principal: Playwright em perfil persistente isolado", "Contingência: Chrome QA isolado via CDP", "O preflight é sequencial", "Nunca controle as duas rotas em paralelo", "sessão pessoal", "session_id", "TTY"] ) {
+    assert.ok(browserRouting.includes(requiredInstruction), requiredInstruction);
+  }
+  const packagedReference = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "local-application-validation.md"), "utf8");
+  assert.equal(packagedReference, localValidation);
+  const packagedBrowserRouting = await readFile(join(built.targetRoot, "skills", "pipeline-qa", "references", "browser-routing.md"), "utf8");
+  assert.equal(packagedBrowserRouting, browserRouting);
+});
+
+test("DEV não conta verificações internas como retorno de loop entre papéis", async () => {
+  const policy = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"), "utf8");
+  const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
+  const deliveryLoop = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "references", "delivery-loop.md"), "utf8");
+  const evals = await readFile(join(REPOSITORY_DIR, "docs", "EVALS.md"), "utf8");
+  assert.match(policy, /retornos confirmados entre papéis/u);
+  assert.match(policy, /Repetições internas do mesmo papel.*não incrementam/u);
+  assert.match(dev, /nunca devem ser classificadas como `loop_limit`/u);
+  assert.match(dev, /não faça handoff de sucesso/u);
+  assert.match(deliveryLoop, /não consome o contador de `loop_limit`/u);
+  assert.match(evals, /EVAL-DEV-INTERNAL-ITERATION-001/u);
+  const packagedDeliveryLoop = await readFile(join(built.targetRoot, "skills", "pipeline-dev", "references", "delivery-loop.md"), "utf8");
+  assert.equal(hash(Buffer.from(packagedDeliveryLoop)), hash(Buffer.from(deliveryLoop)));
+});
+
+test("Skills do pipeline limitam releases em lote e exigem checkpoints recuperáveis", async () => {
+  const run = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-run", "SKILL.md"), "utf8");
+  const dev = await readFile(join(REPOSITORY_DIR, "skills", "pipeline-dev", "SKILL.md"), "utf8");
+  assert.match(run, /timeout.*3 horas/u);
+  assert.match(run, /30 minutos/u);
+  assert.match(run, /somente um checkpoint novo de release reinicia o watchdog/u);
+  assert.match(run, /não repita o mesmo prompt/u);
+  assert.match(run, /Contagens e eventos `item\.\*` indicam atividade da sessão, não conclusão de etapa/u);
+  assert.match(run, /APROVADO PARA PRD` válido no comentário de membro humano autenticado autoriza toda a integração Git prevista, sem confirmação adicional na conversa/u);
+  assert.match(run, /execução elevada oficial/u);
+  assert.match(dev, /release_queue\.progress_file/u);
+  assert.match(dev, /Esse comentário é a autorização humana suficiente/u);
+  assert.match(dev, /nunca solicite que o usuário o repita/u);
+  assert.match(dev, /instruções locais de release apontadas por `AGENTS\.md` e pelo adapter/u);
+  assert.match(dev, /registro local da versão funcional/u);
+  assert.match(dev, /ferramenta\/comando aprovado pelo projeto/u);
+  assert.match(dev, /checkpoint `documentation` só está completo quando release notes e todo registro local de versão exigido estiverem verificados/u);
+  for (const checkpoint of ["preflight", "documentation", "branch", "push", "pull_request", "checks", "merge", "handoff"]) {
+    assert.ok(dev.includes(`\`${checkpoint}\``), checkpoint);
+  }
+});
+
 test("artefato inclui a política canônica de autonomia referenciada pelas Skills", async () => {
   const source = await readFile(join(REPOSITORY_DIR, "docs", "AUTONOMY_POLICY.md"));
   const artifact = await readFile(join(built.targetRoot, "docs", "AUTONOMY_POLICY.md"));
@@ -97,7 +166,14 @@ test("runtime standalone expõe status de versão antes do tracker", () => {
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
   assert.equal(status.status, "PASS");
-  assert.equal(status.active.runtime_version, "0.2.9");
+  assert.equal(status.active.runtime_version, "0.3.33");
+});
+
+test("Skill pipeline-run consolida recibos durante retentativas da mesma lane", async () => {
+  const skill = await readFile(join(built.targetRoot, "skills", "pipeline-run", "references", "tracker-comment-protocol.md"), "utf8");
+  assert.match(skill, /unidade de publicação é a \*\*lane do mesmo card, papel, estado e RUN_ID\*\*/u);
+  assert.match(skill, /não publique outro lock ou cápsula só porque um agente foi relançado/u);
+  assert.match(skill, /Publique imediatamente quando houver decisão humana, mudança de estado ou troca efetiva de papel/u);
 });
 
 test("planner empacotado não executa o CLI interno do doctor", () => {
@@ -154,6 +230,24 @@ test("artefato inclui executor oficial de comandos do adapter", async () => {
   const runner = await readFile(join(built.targetRoot, "runtime", "src", "command-runner.mjs"), "utf8");
   assert.match(runner, /pipeline-command/);
   assert.match(runner, /project-runtime/);
+});
+
+test("artefato empacota o runtime executável de navegador do QA", async () => {
+  const browser = await readFile(join(built.targetRoot, "runtime", "src", "qa-browser.mjs"), "utf8");
+  assert.match(browser, /playwright-core/u);
+  assert.match(browser, /Target\.attachToTarget/u);
+  assert.match(browser, /RUN_ID_PATTERN/u);
+  const result = spawnSync(NODE, [join(built.targetRoot, "runtime", "src", "qa-browser.mjs"), "--help"], { cwd: REPOSITORY_DIR, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /preflight\|navigate\|inspect.*upload.*serve/u);
+  assert.match(browser, /DOM\.setFileInputFiles/u);
+  assert.match(browser, /serveQaBrowserSession/u);
+  const runtimePackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "package.json"), "utf8"));
+  const playwrightPackage = JSON.parse(await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "package.json"), "utf8"));
+  const playwrightLicense = await readFile(join(built.targetRoot, "runtime", "node_modules", "playwright-core", "LICENSE"), "utf8");
+  assert.equal(runtimePackage.dependencies["playwright-core"], "1.63.0");
+  assert.equal(playwrightPackage.version, "1.63.0");
+  assert.match(playwrightLicense, /Apache License/u);
 });
 
 test("manifest, runtime e build-info compartilham a mesma versão", async () => {

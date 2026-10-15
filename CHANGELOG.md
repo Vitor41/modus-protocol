@@ -6,6 +6,289 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.33] - 2026-10-15
+
+### Corrigido
+
+- Release agora exige consultar as instruções específicas do projeto e aplicar, antes de concluir o checkpoint de documentação, o bump de versão e todo registro funcional local declarado (com alvo local verificado, ferramenta aprovada e readback); ausência dessa evidência impede handoff concluído sem converter falha operacional em gate humano.
+
+## [0.3.32] - 2026-10-15
+
+### Corrigido
+
+- `APROVADO PARA PRD` confirmado por comentário humano autenticado é autorização suficiente para todo o fluxo de integração Git; o orquestrador não pede consentimento duplicado no chat e tenta a rota oficial elevada antes de classificar falha de sandbox como autorização externa.
+- Handoffs terminais bloqueados agora exigem recibo persistido e relido antes do snapshot/plano seguinte, evitando relançar o mesmo slot durante a janela de reconciliação.
+
+## [0.3.31] - 2026-10-14
+
+### Corrigido
+
+- Skill QA agora exige TTY persistente com `session_id` e handshake antes de avaliar navegador, e orienta elevação local restrita quando o projeto exigir escrita temporária/loopback.
+
+## [0.3.30] - 2026-10-14
+
+### Adicionado
+
+- QA pode enviar fixtures sintéticas para campos de arquivo por Playwright ou CDP, em sessões persistentes e com confinamento ao diretório isolado do RUN.
+- Handoff QA diferencia dados removidos de trilhas de auditoria imutáveis retidas, sem exigir bypass de constraints do sistema.
+
+### Corrigido
+
+- Screenshots gerados sem nome explícito recebem nomes únicos e não sobrescrevem evidências de ações anteriores.
+- Shutdown remove fixtures temporárias junto ao perfil e estado do navegador, preservando as capturas para o handoff.
+
+## [0.3.29] - 2026-10-14
+
+### Corrigido
+
+- QA mantém navegador e sessão autenticada vivos em um controlador de processo persistente, com protocolo JSON-lines, evitando que ações em comandos separados percam o Chrome iniciado pelo preflight.
+- Validação de navegador agora cobre o launcher CLI real e a continuidade entre ações para Playwright e CDP.
+
+## [0.3.28] - 2026-10-14
+
+### Corrigido
+
+- QA distingue falhas de sandbox/local-executor de falhas do navegador e exige execução local autorizada antes de acionar a rota CDP de contingência.
+- O cliente CDP usa timeout explícito e mantém timers de comando ativos, evitando encerramento sem diagnóstico (`unsettled top-level await`) durante falhas de loopback.
+
+## [0.3.27] - 2026-10-14
+
+### Adicionado
+
+- QA recebe um runtime de navegador local executável: Playwright Core isolado como rota principal e Chrome QA em perfil próprio via CDP como contingência, com preflight, inspeção, ações, viewport, screenshots e limpeza confinada ao `RUN_ID`.
+
+### Corrigido
+
+- A contingência de navegador não depende mais de extensão/provider de Chrome que não estava disponível aos subagentes; URLs externas, credenciais em URL e caminhos fora do projeto são recusados.
+
+## [0.3.26] - 2026-10-14
+
+### Corrigido
+
+- Bloqueio técnico de QA exige handoff terminal do próprio especialista, validação `role-gate`, recibo confirmado e replanejamento com `TERMINAL_ROLE_BLOCK`; um recibo genérico do ORCHESTRATOR não pode fingir conclusão do papel nem deixar o mesmo QA elegível sem reconciliação.
+
+## [0.3.25] - 2026-10-14
+
+### Melhorado
+
+- QA de interface local agora tem duas rotas documentadas e ordenadas: automação em navegador/contexto isolado como principal e perfil QA dedicado do Chrome como contingência, com preflight, failover sequencial, reconciliação de efeitos parciais e limpeza própria.
+- Adapter explicita as capacidades e o isolamento necessários às rotas, sem exigir alterações em projetos consumidores ou reutilizar sessão pessoal.
+
+## [0.3.24] - 2026-10-14
+
+### Melhorado
+
+- QA em ambiente local/não produtivo agora tem autonomia explícita para criar e usar a própria conta, conceder perfis locais, preparar massa sintética e percorrer fluxos completos sem autorizações humanas por ação; o escopo fica isolado por usuário e exige limpeza verificada.
+- Validação autenticada de interface exige navegador/perfil isolado da sessão pessoal compartilhada, mantendo a prova visual real sem expor dados de outras contas.
+
+## [0.3.23] - 2026-10-13
+
+### Melhorado
+
+- QA tem autorização explícita para criar contas e massa sintética no banco local de testes declarado pelo adapter, sem aprovações repetidas por fixture; handoff agora exige recibo de limpeza completo antes de comentário ou transição.
+- Diagnóstico de inicialização Windows exige preservar a etapa, API, exceção e código Win32 da preparação do Job Object, evitando bloqueios genéricos sem causa acionável.
+
+### Melhorado
+
+- QA pode criar contas e massa sintética no banco de testes local autorizado sem aprovações repetidas; o handoff agora exige recibo de limpeza confirmado antes de comentário ou transição do card.
+
+## [0.3.22] - 2026-10-13
+
+### Corrigido
+
+- Handoff técnico terminal bloqueado agora isola somente o card no RUN atual, libera o WIP técnico e permite continuar trabalho independente ou encerrar honestamente quando não houver mais slots; gates humanos permanecem separados.
+
+## [0.3.21] - 2026-10-13
+
+### Melhorado
+
+- QA agora tem procedimento explícito para iniciar e encerrar com segurança aplicações locais, validar backend e interface autenticada em navegador real e criar identidade/massa somente em banco comprovadamente não produtivo.
+- O contrato do adapter documenta perfil local de QA, portas, healthcheck, identidade e limites de banco sem acoplar regras de projeto ao núcleo.
+
+## [0.3.20] - 2026-10-13
+
+### Melhorado
+
+- Retentativas técnicas da mesma lane reutilizam o lock e mantêm tentativas intermediárias no diário local; o Trello recebe o resultado consolidado, gates humanos e mudanças reais de papel/estado, reduzindo comentários sem ocultar decisões ou transições.
+
+## [0.3.19] - 2026-10-13
+
+### Corrigido
+
+- Evidência interna de lock terminal bloqueado deixa de vazar para o snapshot público; a liberação verifica a trilha terminal somente no guard de escrita, preservando o schema estrito do planner.
+
+## [0.3.18] - 2026-10-13
+
+### Corrigido
+
+- Liberação humana explícita agora pode encerrar um lock cujo handoff terminal do mesmo RUN_ID terminou em `BLOCKED`, sem permitir locks marcados diretamente como bloqueados; card, estado, autoria, autorização posterior e readback continuam obrigatórios.
+
+## [0.3.17] - 2026-10-13
+
+### Corrigido
+
+- A liberação de lock aceita a autorização exata envolta por um único par de crases Markdown, mantendo validação de texto, card, autoria e data sem flexibilizar conteúdo adicional.
+
+## [0.3.16] - 2026-10-13
+
+### Corrigido
+
+- Loop limits agora contam somente retornos confirmados entre papéis: três são permitidos e somente a quarta tentativa bloqueia; `blocked` técnico e trabalho interno não consomem ciclos.
+- Snapshot mantém o orçamento QA→DEV entre ciclos de correção e não perde retornos anteriores ao entrar novamente em QA; Review bloqueado tecnicamente não devolve indevidamente o card ao DEV.
+- Evals cobrem bloqueios técnicos sem retorno, histórico de retornos QA entre entradas na lane e o limite exato da quarta tentativa.
+- Recibos do tracker combinam lock+cápsula e handoff+transição quando ocorrem no mesmo checkpoint, reduzindo comentários sem retirar evidência de estado ou decisões humanas.
+
+## [0.3.15] - 2026-10-13
+
+### Corrigido
+
+- Review aprovado agora libera diretamente a transição operacional para `PRONTO PARA VALIDAÇÃO`, preservando o RUN_ID e o handoff de Review; o planner deixa de relançar DEV em um passo incompatível com o role-gate.
+
+## [0.3.14] - 2026-10-13
+
+### Corrigido
+
+- O launcher canonicaliza uma referência única de handoff em prompts desatualizados conforme o destino do manifest. Prompts com referências múltiplas e ambíguas continuam bloqueados antes do spawn.
+
+## [0.3.13] - 2026-10-13
+
+### Corrigido
+
+- O launcher repara um delimitador `}` excedente no fim de um handoff que, sem essa sobra, é JSON válido; qualquer outro conteúdo inválido continua bloqueado. A recuperação fica explícita no recibo do job.
+
+## [0.3.12] - 2026-10-13
+
+### Corrigido
+
+- DEV distingue uma nova tentativa após bloqueio pré-implementação (`initial`) de um retorno real para correção (`return`), evitando divergência entre handoff e coluna do card.
+- O orçamento de tentativas do launcher aplica-se somente a falhas de lançamento sem handoff terminal; handoffs `blocked` exigem replanejamento e continuidade no mesmo `RUN_ID` enquanto houver trabalho e dentro do watchdog.
+- DEV recupera testes ASGI sem dependências opcionais usando alternativa mínima documentada, sem instalar dependências ou confundir resposta HTTP com inspeção visual.
+- `pipeline-run` valida os caminhos de prompt/request/manifest/handoff do job antes de lançá-lo; documentação do recibo evita parsing ambíguo de listas no PowerShell.
+- Evals cobrem retomada inicial e recuperação de ambiente de teste observadas na supervisão FP.
+
+## [0.3.11] - 2026-10-12
+
+### Corrigido
+
+- `loop_limit` passa a ser explicitamente restrito a retornos entre papéis; testes, inspeções e correções internas do DEV não consomem ciclos nem geram gate humano.
+- A Skill DEV exige recuperação alternativa para evidência indisponível, proíbe handoff de sucesso sem comprovação e mantém impedimentos técnicos localizados sem parar lanes independentes.
+- Evals cobrem iterações internas e falha de ferramenta de verificação no mesmo papel.
+
+## [0.3.10] - 2026-10-01
+
+### Corrigido
+
+- `pipeline-run` exige launcher externo elevado também para `role-launch`, impedindo a tentativa sandboxada que gerou socket `10013` antes da recuperação.
+- `run-close-gate` preserva tentativas falhas e aceita encerramento quando `superseded_by` aponta para tentativa concluída do mesmo papel e `scope_ref`; tentativas sem sucessora válida continuam bloqueando.
+- O recibo de encerramento detecta referências de evidência duplicadas e mantém a trilha de cada tentativa de recuperação.
+
+## [0.3.9] - 2026-10-01
+
+### Corrigido
+
+- O ORCHESTRATOR pode encerrar locks de runs interrompidos somente após autorização humana explícita, mantendo o RUN_ID anterior e registrando recibo de liberação relido no card.
+- Autorização via comentário exige frase exata no card correto e autoria correspondente à conta Trello autenticada; o gatilho comum nunca libera locks.
+- A Skill `pipeline-run` documenta a exceção sem permitir expiração automática, liberação de cards fora do escopo ou movimentação implícita.
+
+## [0.3.8] - 2026-10-01
+
+### Corrigido
+
+- Releases em lote mantêm timeout máximo de 3 horas e watchdog de 30 minutos sem progresso verificável, com checkpoints por etapa; o launcher rejeita manifests que tentem ampliar esses limites.
+- Na release, mensagens e eventos genéricos não renovam o watchdog: somente um checkpoint novo e validado representa progresso operacional.
+- O status do launcher expõe o tipo/status do último item e o checkpoint sanitizado da release, sem copiar texto ou comandos privados do agente.
+- `pipeline-run` deixa de tratar contagens de eventos como prova de etapa concluída e proíbe polling minuto a minuto ou repetição cega de release interrompida.
+- DEV de release registra preflight, documentação, branch, push, PR, checks, merge e handoff em checkpoint local para retomada auditável do mesmo `RUN_ID`.
+
+## [0.3.7] - 2026-10-01
+
+### Corrigido
+
+- Todos os perfis executáveis deixam de fixar modelos GPT-5.6: `RAPIDO` e `EQUILIBRADO` usam `gpt-6-luna`; `PROFUNDO`, `MAXIMO` e `PARALELO` usam `gpt-6.1-sol`, preservando os respectivos esforços.
+- Planner, launcher, schema e handoffs compartilham o mapa `modus-model-map-0.3.7`; Code Review mantém papel independente com perfil `PROFUNDO` e esforço `high`.
+- O launcher/schema aceitam somente os modelos do mapa ativo, evitando que um recibo de papel volte a declarar GPT-5.6 sob o contrato 0.3.7.
+
+## [0.3.6] - 2026-10-01
+
+### Corrigido
+
+- Code Review com perfil `PROFUNDO` solicita agora `gpt-6-luna / high`, mantendo revisão independente e o esforço alto; os outros papéis `PROFUNDO` preservam seu mapeamento atual.
+- O contrato do handoff e o mapa versionado distinguem a execução do Reviewer, impedindo que o planner continue apontando para GPT-5.6 nesse papel.
+
+## [0.3.5] - 2026-10-01
+
+### Corrigido
+
+- O perfil `EQUILIBRADO` passa a solicitar `gpt-6-luna` com esforço `medium`; launcher, schema e recibos aceitam esse modelo e o esforço `xhigh`, preservando os demais perfis existentes.
+- A identidade do mapa de execução passa a ser `modus-model-map-0.3.5`, evitando que handoffs produzidos com a nova configuração sejam comparados com o contrato antigo.
+
+### Limite conhecido
+
+- Esta versão remove a rejeição estrutural de GPT-6 Luna, mas não detecta automaticamente todo modelo disponível nem corrige falhas externas de inicialização/conectividade do executor.
+
+## [0.3.4] - 2026-09-28
+
+### Corrigido
+
+- O gatilho `Processe a fila do Trello.` volta a exigir sempre um único subagente ORCHESTRATOR; a indisponibilidade inicial de rede não autoriza executar a fila no chat chamador.
+- O mandato do ORCHESTRATOR exige elevação externa antes da primeira chamada ao tracker. Uma recusa local de sandbox não consome as três tentativas idempotentes do Trello.
+
+## [0.3.3] - 2026-09-28
+
+### Corrigido
+
+- Falhas de transporte do Trello agora preservam a cadeia de causa sanitizada, com código de rede quando disponível, e identificam explicitamente quando a execução nasceu sem permissão de rede no sandbox; tokens e parâmetros de URL continuam redigidos.
+- Leituras idempotentes aguardam brevemente entre tentativas, evitando que três recusas transitórias instantâneas sejam confundidas com uma indisponibilidade global do Trello.
+- O gatilho não delega o ORCHESTRATOR a uma tarefa incapaz de solicitar acesso externo; nesse cenário, preserva a execução no chamador autorizado em vez de produzir três falhas inevitáveis de snapshot.
+
+### Documentado
+
+- O ORCHESTRATOR deve iniciar snapshot e reconciliações do tracker em comando com acesso externo autorizado/elevado; uma sessão `network: restricted` com aprovação impossível é erro do launcher local, não diagnóstico da rede do usuário.
+
+## [0.3.2] - 2026-09-28
+
+### Corrigido
+
+- Cápsulas, handoffs, bloqueios e transições passam a ter recibo mínimo verificável no tracker. O conteúdo completo continua local; o runtime publica somente metadados canônicos e o hash SHA-256 do artefato, reduzindo rejeições de revisão automática por divulgação de contexto interno.
+- O cliente Trello valida estritamente eventos, papel, estados, status, `RUN_ID` e arquivo local antes de construir o recibo; valores livres, caminhos externos e artefatos acima do limite são recusados antes de qualquer escrita.
+
+### Documentado
+
+- O protocolo operacional diferencia `write-tracker-receipt` de `write-readback`: o primeiro é obrigatório para evidência da esteira e o segundo fica restrito a mensagens humanas curtas e intencionais.
+
+## [0.3.1] - 2026-09-27
+
+### Corrigido
+
+- O launcher agora persiste no ledger os últimos eventos `error` com payload sanitizado, código e contexto útil; timeouts e falhas sem progresso preservam também os trechos finais sanitizados de `stdout` e `stderr`.
+- Três eventos `error` consecutivos sem trabalho observável, ou cinco minutos sem evento substancial, encerram o job como `no_progress` com diagnóstico estruturado em vez de consumir o timeout completo de 45 minutos.
+- Antes de qualquer subprocesso, o launcher compara todo caminho de handoff citado no prompt com `job.handoff`. Recuperações de segunda tentativa regeneram a instrução com o caminho exclusivo do novo job, impedindo que um handoff R2 seja escrito no arquivo R1.
+
+### Documentado
+
+- Manifests de recuperação usam `recovery.attempt: 2`; o status terminal distingue `no_progress`, `timeout`, `missing_handoff` e `launcher_error` sem transformar falha técnica em gate humano.
+
+## [0.3.0] - 2026-09-27
+
+### Adicionado
+
+- O gatilho passa a delegar a execução a um subagente ORCHESTRATOR dedicado, com mandato explícito para drenar toda a fila até um gate humano real, consumir jobs terminais e concluir o gate de encerramento.
+- UX/UI ganha contrato de design system vivo: mock fiel ao shell atual do produto, referências de componentes/tokens e documentação obrigatória de qualquer componente realmente novo no repositório consumidor.
+- PO passa a entregar matriz de referências visuais e critério literal de reuso; DEV, Code Review e QA usam essa evidência para evitar recriação de componentes e divergência visual.
+- `release_queue` agrupa todas as entregas aprovadas para PRD numa única integração Git serial quando não existe DEV, Review ou QA em curso, preservando recibo e releitura individuais por card.
+- O launcher materializa falha terminal estruturada e timeout para impedir que ausência de handoff pareça agente em andamento.
+
+### Alterado
+
+- O limite de três retornos passa a ser contado por fronteira e escopo: DEV↔Review e QA↔DEV são independentes e um avanço aprovado zera o contador anterior.
+- O gate de encerramento recusa finalizar enquanto existir trabalho automático apenas adiado por capacidade; WIP e `LANE_CAPACITY` definem ordem, não permissão de parada.
+- O mandato do orquestrador passa a cobrir anexar/reler/remover mocks próprios e baixar anexos relevantes do card por launcher oficial para inspeção local segura.
+
+### Corrigido
+
+- Releases aprovadas não preemptam uma cadeia técnica ativa nem são desnecessariamente processadas card a card.
+- Handoff ausente, inválido ou atrasado passa a acionar recuperação estruturada a partir de evidências reais antes de qualquer decisão humana.
+
 ## [0.2.9] - 2026-09-13
 
 ### Corrigido

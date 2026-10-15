@@ -33,9 +33,10 @@ Adicione ao `AGENTS.md` da raiz do projeto:
 ```markdown
 ## Modus Protocol
 
-Ao receber exatamente `Processe a fila do Trello.`, use exclusivamente `$pipeline-run` com `.pipeline/project.adapter.yaml`.
+Ao receber exatamente `Processe a fila do Trello.`, abra um subagente ORCHESTRATOR e use exclusivamente `$pipeline-run` com `.pipeline/project.adapter.yaml`.
 Não use uma esteira, skill ou comando legado como fallback.
-Antes de acessar o Trello, execute o status de versão exigido pela skill e interrompa se a tarefa estiver usando um runtime incompatível ou obsoleto.
+Envie ao ORCHESTRATOR: `Processe a fila do Trello. Só pare o processamento em um gate humano REAL. Em APROVADO PARA PRD, está autorizado a documentar a entrega, fazer commit, push, PR, checks, resolver conflitos dentro do escopo e merge com origin/main no GitHub.`
+O mesmo mandato autoriza anexar/reler/remover mocks do próprio pipeline e baixar anexos relevantes do card pelo launcher oficial para inspeção local; não autoriza deploy, produção nem expansão de escopo.
 ```
 
 O texto que inicia o processamento é exatamente:
@@ -44,7 +45,7 @@ O texto que inicia o processamento é exatamente:
 Processe a fila do Trello.
 ```
 
-O gatilho entra no roteador. O loop continua automaticamente entre PO, UX/UI, DEV, Code Review e QA e só para diante de gate humano, dúvida real, limite de retorno ou falha comprovada.
+O gatilho entra no roteador. O loop continua automaticamente entre PO, UX/UI, DEV, Code Review e QA e só para diante de gate humano real, limite de retorno na fronteira ativa ou falha global comprovada. O plugin carregado na nova tarefa é a fonte única de versão; o gatilho não executa preflight de versão antes do snapshot.
 
 ## 4. Valide antes do cutover
 

@@ -4,15 +4,24 @@ Use este protocolo em toda execução live. O comentário é evidência operacio
 
 ## Gate físico
 
-Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-readback` para publicação e `read` para reconciliação. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
+Siga exatamente os providers do adapter. Para Trello com provider `environment`, execute `runtime/pipeline.ps1 trello` com acesso externo autorizado: `snapshot` para a fila enxuta, `list` para histórico pontual, `write-tracker-receipt` para os eventos operacionais, `write-readback` somente para mensagens humanas deliberadamente curtas e `read` para reconciliação. A chamada deve nascer em shell com rede autorizada/elevada; `network: restricted` ou `approval_policy: never` sem capacidade de escalar é falha local do launcher, não indisponibilidade do Trello. O cliente lê o arquivo externo declarado sem imprimir credenciais. Leituras idempotentes recuperam falhas transitórias em até três tentativas totais, com espera curta entre elas. Não faça fallback, implementação ad hoc ou leitura integral do board. Antes de isolar uma falha recuperável, use a reconciliação limitada abaixo.
 
-Para cada evento obrigatório declarado em `tracker.comments.required_events`:
+Quando um checkpoint do tracker exigir eventos declarados em `tracker.comments.required_events`:
 
-1. publique um comentário novo no card correto;
+1. mantenha o artefato completo local e publique um recibo mínimo novo no card correto;
 2. capture a referência retornada pela escrita e os providers efetivamente usados;
 3. releia o comentário pela referência ou pelo card combinado com `RUN_ID` e prefixo inequívoco;
 4. compare `RUN_ID`, card, papel/evento, fatos essenciais e UTF-8;
 5. somente depois considere a escrita concluída.
+
+Reduza ruído sem remover evidência. A unidade de publicação é a **lane do mesmo card, papel, estado e RUN_ID**, não cada processo/agente lançado:
+
+- Publique um recibo `lock, capsule` no primeiro lançamento da lane. Em retentativas técnicas do mesmo papel, reutilize esse lock enquanto ele continuar pertencendo ao mesmo RUN_ID/card/estado; não publique outro lock ou cápsula só porque um agente foi relançado.
+- Registre tentativas, progresso e cápsulas intermediárias no diário/artefatos locais do RUN. Depois da recuperação, inclua o hash da cápsula consolidada mais recente no próximo recibo obrigatório.
+- Publique imediatamente quando houver decisão humana, mudança de estado ou troca efetiva de papel. Ao combinar handoff e transição, use um único recibo.
+- Se uma tentativa terminar tecnicamente bloqueada, mas ainda houver recuperação segura dentro do orçamento, mantenha o handoff no diário local e continue a lane sem comentário de bloqueio no Trello. Se a lane esgotar as recuperações, publique um único recibo terminal de handoff+bloqueio com o resultado consolidado.
+
+Uma retentativa não é, por si só, novo checkpoint do tracker. A redução não pode ocultar uma aprovação humana, um bloqueio que já exige decisão, uma troca de papel/estado, nem a conclusão terminal de uma lane. O cabeçalho `CODEX LOCK` mantém a reconciliação do lock compatível. Comentários humanos, decisões e mudanças de papel/estado permanecem preservados.
 
 Falha na publicação gera `TRACKER_COMMENT_WRITE_FAILED`. Falha, ausência ou divergência na releitura gera `TRACKER_COMMENT_READBACK_FAILED`. Em ambos os casos, não mova o card e não presuma sucesso.
 
@@ -22,12 +31,24 @@ Antes de movimentar, materialize `schema/tracker-transition-receipt.schema.json`
 
 Se um snapshot posterior encontrar `STATUS: completed`, `STATE_FROM`, `STATE_TO` diferente e eventos `role_handoff, transition` ainda na lista de origem, o planner emite `execution_kind: operational`. O orquestrador relê a evidência e retoma apenas o gate/movimento; não chama novamente PO, UX/UI, DEV, Review ou QA.
 
+## Recibo mínimo seguro
+
+O conteúdo completo de cápsulas, handoffs, bloqueios e transições é interno ao projeto. Para cada evento, use `write-tracker-receipt` com `--artifact-file` local e campos canônicos. O runtime calcula o hash local e constrói o único payload externo permitido: cabeçalho, `RECEIPT_VERSION`, `RUN_ID`, `ROLE`, `STATUS`, `EVENTS`, estados, próximo papel quando aplicável e `LOCAL_ARTIFACT_SHA256`.
+
+No PowerShell, passe a lista de eventos como um único argumento entre aspas, por exemplo `--events 'role_handoff,blocker'`; alternativamente use `--event 'role_handoff'` em chamadas separadas. Antes de repetir após erro de parsing, confirme que a primeira chamada não gravou recibo, para evitar duplicidade.
+
+O recibo não pode conter descrição do card, comentários, anexos, dados de negócio, caminhos locais, prompts, logs, texto de evidência, stack trace ou credenciais. O gate semântico lê o artefato local; o tracker apenas atesta a versão por hash e a sequência de estados. Isso reduz a superfície de divulgação e permite a revisão automática avaliar uma escrita pequena e determinística.
+
+### Encerramento excepcional de lock
+
+Um lock ativo externo só pode ser encerrado por pedido humano explícito na conversa atual ou por comentário humano no próprio card com o texto exato `AUTORIZO LIBERAR LOCK: <RUN_ID>`. O recibo continua vinculado ao RUN_ID antigo, usa `ROLE: orchestrator`, `STATUS: released`, `EVENTS: lock`, `STATE` atual e informa `LOCK_RELEASE_AUTHORIZATION: conversation|trello-comment` mais `AUTHORIZATION_REF`. Na autorização por comentário, o launcher valida a referência, o card, o texto exato e a autoria contra `/members/me`; o ORCHESTRATOR ainda precisa confirmar que o comentário é posterior ao lock e que o job antigo não está ativo. A ação exige escrita e releitura confirmadas, não move o card e não expira nenhum outro lock.
+
 ## Eventos mínimos
 
-- `lock`: `CODEX LOCK`, `RUN_ID`, papel, estado e status;
-- `capsule`: `CONTEXT CAPSULE`, decisões, evidências, riscos e próximo passo;
-- `role_handoff`: prefixo do papel, commit/artefato fixado, veredito e evidências;
-- `blocker`: causa, estado preservado, retorno esperado, `requires_human` e `blocker.kind`; falha técnica usa `requires_human: false`;
+- `lock`: `CODEX LOCK`, `RUN_ID`, papel, estado e status; em recuperação humana explícita pode registrar `STATUS: released` com a proveniência da autorização acima;
+- `capsule`: recibo de cápsula local por hash;
+- `role_handoff`: recibo do papel, commit/artefato fixado localmente, veredito e hash;
+- `blocker`: recibo do bloqueio local, estado preservado e hash; falha técnica usa `requires_human: false` no artefato local;
 - `transition`: estado de origem, destino e referência do handoff que autorizou a mudança.
 
 Um único comentário pode representar `role_handoff` e `transition` quando declarar ambos explicitamente. Aprovações humanas continuam sendo comentários separados e posteriores à evidência que aprovam.

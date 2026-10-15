@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | --- | --- |
-| Versão pública | `0.2.9` |
-| Versão do Kernel | `0.2.9` |
+| Versão pública | `0.3.19` |
+| Versão do Kernel | `0.3.19` |
 | Estado | Publicada |
-| Data | 2026-09-09 |
+| Data | 2026-10-13 |
 | Plataforma inicial | Codex local e ChatGPT desktop |
 | Referências internas | Projeto Piloto B e Projeto Piloto A |
 
@@ -15,7 +15,7 @@ Modus Protocol é um sistema versionado de governança e execução para desenvo
 
 Ela deve permitir que um projeto seja conectado a um núcleo comum sem copiar e evoluir isoladamente workflows, Skills, templates e políticas. O núcleo evolui uma vez; cada projeto preserva somente contexto, configurações e regras próprias.
 
-A v0.2 consolida a arquitetura e os contratos, implementa as Skills mínimas e empacota o núcleo como plugin reproduzível. Um piloto funcional ponta a ponta e um segundo cutover de integração comprovaram roteamento, Review e QA independentes, loops, Trello direto e compatibilidade entre adapters. A agenda atual permite PO, UX/UI e uma unidade técnica simultâneos sem abrir branches funcionais concorrentes.
+A v0.3 consolida a autonomia operacional: o orquestrador drena lanes independentes, reconcilia estado fresco antes de concluir e integra releases aprovadas em lote serial quando a lane técnica está livre. PO, UX/UI e uma unidade técnica podem trabalhar simultaneamente sem abrir branches funcionais concorrentes.
 
 Este documento é complementado por:
 
@@ -282,7 +282,7 @@ A v0.1 reutiliza os gates do Projeto Piloto B, sem criar colunas adicionais.
 
 O contrato exato de comparação, autoria e validade temporal dos comentários será definido no adaptador Trello. Como baseline, a aprovação deve ser posterior à evidência que pretende aprovar e perde validade quando essa evidência é substituída.
 
-O humano interrompe a automação pelos gates previstos — regra de negócio material, aprovação de tela, autorização para PRD e limite de retornos — ou por exceção grande e explícita: expansão estrutural além do card, risco sistêmico não contido ou autorização externa ausente. Todo bloqueio humano declara `blocker.kind`. Esses gates pertencem à fase em que foram criados. Uma transição confirmada invalida bloqueios, locks e conclusões da fase anterior; o `RUN_ID` permanece para rastreabilidade, mas a lista e as evidências atuais prevalecem. Falhas técnicas locais podem isolar um card depois da recuperação limitada, porém nunca são apresentadas como decisão humana e não encerram lanes independentes. A classificação canônica está em [AUTONOMY_POLICY.md](AUTONOMY_POLICY.md).
+O humano interrompe a automação pelos gates previstos — regra de negócio material, aprovação de tela, autorização para PRD e limite de retornos — ou por exceção grande e explícita: expansão estrutural além do card, risco sistêmico não contido ou autorização externa ausente. Todo bloqueio humano declara `blocker.kind`. Esses gates pertencem à fase em que foram criados. Uma transição confirmada invalida bloqueios, locks e conclusões da fase anterior; o `RUN_ID` permanece para rastreabilidade, mas a lista e as evidências atuais prevalecem. Falhas técnicas locais podem isolar um card depois da recuperação limitada, porém nunca são apresentadas como decisão humana e não encerram lanes independentes. Um handoff técnico terminal `blocked` isola somente o card no RUN atual, libera seu WIP e não pode relançar o mesmo papel nessa execução; a mesma atividade só pode ser tentada novamente em um novo RUN após snapshot atual. A classificação canônica está em [AUTONOMY_POLICY.md](AUTONOMY_POLICY.md).
 
 Antes de isolar uma falha técnica, o orquestrador esgota a autorrecuperação segura e limitada: renova snapshot obsoleto, repete leituras idempotentes até o orçamento, relê uma escrita pela referência já retornada, repara handoff/receipt, tolera pequena diferença causal de relógio e retoma uma transição cujo handoff foi aprovado. Isso não autoriza duplicar comentários, repetir trabalho especializado sem necessidade ou ignorar divergência de conteúdo. Retornos de Code Review e QA são trabalho normal da lane técnica e voltam automaticamente ao DEV.
 
@@ -292,9 +292,10 @@ Loops previstos:
 
 - `PO ↔ UX/UI`;
 - `PO ↔ DEV`;
+- `DEV ↔ Code Review`;
 - `DEV ↔ QA`.
 
-Cada retorno cria evidência nova e incrementa o ciclo. No terceiro retorno do mesmo loop e escopo, o card recebe `Aguardando resposta humana`. Não existe quarto ciclo automático.
+Somente um retorno confirmado entre papéis cria evidência e incrementa o ciclo daquela fronteira. São permitidos três retornos confirmados; a quarta tentativa de retorno na mesma fronteira e escopo recebe `Aguardando resposta humana`. Um handoff `blocked` que mantém papel/estado e iterações internas de teste, renderização/inspeção, correções e nova verificação não contam como retorno e não podem disparar `loop_limit`; são governadas pelo timeout e watchdog de progresso da execução. Se uma ferramenta de verificação ficar indisponível, o especialista tenta alternativa segura; sem evidência suficiente não há handoff de sucesso, mas o impedimento técnico é localizado e lanes independentes continuam.
 
 O bloqueio possui escopo explícito: `card` para uma pendência isolada, `delivery_group` para membros com dependência determinante e `dependency_group` para um grupo que aguarda outro grupo. Um Delivery Group pode ser `optimization`, quando compartilha esforço mas seus cards continuam independentes, ou `dependency`, quando um bloqueio deve paralisar todos os membros. Os demais cards e grupos independentes continuam elegíveis.
 
@@ -441,6 +442,10 @@ Cada etapa ou ciclo produz um resumo incremental com:
 
 Na retomada, o capsule reduz releitura, mas não substitui evidências necessárias.
 
+O capsule completo permanece no projeto. O tracker recebe somente um recibo mínimo e determinístico com `RUN_ID`, papel, estados, evento e hash SHA-256 do artefato local; ele nunca recebe descrição, histórico, prompt, caminhos ou narrativa interna. O gate usa o artefato local e o recibo torna sua versão auditável sem ampliar a superfície de divulgação.
+
+Para reduzir ruído no histórico, a unidade de publicação é a lane por card/papel/estado/RUN_ID, não cada agente relançado. O primeiro lançamento publica lock+cápsula; retentativas técnicas reutilizam o lock e registram evidências intermediárias no diário local. O tracker recebe imediatamente decisões humanas, transições/trocas reais de papel e resultados terminais consolidados; handoff e transição compartilham um recibo quando simultâneos. A política não pode ocultar mudança de estado, aprovação ou bloqueio que exija decisão humana.
+
 ### 14.3 Eficiência operacional
 
 - usar RTK para compactar saídas extensas quando ele preservar o sinal necessário;
@@ -456,11 +461,13 @@ As Skills não fixam modelos. Elas podem indicar o perfil necessário; o ORCHEST
 
 | Perfil | Finalidade | Mapeamento inicial sugerido |
 | --- | --- | --- |
-| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-5.6-luna` / `low` |
-| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-5.6-terra` / `medium` |
-| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-5.6-sol` / `high` |
-| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-5.6-sol` / `max` |
-| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-5.6-sol` / `high`, com orquestração paralela |
+| `RAPIDO` | Trabalho mecânico, leitura estruturada e alteração trivial | `gpt-6-luna` / `low` |
+| `EQUILIBRADO` | Implementação bem especificada e execução de validações | `gpt-6-luna` / `medium` |
+| `PROFUNDO` | Ambiguidade, arquitetura, UX/UI, investigação e revisão crítica | `gpt-6.1-sol` / `high` |
+| `MAXIMO` | Problema excepcionalmente difícil ou auditoria de alto valor | `gpt-6.1-sol` / `max` |
+| `PARALELO` | Frentes independentes com benefício mensurável de delegação | `gpt-6.1-sol` / `high`, com orquestração paralela |
+
+Code Review usa o mesmo perfil `PROFUNDO` e modelo `gpt-6.1-sol` que PO, UX/UI e arquitetura, mantendo execução independente. A separação de modelos é por nível de esforço, não por papel.
 
 Baseline por etapa:
 
@@ -486,7 +493,7 @@ Regras:
 
 - reler o lock antes de cada transição;
 - não processar o mesmo lote com identificadores concorrentes;
-- não expirar lock automaticamente sem uma política confiável;
+- não expirar lock automaticamente; encerramento excepcional exige autorização humana explícita, recibo `released` vinculado ao RUN_ID antigo e confirmação por releitura. Um lock `blocked` só pode ser liberado quando deriva de um lock `active` do mesmo RUN_ID seguido por handoff terminal `BLOCKED`; locks declarados diretamente como `blocked` não são elegíveis;
 - permitir retomada somente com card, capsule e estado consistentes;
 - não permitir escrita paralela na mesma branch;
 - permitir uma lane de PO, uma de UX/UI e uma técnica simultâneas;

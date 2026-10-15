@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0, Mandatory = $true)]
-  [ValidateSet('status', 'doctor', 'setup', 'plan', 'role-launch', 'role-gate', 'transition-gate', 'run-close-gate', 'trello', 'command')]
+  [ValidateSet('status', 'doctor', 'setup', 'plan', 'role-launch', 'role-gate', 'transition-gate', 'run-close-gate', 'trello', 'command', 'qa-browser')]
   [string]$Command,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs
@@ -20,6 +20,7 @@ $entries = @{
   'run-close-gate' = 'run-close-gate.mjs'
   'trello' = 'trello-comments.mjs'
   'command' = 'command-runner.mjs'
+  'qa-browser' = 'qa-browser.mjs'
 }
 
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
