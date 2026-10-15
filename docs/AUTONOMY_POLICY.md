@@ -27,7 +27,9 @@ Use até três tentativas totais para leituras idempotentes do tracker. Para lan
 
 Falha técnica ainda não resolvida após esse orçamento vira impedimento técnico localizado, com diagnóstico e próximo experimento. Ela não pede decisão humana e não encerra lanes independentes.
 
-Após `APROVADO PARA PRD` válido, a autorização operacional cobre documentação de entrega, commit, push, criação/atualização de PR, checks, resolução de conflitos dentro do escopo e merge em `origin/main`. Proteção remota efetivamente recusada, credencial ausente ou conflito que exige alterar escopo/arquitetura continuam sendo bloqueios externos ou estruturais reais.
+Após `APROVADO PARA PRD` válido, publicado no card por um membro humano autenticado e confirmado por snapshot fresco, essa aprovação é a autorização humana completa para documentação de entrega, commit, push, criação/atualização de PR, checks, resolução de conflitos dentro do escopo e merge em `origin/main`. Não peça uma segunda autorização na conversa nem uma confirmação humana por operação. O ORCHESTRATOR deve registrar a referência do comentário como `production_approval_ref` e carregá-la durante toda a integração.
+
+Essa autorização operacional não cria credenciais nem altera permissões do sistema operacional, sandbox, GitHub ou regras de proteção remota. Antes de lançar release, confirme que a rota de execução oficial possui acesso de escrita ao checkout/metadados Git e uma credencial GitHub utilizável. Se a execução comum for impedida pelo sandbox/ACL, tente a rota oficial de execução elevada/autorizada disponível no host, sem pedir que o usuário repita a autorização no chat. Use credenciais já configuradas do projeto/host e o login GitHub conectado disponível, sem ler, exibir ou copiar segredos. Se a rota elevada não estiver disponível, uma proteção remota recusar a ação, ou nenhuma credencial autenticada existir, registre a causa técnica exata; só então trate como `external_authorization` que requer intervenção externa. O texto `APROVADO PARA PRD` continua válido e não deve ser solicitado novamente.
 
 ## Intervenção humana
 
@@ -39,7 +41,7 @@ Após `APROVADO PARA PRD` válido, a autorização operacional cobre documentaç
 - `loop_limit`: a quarta tentativa de retorno confirmado na mesma fronteira e escopo foi alcançada;
 - `structural_scope`: a solução exige ampliar o escopo ou alterar contrato, classe/fundação transversal ou arquitetura aprovada além do card;
 - `systemic_risk`: há risco plausível de perda de dados, quebra sistêmica, segurança ou regressão ampla que não pode ser contido no escopo;
-- `external_authorization`: falta credencial, permissão ou autorização para uma ação externa necessária.
+- `external_authorization`: após usar as rotas oficiais de execução autorizada, ainda falta credencial, permissão efetiva do host/GitHub ou autorização de um terceiro para a ação externa necessária. A ausência de um segundo consentimento humano no chat nunca é motivo válido quando existe `APROVADO PARA PRD` válido no card.
 
 Uma refatoração local ou correção arquitetural contida no card permanece autônoma. Somente mudança transversal de arquitetura, contrato ou escopo usa `structural_scope`.
 

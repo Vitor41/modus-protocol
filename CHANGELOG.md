@@ -6,6 +6,13 @@ O formato segue os princípios de Keep a Changelog e o versionamento seguirá Se
 
 ## [Não publicado]
 
+## [0.3.32] - 2026-10-15
+
+### Corrigido
+
+- `APROVADO PARA PRD` confirmado por comentário humano autenticado é autorização suficiente para todo o fluxo de integração Git; o orquestrador não pede consentimento duplicado no chat e tenta a rota oficial elevada antes de classificar falha de sandbox como autorização externa.
+- Handoffs terminais bloqueados agora exigem recibo persistido e relido antes do snapshot/plano seguinte, evitando relançar o mesmo slot durante a janela de reconciliação.
+
 ## [0.3.31] - 2026-10-14
 
 ### Corrigido
